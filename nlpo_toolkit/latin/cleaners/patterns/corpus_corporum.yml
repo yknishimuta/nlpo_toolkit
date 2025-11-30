@@ -1,0 +1,43 @@
+remove_line_patterns:
+  - name: "page_heading"
+    enabled: true
+    pattern: "^-+\\[page\\s+\\d+\\]-+\\s*$"
+
+  - name: "underscore_ruler"
+    enabled: true
+    pattern: "^\\s*_+\\s*$"
+
+  - name: "footnote_line"
+    enabled: true
+    pattern: "^\\s*\\d+\\:\\s"
+
+  - name: "liber_heading"
+    enabled: true
+    pattern: "^\\s*LIBER\\s+[A-Z]+\\."
+
+  - name: "preface_heading"
+    enabled: true
+    pattern: "^\\s*(PRAEFATIO|PREFATIO|PROOEMIUM|PROLOGUS|ARGUMENTUM)\\b"
+
+  - name: "caput_heading"
+    enabled: true
+    pattern: "^\\s*CAPUT\\s+[A-ZIVXLCDM]+\\."
+
+  - name: "roman_number_line"
+    enabled: true
+    pattern: "^\\s*[IVXLCDM]+\\.*\\s*$"
+
+  - name: "number_section_line"
+    enabled: true
+    pattern: "^\\s*\\d+\\.\\s*$"
+
+substitute_patterns:
+  - name: "inline_caput_bracketed"
+    enabled: true
+    pattern: "\\[\\s*CAPUT\\s+[IVXLCDM]+\\.\\s*\\]"
+    repl: ""
+
+  - name: "inline_footnote_reference"
+    enabled: true
+    pattern: "\\[\\d+\\]"
+    repl: ""

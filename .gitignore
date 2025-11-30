@@ -1,0 +1,48 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.python-version
+
+# ---- Virtual environments ----
+.venv/
+venv/
+env/
+ENV/
+*.env
+
+# ---- IDE / OS files ----
+.vscode/
+.idea/
+.DS_Store
+
+# ---- Local artifacts ----
+*.log
+*.tmp
+*.bak
+*.swp
+
+# --- input/output files ---
+nlpo_toolkit/latin/cleaners/input/*
+!nlpo_toolkit/latin/cleaners/input/.gitkeep
+
+nlpo_toolkit/latin/cleaners/output/*
+!nlpo_toolkit/latin/cleaners/output/.gitkeep
+
+nlpo_toolkit/latin/cleaners/config/*
+!nlpo_toolkit/latin/cleaners/config/sample.yml
+!nlpo_toolkit/latin/cleaners/config/.gitkeep
+
+nlpo_toolkit/latin/latin_wordlist/input/*
+!nlpo_toolkit/latin/latin_wordlist/input/.gitkeep
+
+nlpo_toolkit/latin/latin_wordlist/output/*
+!nlpo_toolkit/latin/latin_wordlist/output/.gitkeep
+

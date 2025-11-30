@@ -1,0 +1,38 @@
+remove_line_patterns:
+  - name: "quaestio_heading"
+    enabled: true
+    pattern: '^Quaestio\s+\d+\.?\s*$'
+
+  - name: "articulus_heading"
+    enabled: true
+    pattern: '^Articulus\s+\d+\.?\s*$'
+
+  - name: "prooemium_heading"
+    enabled: true
+    pattern: '^Prooemium\.?\s*$'
+
+  - name: "sed_contra_heading"
+    enabled: true
+    pattern: '^Sed\s+contra\.?\s*$'
+
+  - name: "respondeo_heading"
+    enabled: true
+    pattern: '^Respondeo\s+dicendum\s+quod\.?\s*$'
+
+  - name: "ad_primum_heading"
+    enabled: true
+    pattern: '^Ad\s+primum\.?\s*$'
+
+  - name: "ad_secundum_heading"
+    enabled: true
+    pattern: '^Ad\s+secundum\.?\s*$'
+
+  - name: "ad_tertium_heading"
+    enabled: true
+    pattern: '^Ad\s+tertium\.?\s*$'
+
+substitute_patterns:
+  - name: "inline_footnote"
+    enabled: true
+    pattern: '\[\d+\]'
+    repl: ''

@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nlpo_toolkit"
+version = "0.1.0"
+description = "Toolkit for NLP and corpus processing"
+authors = [{name="Yuki Nishimuta"}]
+readme = "README.md"
+license = {text = "MIT"}
+dependencies = [
+    "stanza>=1.9,<1.10",
+    "pyyaml",
+    "beautifulsoup4",
+    "requests",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]

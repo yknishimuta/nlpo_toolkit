@@ -1,0 +1,3 @@
+kind: corpus_corporum
+input: ../input/input_file.txt 
+output: ../output/cleaned.txt
