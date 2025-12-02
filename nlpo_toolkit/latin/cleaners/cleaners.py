@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+from typing import Pattern as TypingPattern
 import yaml
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -12,7 +13,8 @@ SCHOLASTIC_TEXT_YAML_PATH = BASE_DIR.parent / "cleaners" / "patterns" / "scholas
 # End of initial metadata section: a line consisting of 5 or more '#'
 HEADER_HASH_RE = re.compile(r'^\s*#{5,}\s*$')
 
-Pattern = re.Pattern[str]
+#Pattern = re.Pattern[str]
+Pattern = TypingPattern[str]
 
 def load_patterns_from_yaml(yaml_path: str | Path) -> dict:
     """
