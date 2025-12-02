@@ -14,7 +14,7 @@ _DIACRITICS_RE = re.compile(r"[\u0300-\u036f]")
 PackageType = Union[str, Mapping[str, str], None]
 
 # Simple tokenizer
-TOKEN_RE = re.compile(r"[A-Za-zĀāĒēĪīŌōŪū]+")
+TOKEN_RE = re.compile(r"[A-Za-zĀāĒēĪīŌōŪūÆæŒœ]+")
 
 def build_stanza_pipeline(
     lang: str = "la",
@@ -25,6 +25,9 @@ def build_stanza_pipeline(
     """
     Build a Stanza pipeline (auto-download if missing).
     """
+    if lang == "la" and package is None:
+        package = "perseus"
+
     import stanza
 
     try:
@@ -133,44 +136,24 @@ def render_stanza_package_table(
     return lines
 
 def iter_char_chunks(text: str, chunk_chars: int = 200_000):
-    """Yield text in fixed-size character chunks for streaming NLP processing."""
-    i = 0
+    """
+    Yield text in fixed-size approximate chunks, trying not to split inside a token.
+    """
     N = len(text)
+    i = 0
     while i < N:
         j = min(N, i + chunk_chars)
+
+        if j < N:
+            k = text.rfind(" ", i + 1, j)
+            if k == -1:
+                k = text.rfind("\n", i + 1, j)
+
+            if k != -1 and k > i:
+                j = k + 1
+
         yield text[i:j]
         i = j
-
-
-def count_nouns_in_chunk(
-    text: str,
-    nlp,
-    use_lemma: bool = True,
-    upos_targets: Set[str] = frozenset({"NOUN"}),
-):
-    """
-    Count nouns in a text chunk using Stanza nlp pipeline.
-
-    Returns Counter
-      key = lemma or surface form, value = frequency
-    """
-
-    counter = Counter()
-
-    if not text.strip():
-        return counter
-
-    # Stanza analysis
-    doc = nlp(text)
-
-    for sent in doc.sentences:
-        for tok in sent.words:
-            # Check whether the token belongs to the specified UPOS tags (default: NOUN)
-            if tok.upos in upos_targets:
-                key = tok.lemma if use_lemma else tok.text
-                counter[key] += 1
-
-    return counter
 
 
 def count_nouns_streaming(
@@ -193,13 +176,12 @@ def count_nouns_streaming(
     for k, chunk in enumerate(chunks, 1):
 
         # chunk 内の名詞を数える
-        nouns = count_nouns_in_chunk(
+        nouns = count_nouns(
             chunk,
             nlp,
             use_lemma=use_lemma,
-            upos_targets=upos_targets
+            upos_targets=upos_targets,
         )
-
         total.update(nouns)
 
         if label:

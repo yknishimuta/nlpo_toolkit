@@ -1,0 +1,13 @@
+{
+  "lemma_counts": {
+    "puella": 2,
+    "rosa": 2,
+    "liber": 1
+  },
+  "surface_counts": {
+    "Puella": 2,
+    "rosam": 1,
+    "Rosa": 1,
+    "librum": 1
+  }
+}
