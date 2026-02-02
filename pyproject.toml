@@ -18,3 +18,9 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["."]
+
+[tool.setuptools.package-data]
+nlpo_toolkit = ["**/*.yml", "**/*.yaml"]
+
+[tool.setuptools]
+include-package-data = true

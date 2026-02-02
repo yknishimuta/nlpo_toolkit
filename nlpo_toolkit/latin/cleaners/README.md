@@ -17,8 +17,6 @@ pip install pyyaml
 
 ## Usage
 
-# Usage
-
 This script cleans a Latin text using a YAML configuration file that specifies:
 
 - the **kind** of cleaner (e.g., `"corpus_corporum"` or `"scholastic_text"`)
@@ -32,7 +30,7 @@ The script loads the config, reads the text, applies the appropriate cleaning ru
 From the project root (or from the module path):
 
 ```
-python -m nlpo_toolkit.latin.cleaners.run_clean_config
+python -m nlpo_toolkit.latin.cleaners.run_clean_corpus
 ```
 
 By default, it uses:
@@ -54,7 +52,7 @@ DEFAULT_CONFIG: Path = BASE_DIR.parent / "cleaners" / "config" /"sample.yml"
 You can specify a different YAML config file by passing the path as an argument:
 
 ```
-python -m nlpo_toolkit.latin.cleaners.run_clean_config \
+python -m nlpo_toolkit.latin.cleaners.run_clean_corpus \
     /path/to/your/custom_config.yml
 ```
 
@@ -64,6 +62,8 @@ or, if calling the script directly:
 python nlpo_toolkit/latin/cleaners/run_clean_config.py \
     /path/to/config.yml
 ```
+
+By default, the script uses a sample config under the cleaners directory.
 
 ------
 

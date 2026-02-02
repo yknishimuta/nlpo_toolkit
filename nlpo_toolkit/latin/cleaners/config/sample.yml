@@ -1,3 +1,4 @@
 kind: corpus_corporum
-input: ../input/input_file.txt 
-output: ../output/cleaned.txt
+input: ../input
+output: ../output
+output_filename_template: "{stem}.{index:02d}.cleaned.{ext}"
