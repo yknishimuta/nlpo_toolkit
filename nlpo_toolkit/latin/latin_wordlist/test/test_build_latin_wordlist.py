@@ -1,7 +1,6 @@
 from pathlib import Path
 import sys
-
-import pytest
+import textwrap
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -72,16 +71,32 @@ def test_build_latin_wordlist_small_corpus(tmp_path, monkeypatch):
     )
 
     out_path = tmp_path / "output" / "latin_words_test.txt"
+    cfg_path = tmp_path / "latin_wordlist.yml"
+    cfg_path.write_text(
+        textwrap.dedent(f"""\
+    inputs:
+        conllu_dir: "{conllu_dir}"
+        latin_text_dir: "{latin_text_dir}"
+        extra_wordlists:
+            - "{extra_wordlist}"
 
+    output:
+        latin_wordlist_out: "{out_path}"
 
-    # Monkeypatch module-level paths so build() uses our tiny corpus
-    monkeypatch.setattr(mod, "CONLLU_DIR", conllu_dir)
-    monkeypatch.setattr(mod, "LATIN_TEXT_DIR", latin_text_dir)
-    monkeypatch.setattr(mod, "EXTRA_WORDLISTS", [extra_wordlist])
-    monkeypatch.setattr(mod, "LATIN_WORDLIST_OUT", out_path)
+    filters:
+        min_length: 2
+        min_form_freq: 2
+        min_text_freq: 3
 
-    # run build
-    mod.build()
+    tokenize:
+        extra_punct: ""
+    """),
+        encoding="utf-8",
+    )
+
+    cfg = mod.load_config(cfg_path)
+    rc = mod.build(cfg)
+    assert rc == 0
 
     # Verify the output
     assert out_path.is_file(), f"Expected output file not found: {out_path}"

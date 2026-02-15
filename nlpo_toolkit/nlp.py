@@ -46,6 +46,14 @@ def build_stanza_pipeline(
             use_gpu=use_gpu,
         )
 
+def build_sentence_splitter(language: str, stanza_package: str, cpu_only: bool):
+    return build_stanza_pipeline(
+        lang=language,
+        processors="tokenize",
+        package=stanza_package,
+        use_gpu=not cpu_only,
+    )
+
 def tokenize_all_pos(text: str) -> List[str]:
     return TOKEN_RE.findall(text.lower())
 
