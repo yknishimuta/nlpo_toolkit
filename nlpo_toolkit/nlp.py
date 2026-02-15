@@ -1,8 +1,7 @@
 from __future__ import annotations
 from typing import Set, Dict, List, Iterable, Optional, Mapping, Union, Callable
 from collections import Counter
-import unicodedata
-import re
+import unicodedata, re, csv
 from pathlib import Path
 
 _LIG_MAP = {
@@ -57,22 +56,57 @@ def build_sentence_splitter(language: str, stanza_package: str, cpu_only: bool):
 def tokenize_all_pos(text: str) -> List[str]:
     return TOKEN_RE.findall(text.lower())
 
-def count_nouns(text: str, nlp, use_lemma: bool = True,
-                upos_targets: Set[str] = frozenset({"NOUN"})) -> Counter:
+def _iter_sentence_words(sent):
+    words = getattr(sent, "words", None)
+    if words:
+        for w in words:
+            yield w
+        return
+
+    # fallback: sent.tokens -> token.words
+    for tok in getattr(sent, "tokens", []) or []:
+        twords = getattr(tok, "words", None)
+        if twords:
+            for w in twords:
+                yield w
+        else:
+            yield tok
+
+def count_nouns(doc):
     """
-    Count NOUN/PROPN (configurable via upos_targets). Returns Counter of lowercase lemmas (or surface).
+    Count NOUN lemmas in a Stanza document.
+    Safe against words/tokens structure differences.
     """
-    if not text or not text.strip():
-        return Counter()
-    nouns: List[str] = []
-    doc = nlp(text)
+    noun_counts = {}
+
     for sent in doc.sentences:
-        for w in sent.words:
-            if w.upos in upos_targets:
-                token = (w.lemma if (use_lemma and getattr(w, "lemma", None)) else w.text)
-                if token:
-                    nouns.append(token.lower())
-    return Counter(nouns)
+        # 1) Prefer words
+        if getattr(sent, "words", None):
+            iterable = sent.words
+
+        # 2) Fallback: tokens -> token.words
+        elif getattr(sent, "tokens", None):
+            iterable = []
+            for tok in sent.tokens:
+                if getattr(tok, "words", None):
+                    iterable.extend(tok.words)
+                else:
+                    iterable.append(tok)
+        else:
+            continue
+
+        for w in iterable:
+            upos = getattr(w, "upos", None)
+            lemma = getattr(w, "lemma", None)
+
+            if upos != "NOUN":
+                continue
+            if not lemma:
+                continue
+
+            noun_counts[lemma] = noun_counts.get(lemma, 0) + 1
+
+    return noun_counts
 
 def count_nouns_normalized(
     text: str,
@@ -84,8 +118,9 @@ def count_nouns_normalized(
     """
     Count NOUN tokens (optionally using lemma) and return a normalized Counter.
 
-    - No vocabulary filtering.
-    - Always returns a single Counter.
+    - Safe against words/tokens structure differences
+    - No vocabulary filtering
+    - Always returns a single Counter
     """
     if normalizer is None:
         normalizer = normalize_token
@@ -98,11 +133,34 @@ def count_nouns_normalized(
     doc = nlp(text)
 
     for sent in doc.sentences:
-        for w in sent.words:
-            if w.upos in upos_targets:
-                token = (w.lemma if (use_lemma and getattr(w, "lemma", None)) else w.text)
-                if token:
-                    counter[normalizer(token)] += 1
+
+        # ---- words 優先 ----
+        if getattr(sent, "words", None):
+            iterable = sent.words
+
+        # ---- fallback: tokens -> token.words ----
+        elif getattr(sent, "tokens", None):
+            iterable = []
+            for tok in sent.tokens:
+                if getattr(tok, "words", None):
+                    iterable.extend(tok.words)
+                else:
+                    iterable.append(tok)
+        else:
+            continue
+
+        for w in iterable:
+            upos = getattr(w, "upos", None)
+            if upos not in upos_targets:
+                continue
+
+            lemma = getattr(w, "lemma", None)
+            text_form = getattr(w, "text", None)
+
+            token = lemma if (use_lemma and lemma) else text_form
+
+            if token:
+                counter[normalizer(token)] += 1
 
     return counter
 
@@ -163,27 +221,23 @@ def iter_char_chunks(text: str, chunk_chars: int = 200_000):
         yield text[i:j]
         i = j
 
-
-def count_nouns_streaming(
+def _count_nouns_streaming_fast(
     text: str,
     nlp,
     use_lemma: bool = True,
     upos_targets: Set[str] = frozenset({"NOUN"}),
     chunk_chars: int = 200_000,
     label: str = "",
-):
+) -> Counter:
     """
-    Count NOUN lemmas (or surface forms) in streaming chunks.
+    Fast path: existing behavior (no tracing).
     """
-
     total = Counter()
     if not text:
         return total
 
     chunks = list(iter_char_chunks(text, chunk_chars=chunk_chars))
     for k, chunk in enumerate(chunks, 1):
-
-        # chunk 内の名詞を数える
         nouns = count_nouns(
             chunk,
             nlp,
@@ -196,6 +250,103 @@ def count_nouns_streaming(
             print(f"[NLP] {label}: chunk {k}/{len(chunks)} processed (chars {len(chunk):,})")
 
     return total
+
+
+def _count_nouns_streaming_trace(
+    text: str,
+    nlp,
+    use_lemma: bool = True,
+    upos_targets: Set[str] = frozenset({"NOUN"}),
+    chunk_chars: int = 200_000,
+    label: str = "",
+    *,
+    trace_tsv: Path,
+    trace_max_rows: int = 0,  # 0 => unlimited
+) -> Counter:
+    """
+    Trace path: dump evidence rows to TSV while counting nouns.
+
+    TSV columns:
+      chunk_idx, sentence_text, token_text, lemma, upos
+    """
+    total = Counter()
+    if not text:
+        return total
+
+    trace_tsv.parent.mkdir(parents=True, exist_ok=True)
+    rows_written = 0
+
+    with trace_tsv.open("w", encoding="utf-8", newline="") as fp:
+        w = csv.writer(fp, delimiter="\t")
+        w.writerow(["chunk", "sentence", "token", "lemma", "upos"])
+
+        chunks = list(iter_char_chunks(text, chunk_chars=chunk_chars))
+        for k, chunk in enumerate(chunks, 1):
+            doc = nlp(chunk)
+
+            for sent in getattr(doc, "sentences", []):
+                sent_text = getattr(sent, "text", "") or ""
+
+                for wd in _iter_sentence_words(sent):
+                    upos = getattr(wd, "upos", "") or ""
+                    if upos not in upos_targets:
+                        continue
+
+                    token = getattr(wd, "text", "") or ""
+                    lemma = getattr(wd, "lemma", "") or ""
+
+                    key = lemma if (use_lemma and lemma) else token
+                    key = (key or "").strip().lower()
+                    if key:
+                        total[key] += 1
+
+                    if trace_max_rows and rows_written >= trace_max_rows:
+                        continue
+                    w.writerow([k, sent_text, token, lemma, upos])
+                    rows_written += 1
+
+            if label:
+                print(f"[NLP] {label}: chunk {k}/{len(chunks)} processed (chars {len(chunk):,})")
+
+    return total
+
+
+def count_nouns_streaming(
+    text: str,
+    nlp,
+    use_lemma: bool = True,
+    upos_targets: Set[str] = frozenset({"NOUN"}),
+    chunk_chars: int = 200_000,
+    label: str = "",
+    *,
+    trace_tsv: Optional[Path] = None,
+    trace_max_rows: int = 0,
+) -> Counter:
+    """
+    Public API:
+      - trace_tsv is None => fast path
+      - trace_tsv given   => trace path
+    """
+    if trace_tsv is None:
+        return _count_nouns_streaming_fast(
+            text,
+            nlp,
+            use_lemma=use_lemma,
+            upos_targets=upos_targets,
+            chunk_chars=chunk_chars,
+            label=label,
+        )
+
+    return _count_nouns_streaming_trace(
+        text,
+        nlp,
+        use_lemma=use_lemma,
+        upos_targets=upos_targets,
+        chunk_chars=chunk_chars,
+        label=label,
+        trace_tsv=trace_tsv,
+        trace_max_rows=trace_max_rows,
+    )
 
 def normalize_token(
     s: str,
