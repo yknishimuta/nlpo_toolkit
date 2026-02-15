@@ -1,0 +1,17 @@
+inputs:
+  conllu_dir: input/treebank_latin
+  latin_text_dir: input/latin_texts
+  extra_wordlists:
+    - input/latin_texts/whitaker_lemmas.txt
+    - input/latin_texts/lemlat_wordlist.txt
+
+output:
+  latin_wordlist_out: output/latin_words.txt
+
+filters:
+  min_length: 2
+  min_form_freq: 2
+  min_text_freq: 3
+
+tokenize:
+  extra_punct: "“”‘’«»…—–-­"
