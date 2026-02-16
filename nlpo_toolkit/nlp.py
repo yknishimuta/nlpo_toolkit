@@ -200,14 +200,13 @@ def _count_nouns_streaming_fast(
     label: str = "",
 ) -> Counter:
     """
-    Fast path: existing behavior (no tracing).
+    Fast path: streaming without materializing chunk list (memory-friendly).
     """
     total = Counter()
     if not text:
         return total
 
-    chunks = list(iter_char_chunks(text, chunk_chars=chunk_chars))
-    for k, chunk in enumerate(chunks, 1):
+    for k, chunk in enumerate(iter_char_chunks(text, chunk_chars=chunk_chars), 1):
         nouns = count_nouns(
             chunk,
             nlp,
@@ -217,7 +216,7 @@ def _count_nouns_streaming_fast(
         total.update(nouns)
 
         if label:
-            print(f"[NLP] {label}: chunk {k}/{len(chunks)} processed (chars {len(chunk):,})")
+            print(f"[NLP] {label}: chunk {k} processed (chars {len(chunk):,})")
 
     return total
 
@@ -236,7 +235,7 @@ def _count_nouns_streaming_trace(
     Trace path: dump evidence rows to TSV while counting nouns.
 
     TSV columns:
-      chunk_idx, sentence_text, token_text, lemma, upos
+      label, chunk, sent_idx, token_idx, sentence, token, lemma, upos, global_row
 
     - If trace_max_rows > 0 and the limit is reached:
         → stop writing trace rows
@@ -247,22 +246,22 @@ def _count_nouns_streaming_trace(
         return total
 
     trace_tsv.parent.mkdir(parents=True, exist_ok=True)
+
     rows_written = 0
     trace_enabled = True
+    global_row = 0
 
     with trace_tsv.open("w", encoding="utf-8", newline="") as fp:
         w = csv.writer(fp, delimiter="\t")
-        w.writerow(["chunk", "sentence", "token", "lemma", "upos"])
+        w.writerow(["label", "chunk", "sent_idx", "token_idx", "sentence", "token", "lemma", "upos", "global_row"])
 
-        chunks = list(iter_char_chunks(text, chunk_chars=chunk_chars))
-
-        for k, chunk in enumerate(chunks, 1):
+        for k, chunk in enumerate(iter_char_chunks(text, chunk_chars=chunk_chars), 1):
             doc = nlp(chunk)
 
-            for sent in getattr(doc, "sentences", []):
+            for s_i, sent in enumerate(getattr(doc, "sentences", []) or [], 1):
                 sent_text = getattr(sent, "text", "") if trace_enabled else ""
 
-                for wd in _iter_sentence_words(sent):
+                for t_i, wd in enumerate(_iter_sentence_words(sent), 1):
                     upos = getattr(wd, "upos", None)
                     if upos not in upos_targets:
                         continue
@@ -276,20 +275,24 @@ def _count_nouns_streaming_trace(
                         total[key] += 1
 
                     if trace_enabled:
+                        global_row += 1
                         w.writerow([
+                            label or "",
                             k,
+                            s_i,
+                            t_i,
                             sent_text,
                             token or "",
                             lemma or "",
                             upos or "",
+                            global_row,
                         ])
                         rows_written += 1
-
                         if trace_max_rows and rows_written >= trace_max_rows:
                             trace_enabled = False
 
             if label:
-                print(f"[NLP] {label}: chunk {k}/{len(chunks)} processed (chars {len(chunk):,})")
+                print(f"[NLP] {label}: chunk {k} processed (chars {len(chunk):,})")
 
     return total
 
