@@ -76,6 +76,9 @@ def count_nouns_doc(
     doc,
     use_lemma: bool = True,
     upos_targets: Set[str] = frozenset({"NOUN"}),
+    *,
+    ref_tag_detector: Optional[Callable[[str], str]] = None,
+    ref_tag_counter: Optional[Counter] = None,
 ) -> Counter:
     counter = Counter()
 
@@ -88,8 +91,21 @@ def count_nouns_doc(
             lemma = getattr(w, "lemma", None)
             text_form = getattr(w, "text", None)
             token = lemma if (use_lemma and lemma) else text_form
-            if token:
-                counter[token.strip().lower()] += 1
+            if not token:
+                continue
+
+            key = token.strip().lower()
+            if not key:
+                continue
+
+            if ref_tag_detector is not None:
+                tag = ref_tag_detector(key)
+                if tag:
+                    if ref_tag_counter is not None:
+                        ref_tag_counter[tag] += 1
+                    continue
+
+            counter[key] += 1
 
     return counter
 
@@ -98,11 +114,20 @@ def count_nouns(
     nlp,
     use_lemma: bool = True,
     upos_targets: Set[str] = frozenset({"NOUN"}),
+    *,
+    ref_tag_detector: Optional[Callable[[str], str]] = None,
+    ref_tag_counter: Optional[Counter] = None,
 ) -> Counter:
     if not text or not text.strip():
         return Counter()
     doc = nlp(text)
-    return count_nouns_doc(doc, use_lemma=use_lemma, upos_targets=upos_targets)
+    return count_nouns_doc(
+        doc,
+        use_lemma=use_lemma,
+        upos_targets=upos_targets,
+        ref_tag_detector=ref_tag_detector,
+        ref_tag_counter=ref_tag_counter,
+    )
 
 def count_nouns_normalized(
     text: str,
@@ -198,6 +223,9 @@ def _count_nouns_streaming_fast(
     upos_targets: Set[str] = frozenset({"NOUN"}),
     chunk_chars: int = 200_000,
     label: str = "",
+    *,
+    ref_tag_detector: Optional[Callable[[str], str]] = None,
+    ref_tag_counter: Optional[Counter] = None,
 ) -> Counter:
     """
     Fast path: streaming without materializing chunk list (memory-friendly).
@@ -212,6 +240,8 @@ def _count_nouns_streaming_fast(
             nlp,
             use_lemma=use_lemma,
             upos_targets=upos_targets,
+            ref_tag_detector=ref_tag_detector,
+            ref_tag_counter=ref_tag_counter,
         )
         total.update(nouns)
 
@@ -230,12 +260,14 @@ def _count_nouns_streaming_trace(
     *,
     trace_tsv: Path,
     trace_max_rows: int = 0,  # 0 => unlimited
+    ref_tag_detector: Optional[Callable[[str], str]] = None,
+    ref_tag_counter: Optional[Counter] = None,
 ) -> Counter:
     """
     Trace path: dump evidence rows to TSV while counting nouns.
 
     TSV columns:
-      label, chunk, sent_idx, token_idx, sentence, token, lemma, upos, global_row
+      label, chunk, sent_idx, token_idx, sentence, token, lemma, upos, ref_tag, global_row
 
     - If trace_max_rows > 0 and the limit is reached:
         → stop writing trace rows
@@ -253,7 +285,7 @@ def _count_nouns_streaming_trace(
 
     with trace_tsv.open("w", encoding="utf-8", newline="") as fp:
         w = csv.writer(fp, delimiter="\t")
-        w.writerow(["label", "chunk", "sent_idx", "token_idx", "sentence", "token", "lemma", "upos", "global_row"])
+        w.writerow(["label", "chunk", "sent_idx", "token_idx", "sentence", "token", "lemma", "upos", "ref_tag", "global_row"])
 
         for k, chunk in enumerate(iter_char_chunks(text, chunk_chars=chunk_chars), 1):
             doc = nlp(chunk)
@@ -271,7 +303,16 @@ def _count_nouns_streaming_trace(
 
                     key = lemma if (use_lemma and lemma) else token
                     key = (key or "").strip().lower()
-                    if key:
+
+                    tag = ""
+                    if key and ref_tag_detector is not None:
+                        tag = ref_tag_detector(key)
+                        if tag:
+                            if ref_tag_counter is not None:
+                                ref_tag_counter[tag] += 1
+                        else:
+                            total[key] += 1
+                    elif key:
                         total[key] += 1
 
                     if trace_enabled:
@@ -285,6 +326,7 @@ def _count_nouns_streaming_trace(
                             token or "",
                             lemma or "",
                             upos or "",
+                            tag,
                             global_row,
                         ])
                         rows_written += 1
@@ -306,11 +348,16 @@ def count_nouns_streaming(
     *,
     trace_tsv: Optional[Path] = None,
     trace_max_rows: int = 0,
+    ref_tag_detector: Optional[Callable[[str], str]] = None,
+    ref_tag_counter: Optional[Counter] = None,
 ) -> Counter:
     """
     Public API:
       - trace_tsv is None => fast path
       - trace_tsv given   => trace path
+
+    ref_tag_detector: key -> ref_tag label (non-empty) or "" (not a ref_tag).
+    ref_tag_counter:  mutable Counter; ref_tag hits are accumulated here.
     """
     if trace_tsv is None:
         return _count_nouns_streaming_fast(
@@ -320,6 +367,8 @@ def count_nouns_streaming(
             upos_targets=upos_targets,
             chunk_chars=chunk_chars,
             label=label,
+            ref_tag_detector=ref_tag_detector,
+            ref_tag_counter=ref_tag_counter,
         )
 
     return _count_nouns_streaming_trace(
@@ -331,6 +380,8 @@ def count_nouns_streaming(
         label=label,
         trace_tsv=trace_tsv,
         trace_max_rows=trace_max_rows,
+        ref_tag_detector=ref_tag_detector,
+        ref_tag_counter=ref_tag_counter,
     )
 
 def normalize_token(
