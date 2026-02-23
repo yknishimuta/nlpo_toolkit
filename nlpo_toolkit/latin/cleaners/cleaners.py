@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import re
 import csv
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -25,6 +25,7 @@ class LineRemoveRule:
     Remove an entire line if pattern matches.
     Extra metadata (ref/name) are preserved for tracing / auditing.
     """
+
     pattern: Pattern
     ref: Any = ""
     name: str = ""
@@ -36,6 +37,7 @@ class SubstituteRule:
     Substitute occurrences in a line: pattern.sub(repl, line)
     Extra metadata (ref/name) are preserved for tracing / auditing.
     """
+
     pattern: Pattern
     repl: str
     ref: Any = ""
@@ -47,11 +49,12 @@ class RefEvent:
     """
     A single rule-hit event for later analysis (standard schema).
     """
+
     doc_id: str
-    kind: str               # "corpus_corporum" or "scholastic_text"
+    kind: str  # "corpus_corporum" or "scholastic_text"
     rule_name: str
-    action: str             # "drop_line" or "substitute"
-    line_no: int            # 1-based line number (relative to processed region)
+    action: str  # "drop_line" or "substitute"
+    line_no: int  # 1-based line number (relative to processed region)
     match_count: int
 
     ref_key: str
@@ -139,6 +142,49 @@ def load_patterns_from_yaml(yaml_path: str | Path) -> dict:
     }
 
 
+def load_lexicon_map_tsv(path: str | Path) -> Dict[str, str]:
+    """
+    Load a simple TSV mapping file: "from<TAB>to" per line.
+    Lines starting with '#' and blank lines are ignored.
+
+    Example:
+        ipsus<TAB>ipse
+        ipsum<TAB>ipse
+    """
+    p = Path(path)
+    mapping: Dict[str, str] = {}
+    for line in p.read_text(encoding="utf-8").splitlines():
+        s = line.strip()
+        if not s or s.startswith("#"):
+            continue
+        parts = s.split("\t")
+        if len(parts) < 2:
+            raise ValueError(f"Bad lexicon map row (need TSV 'from\\tto'): {line!r}")
+        src = parts[0].strip()
+        dst = parts[1].strip()
+        if not src:
+            continue
+        mapping[src] = dst
+    return mapping
+
+
+def apply_lexicon_map(text: str, mapping: Dict[str, str]) -> str:
+    """
+    Apply word-level mapping using word boundaries.
+    Longest keys are matched first to avoid partial overlaps.
+    """
+    if not text or not mapping:
+        return text
+
+    keys = sorted(mapping.keys(), key=len, reverse=True)
+    pat = re.compile(r"\b(" + "|".join(re.escape(k) for k in keys) + r")\b")
+
+    def repl(m: re.Match) -> str:
+        return mapping.get(m.group(1), m.group(1))
+
+    return pat.sub(repl, text)
+
+
 def _write_ref_events_tsv(ref_tsv: Path, events: List[RefEvent]) -> None:
     """
     Append events to TSV (create with header if missing).
@@ -181,6 +227,7 @@ def _write_ref_events_tsv(ref_tsv: Path, events: List[RefEvent]) -> None:
                 ]
             )
 
+
 def clean_text(
     text: str,
     *,
@@ -188,6 +235,7 @@ def clean_text(
     ref_tsv=None,
     doc_id: str = "",
     rules_path=None,
+    lexicon_map_path=None,
 ) -> str:
     kind = (kind or "").strip()
 
@@ -195,6 +243,7 @@ def clean_text(
         return clean_corpus_corporum_text(
             text,
             yaml_path=rules_path,
+            lexicon_map_path=lexicon_map_path,
             ref_tsv=ref_tsv,
             doc_id=doc_id,
         )
@@ -203,16 +252,19 @@ def clean_text(
         return clean_scholastic_text(
             text,
             yaml_path=rules_path,
+            lexicon_map_path=lexicon_map_path,
             ref_tsv=ref_tsv,
             doc_id=doc_id,
         )
 
     raise ValueError(f"Unknown cleaner kind: {kind!r}")
 
+
 def clean_corpus_corporum_text(
     text: str,
     yaml_path: str | Path = CORPUS_CORPORUM_YAML_PATH,
     *,
+    lexicon_map_path: str | Path | None = None,
     ref_tsv: Optional[str | Path] = None,
     doc_id: str = "",
     snippet_chars: int = 200,
@@ -298,6 +350,11 @@ def clean_corpus_corporum_text(
     cleaned_text = re.sub(r"\n{3,}", "\n\n", cleaned_text)
     cleaned_text = re.sub(r" {2,}", " ", cleaned_text)
 
+    # Apply lexicon map AFTER structural cleaning (3rd layer)
+    if lexicon_map_path is not None:
+        mapping = load_lexicon_map_tsv(lexicon_map_path)
+        cleaned_text = apply_lexicon_map(cleaned_text, mapping)
+
     if ref_tsv is not None:
         _write_ref_events_tsv(Path(ref_tsv), events)
 
@@ -308,12 +365,13 @@ def clean_scholastic_text(
     text: str,
     yaml_path: str | Path = SCHOLASTIC_TEXT_YAML_PATH,
     *,
+    lexicon_map_path: str | Path | None = None,
     ref_tsv: Optional[str | Path] = None,
     doc_id: str = "",
     snippet_chars: int = 200,
 ) -> str:
     if yaml_path is None:
-        yaml_path = CORPUS_CORPORUM_YAML_PATH
+        yaml_path = SCHOLASTIC_TEXT_YAML_PATH
 
     patterns = load_patterns_from_yaml(yaml_path)
     remove_line_rules: List[LineRemoveRule] = patterns["remove_line_patterns"]
@@ -380,6 +438,11 @@ def clean_scholastic_text(
     cleaned_text = "\n".join(cleaned_lines)
     cleaned_text = re.sub(r"\n{3,}", "\n\n", cleaned_text)
     cleaned_text = re.sub(r" {2,}", " ", cleaned_text)
+
+    # Apply lexicon map AFTER structural cleaning (3rd layer)
+    if lexicon_map_path is not None:
+        mapping = load_lexicon_map_tsv(lexicon_map_path)
+        cleaned_text = apply_lexicon_map(cleaned_text, mapping)
 
     if ref_tsv is not None:
         _write_ref_events_tsv(Path(ref_tsv), events)

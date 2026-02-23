@@ -20,20 +20,19 @@ def _clean_single_file(
     ref_tsv: str | Path | None = None,
     doc_id: str = "",
     rules_path: str | Path | None = None,
+    lexicon_map_path: str | Path | None = None,
 ) -> None:
     raw = input_path.read_text(encoding="utf-8")
 
-    kwargs = dict(kind=kind, ref_tsv=ref_tsv, doc_id=doc_id)
+    # Backward-compatible kwargs:
+    # - only pass optional args when they are not None
+    kwargs: dict[str, object] = {"kind": kind, "ref_tsv": ref_tsv, "doc_id": doc_id}
     if rules_path is not None:
         kwargs["rules_path"] = rules_path
+    if lexicon_map_path is not None:
+        kwargs["lexicon_map_path"] = lexicon_map_path
 
-    cleaned = clean_text(
-        raw,
-        kind=kind,
-        ref_tsv=ref_tsv,
-        doc_id=doc_id,
-        rules_path=rules_path,
-    )
+    cleaned = clean_text(raw, **kwargs)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(cleaned, encoding="utf-8")
@@ -57,6 +56,7 @@ def main(argv: list[str] | None = None) -> int:
         ref_tsv: ref_events.tsv
         doc_id_prefix: TEST
         rules_path: config/latin_cleaners/corpus_corporum.yml
+        lexicon_map_path: config/latin_cleaners/lexicon_map.tsv
 
     Available template variables (for directory mode):
         {index} : Auto-incrementing index (1, 2, 3, ...)
@@ -68,9 +68,9 @@ def main(argv: list[str] | None = None) -> int:
 
     # Determine which config file to use
     if argv:
-        config_path = Path(argv[0])
+        config_path = Path(argv[0]).expanduser().resolve()
     else:
-        config_path = DEFAULT_CONFIG
+        config_path = DEFAULT_CONFIG.resolve()
 
     if not config_path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
@@ -83,35 +83,49 @@ def main(argv: list[str] | None = None) -> int:
     raw_output = yaml_data["output"]
     filename_template: str | None = yaml_data.get("output_filename_template")
 
-    # optional ref TSV + doc_id prefix + rules yaml
+    # optional ref TSV + doc_id prefix + rules yaml + lexicon map
     raw_ref_tsv = yaml_data.get("ref_tsv")
     doc_id_prefix: str = str(yaml_data.get("doc_id_prefix") or "")
     raw_rules_path = yaml_data.get("rules_path")
+    raw_lexicon_map_path = yaml_data.get("lexicon_map_path")
 
     config_dir = config_path.parent
 
     # Resolve paths relative to the config file's directory
     input_path = Path(raw_input)
     if not input_path.is_absolute():
-        input_path = (config_dir / input_path).resolve()
+        input_path = (config_dir / input_path)
+    input_path = input_path.expanduser().resolve()
 
     output_path = Path(raw_output)
     if not output_path.is_absolute():
-        output_path = (config_dir / output_path).resolve()
+        output_path = (config_dir / output_path)
+    output_path = output_path.expanduser().resolve()
 
     ref_tsv: Path | None = None
     if raw_ref_tsv:
         ref_tsv = Path(raw_ref_tsv)
         if not ref_tsv.is_absolute():
-            ref_tsv = (config_dir / ref_tsv).resolve()
+            ref_tsv = (config_dir / ref_tsv)
+        ref_tsv = ref_tsv.expanduser().resolve()
 
     rules_path: Path | None = None
     if raw_rules_path:
         rules_path = Path(raw_rules_path)
         if not rules_path.is_absolute():
-            rules_path = (config_dir / rules_path).resolve()
+            rules_path = (config_dir / rules_path)
+        rules_path = rules_path.expanduser().resolve()
         if not rules_path.exists():
             raise FileNotFoundError(f"rules_path not found: {rules_path}")
+
+    lexicon_map_path: Path | None = None
+    if raw_lexicon_map_path:
+        lexicon_map_path = Path(raw_lexicon_map_path)
+        if not lexicon_map_path.is_absolute():
+            lexicon_map_path = (config_dir / lexicon_map_path)
+        lexicon_map_path = lexicon_map_path.expanduser().resolve()
+        if not lexicon_map_path.exists():
+            raise FileNotFoundError(f"lexicon_map_path not found: {lexicon_map_path}")
 
     # Directory mode
     if input_path.is_dir():
@@ -153,11 +167,7 @@ def main(argv: list[str] | None = None) -> int:
                 stem = src.stem
                 ext = src.suffix.lstrip(".")
                 try:
-                    name = effective_template.format(
-                        index=idx,
-                        stem=stem,
-                        ext=ext,
-                    )
+                    name = effective_template.format(index=idx, stem=stem, ext=ext)
                 except Exception as e:
                     raise ValueError(
                         f"Invalid output_filename_template={effective_template!r} "
@@ -181,6 +191,7 @@ def main(argv: list[str] | None = None) -> int:
                 ref_tsv=ref_tsv,
                 doc_id=doc_id,
                 rules_path=rules_path,
+                lexicon_map_path=lexicon_map_path,
             )
 
         print(f"[{kind}] cleaned {idx} files in directory: {input_path} -> {output_path}")
@@ -202,6 +213,7 @@ def main(argv: list[str] | None = None) -> int:
             ref_tsv=ref_tsv,
             doc_id=doc_id,
             rules_path=rules_path,
+            lexicon_map_path=lexicon_map_path,
         )
 
     return 0
