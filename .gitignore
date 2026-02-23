@@ -46,3 +46,4 @@ nlpo_toolkit/latin/latin_wordlist/input/*
 nlpo_toolkit/latin/latin_wordlist/output/*
 !nlpo_toolkit/latin/latin_wordlist/output/.gitkeep
 
+nlpo_toolkit/latin/cleaners/config/ref_events.tsv

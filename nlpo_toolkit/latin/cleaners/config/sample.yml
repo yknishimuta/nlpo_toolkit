@@ -2,3 +2,7 @@ kind: corpus_corporum
 input: ../input
 output: ../output
 output_filename_template: "{stem}.{index:02d}.cleaned.{ext}"
+ref_tsv: ref_events.tsv
+doc_id_prefix: TEST
+
+rules_path: config/latin_cleaners/corpus_corporum.yml
