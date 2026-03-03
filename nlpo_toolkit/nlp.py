@@ -355,6 +355,8 @@ def _count_nouns_streaming_trace(
     *,
     trace_tsv: Path,
     trace_max_rows: int = 0,  # 0 => unlimited
+    trace_only_keys: Optional[Set[str]] = None,
+    trace_write_truncation_marker: bool = True,
     ref_tag_detector: Optional[Callable[[str], str]] = None,
     ref_tag_counter: Optional[Counter] = None,
 ) -> Counter:
@@ -379,6 +381,10 @@ def _count_nouns_streaming_trace(
     - If trace_max_rows > 0 and the limit is reached:
         → stop writing trace rows
         → continue counting normally
+        → (optionally) write one marker row to indicate truncation
+    - If trace_only_keys is given:
+        → only write trace rows where `key` is in trace_only_keys
+        → counting still includes all upos-matching tokens
     """
     total = Counter()
     if not text:
@@ -388,6 +394,7 @@ def _count_nouns_streaming_trace(
 
     rows_written = 0
     trace_enabled = True
+    truncation_marked = False  # ★追加
     global_row = 0
 
     chunk_base_offset = 0  # cumulative offset in the full text
@@ -407,6 +414,11 @@ def _count_nouns_streaming_trace(
         "global_row",
     ]
 
+    # normalize trace_only_keys to lowercase, since `key` is lowercased
+    trace_only_keys_lc: Optional[Set[str]] = None
+    if trace_only_keys is not None:
+        trace_only_keys_lc = {str(x).strip().lower() for x in trace_only_keys if str(x).strip()}
+
     with trace_tsv.open("w", encoding="utf-8", newline="") as fp:
         w = csv.writer(fp, delimiter="\t")
         w.writerow(header)
@@ -415,6 +427,7 @@ def _count_nouns_streaming_trace(
             doc = nlp(chunk)
 
             for s_i, sent in enumerate(getattr(doc, "sentences", []) or [], 1):
+                # If trace disabled, avoid storing sentence text (memory / privacy)
                 sent_text = getattr(sent, "text", "") if trace_enabled else ""
 
                 for t_i, (wd, start_in_chunk) in enumerate(_iter_sentence_words_with_offsets(sent), 1):
@@ -428,46 +441,76 @@ def _count_nouns_streaming_trace(
                     key = lemma if (use_lemma and lemma) else token
                     key = (key or "").strip().lower()
 
+                    # ---- counting (always) ----
                     tag = ""
                     if key and ref_tag_detector is not None:
                         tag = ref_tag_detector(key)
                         if tag:
                             if ref_tag_counter is not None:
                                 ref_tag_counter[tag] += 1
+                            # ref tags are excluded from normal counting
                         else:
                             total[key] += 1
                     elif key:
                         total[key] += 1
 
-                    if trace_enabled:
-                        # offset columns
-                        sic = "" if start_in_chunk is None else str(start_in_chunk)
-                        sit = (
-                            ""
-                            if start_in_chunk is None
-                            else str(chunk_base_offset + int(start_in_chunk))
-                        )
+                    # ---- trace writing (optional) ----
+                    if not trace_enabled:
+                        continue
 
-                        global_row += 1
-                        w.writerow(
-                            [
-                                label or "",
-                                k,
-                                s_i,
-                                t_i,
-                                sic,
-                                sit,
-                                sent_text,
-                                token or "",
-                                lemma or "",
-                                upos or "",
-                                tag,
-                                global_row,
-                            ]
-                        )
-                        rows_written += 1
-                        if trace_max_rows and rows_written >= trace_max_rows:
-                            trace_enabled = False
+                    # ★追加: 指定キーだけ trace する
+                    if trace_only_keys_lc is not None and key not in trace_only_keys_lc:
+                        continue
+
+                    # offset columns
+                    sic = "" if start_in_chunk is None else str(start_in_chunk)
+                    sit = (
+                        ""
+                        if start_in_chunk is None
+                        else str(chunk_base_offset + int(start_in_chunk))
+                    )
+
+                    global_row += 1
+                    w.writerow(
+                        [
+                            label or "",
+                            k,
+                            s_i,
+                            t_i,
+                            sic,
+                            sit,
+                            sent_text,
+                            token or "",
+                            lemma or "",
+                            upos or "",
+                            tag,
+                            global_row,
+                        ]
+                    )
+                    rows_written += 1
+
+                    # ★変更: trace_max_rows 到達時に打ち切り marker 行を 1回だけ書く
+                    if trace_max_rows and rows_written >= trace_max_rows:
+                        trace_enabled = False
+                        if trace_write_truncation_marker and not truncation_marked:
+                            truncation_marked = True
+                            global_row += 1
+                            w.writerow(
+                                [
+                                    label or "",
+                                    k,
+                                    s_i,
+                                    t_i,
+                                    "",  # token_char_start_in_chunk
+                                    "",  # token_char_start_in_text
+                                    "",  # sentence
+                                    "(trace stopped; counting continues)",
+                                    "",  # lemma
+                                    "TRACE_TRUNCATED",
+                                    "",
+                                    global_row,
+                                ]
+                            )
 
             if label:
                 print(f"[NLP] {label}: chunk {k} processed (chars {len(chunk):,})")
@@ -487,6 +530,8 @@ def count_nouns_streaming(
     *,
     trace_tsv: Optional[Path] = None,
     trace_max_rows: int = 0,
+    trace_only_keys: Optional[Set[str]] = None,
+    trace_write_truncation_marker: bool = True,
     ref_tag_detector: Optional[Callable[[str], str]] = None,
     ref_tag_counter: Optional[Counter] = None,
 ) -> Counter:
@@ -519,6 +564,8 @@ def count_nouns_streaming(
         label=label,
         trace_tsv=trace_tsv,
         trace_max_rows=trace_max_rows,
+        trace_write_truncation_marker=trace_write_truncation_marker,
+        trace_only_keys=trace_only_keys,
         ref_tag_detector=ref_tag_detector,
         ref_tag_counter=ref_tag_counter,
     )
