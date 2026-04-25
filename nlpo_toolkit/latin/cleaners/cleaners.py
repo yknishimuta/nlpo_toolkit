@@ -320,28 +320,29 @@ def clean_corpus_corporum_text(
             continue
 
         # Apply substitution patterns to the line
-        for rule in substitute_rules:
-            # count matches BEFORE substitution (so we can log only when it actually hit)
-            m = rule.pattern.findall(line)
-            if m:
-                line = rule.pattern.sub(rule.repl, line)
-                if ref_tsv is not None:
-                    flat = flatten_ref(rule.ref)
-                    events.append(
-                        RefEvent(
-                            doc_id=doc_id,
-                            kind="corpus_corporum",
-                            rule_name=rule.name,
-                            action="substitute",
-                            line_no=rel_i,
-                            match_count=len(m),
-                            ref_key=flat["ref_key"],
-                            ref_author=flat["ref_author"],
-                            ref_work=flat["ref_work"],
-                            ref_loc=flat["ref_loc"],
-                            text_snippet=stripped[:snippet_chars],
-                        )
-                    )
+    for rule in substitute_rules:
+        # count matches BEFORE substitution
+        cleaned_text = "\n".join(cleaned_lines)
+        cleaned_text = re.sub(r"\n{3,}", "\n\n", cleaned_text)
+        cleaned_text = re.sub(r" {2,}", " ", cleaned_text)
+
+        if ref_tsv is not None:
+            flat = flatten_ref(rule.ref)
+            events.append(
+                RefEvent(
+                    doc_id=doc_id,
+                    kind="corpus_corporum",
+                    rule_name=rule.name,
+                    action="substitute",
+                    line_no=rel_i,
+                    match_count=len(m),
+                    ref_key=flat["ref_key"],
+                    ref_author=flat["ref_author"],
+                    ref_work=flat["ref_work"],
+                    ref_loc=flat["ref_loc"],
+                    text_snippet=stripped[:snippet_chars],
+                )
+            )
 
         line = line.replace("\t", " ")
         cleaned_lines.append(line)
