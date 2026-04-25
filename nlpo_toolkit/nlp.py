@@ -1,16 +1,9 @@
-from __future__ import annotations
+from collections import Counter
+from typing import Set, Optional, Counter as CounterType, Dict, List, Iterable, Mapping, Union, Callable, Any
 
-from typing import (
-    Set,
-    Dict,
-    List,
-    Iterable,
-    Optional,
-    Mapping,
-    Union,
-    Callable,
-    Any,
-)
+from .models import NLPDocument, NLPToken
+from .interfaces import NLPBackend
+
 from collections import Counter
 import unicodedata
 import re
@@ -25,7 +18,7 @@ _LIG_MAP = {
 }
 _DIACRITICS_RE = re.compile(r"[\u0300-\u036f]")
 
-# stanza の package は str のほか、processorごとの dict 指定も受け得る
+# stanza's package can accept a str as well as a dict specifying per-processor packages
 PackageType = Union[str, Mapping[str, str], None]
 
 # Simple tokenizer
@@ -35,76 +28,53 @@ TOKEN_RE = re.compile(r"[A-Za-zĀāĒēĪīŌōŪūÆæŒœ]+")
 def build_stanza_pipeline(
     lang: str = "la",
     processors: str = "tokenize,mwt,pos,lemma",
-    package: PackageType = None,
+    package: str = "perseus",
     use_gpu: bool = False,
-    *,
-    # ---- backwards/compat knobs ----
-    stanza_package: PackageType = None,
-    # download挙動を明示的に制御したいケースのため（デフォルトは「従来通り auto-download」）
-    auto_download: bool = True,
-    # stanza リソースディレクトリ等を渡したい場合のため
-    stanza_dir: Optional[str] = None,
-    # stanza.Pipeline の download_method を使いたい場合（例: "reuse_resources", "download_resources" 等）
-    download_method: Optional[str] = None,
-    # 将来拡張/呼び出し側の追加引数用
-    **kwargs: Any,
-):
+) -> NLPBackend:
     """
-    Build a Stanza pipeline (auto-download if missing).
-
-    Backward-compat:
-    - `package` 引数を維持（既存実装と同じ）
-    - 追加で `stanza_package` でも指定できる（他モジュール/設定との整合用）
-    - 既定では従来通り auto-download する（auto_download=True）
-
-    Notes:
-    - stanza の import は関数内にして pytest の collection 時の副作用を最小化
+    Function to maintain compatibility.
+    Initializes and returns a StanzaBackend internally.
     """
+    from .backends.stanza_backend import StanzaBackend
+    return StanzaBackend(
+        lang=lang,
+        package=package,
+        use_gpu=use_gpu,
+        processors=processors
+    )
 
-    # 優先順位: stanza_package が渡されていればそれを採用、そうでなければ package
-    if stanza_package is not None:
-        package = stanza_package
+def count_nouns(
+    text: str,
+    nlp: NLPBackend,
+    use_lemma: bool = True,
+    upos_targets: Optional[Set[str]] = None,
+    ref_tag_detector: Optional[Callable[[str], str]] = None,
+    ref_tag_counter: Optional[CounterType[str]] = None,
+) -> CounterType[str]:
+    """
+    Analyzes text using the NLP backend and counts the occurrences of the specified parts of speech.
+    """
+    if upos_targets is None:
+        upos_targets = {"NOUN"}
 
-    # 従来互換：la で package 未指定なら perseus
-    if lang == "la" and package is None:
-        package = "perseus"
+    doc: NLPDocument = nlp(text)
+    counts = Counter()
 
-    import stanza  # lazy import
+    for sent in doc.sentences:
+        for token in sent.tokens:
+            # Count specified parts of speech (e.g., NOUN)
+            if token.upos in upos_targets:
+                key = token.lemma.strip().lower() if (use_lemma and token.lemma) else token.text.strip().lower()
+                if key:
+                    counts[key] += 1
+            
+            # Detect and count reference tags (REF)
+            if ref_tag_detector is not None:
+                ref_tag = ref_tag_detector(token.text)
+                if ref_tag and ref_tag_counter is not None:
+                    ref_tag_counter[ref_tag] += 1
 
-    pipe_kwargs: dict[str, Any] = {
-        "lang": lang,
-        "processors": processors,
-        "package": package,
-        "use_gpu": use_gpu,
-    }
-    if stanza_dir:
-        pipe_kwargs["dir"] = stanza_dir
-    if download_method is not None:
-        pipe_kwargs["download_method"] = download_method
-
-    # 呼び出し側から stanza.Pipeline に追加で渡したいものがあれば許容
-    # （例: tokenize_pretokenized=True など）
-    pipe_kwargs.update(kwargs)
-
-    try:
-        return stanza.Pipeline(**pipe_kwargs)
-    except Exception:
-        if not auto_download:
-            # 従来実装はここで download→再試行していたが、
-            # auto_download=False の場合は例外をそのまま返す（デグレではなく挙動選択）
-            raise
-
-        # 従来互換：失敗したら download して再試行
-        # package が dict の場合 stanza.download の引数として扱いにくいので、
-        # download は lang 単位で呼び出す（stanza が必要なものを解決する）
-        try:
-            stanza.download(lang, package=package)  # type: ignore[arg-type]
-        except TypeError:
-            # Mapping 指定などで stanza.download が受けない場合のフォールバック
-            stanza.download(lang)
-
-        return stanza.Pipeline(**pipe_kwargs)
-
+    return counts
 
 def build_sentence_splitter(language: str, stanza_package: str, cpu_only: bool):
     return build_stanza_pipeline(
@@ -289,39 +259,284 @@ def render_stanza_package_table(
     lines.append("")
     return lines
 
+def iter_char_chunks(text: str, chunk_chars: int) -> Iterable[str]:
+    """Splits the text based on a target character count (adjusted at whitespaces to avoid splitting words)"""
+    start = 0
+    text_len = len(text)
+    while start < text_len:
+        end = start + chunk_chars
+        if end >= text_len:
+            yield text[start:]
+            break
+        
+        # Backtrack slightly to a whitespace to avoid splitting a word
+        while end > start and not text[end].isspace():
+            end -= 1
+        if end == start:  # Fallback in case of a single massive word
+            end = start + chunk_chars
+            
+        yield text[start:end]
+        start = end
 
-def iter_char_chunks(text: str, chunk_chars: int = 200_000):
+def count_nouns_streaming(
+    text: str,
+    nlp: NLPBackend,
+    use_lemma: bool = True,
+    upos_targets: Optional[Set[str]] = None,
+    chunk_chars: int = 200_000,
+    label: str = "",
+    ref_tag_detector: Optional[Callable[[str], str]] = None,
+    ref_tag_counter: Optional[CounterType[str]] = None,
+    trace_tsv: Optional[Path] = None,
+    trace_max_rows: int = 0,
+    trace_only_keys: Optional[Set[str]] = None,
+    trace_write_truncation_marker: bool = True,
+) -> CounterType[str]:
     """
-    Yield text in fixed-size approximate chunks, trying not to split inside a token.
+    Performs streaming NLP analysis and counting while splitting the text into chunks.
     """
-    N = len(text)
-    i = 0
-    while i < N:
-        j = min(N, i + chunk_chars)
+    if upos_targets is None:
+        upos_targets = {"NOUN"}
 
-        if j < N:
-            k = text.rfind(" ", i + 1, j)
-            if k == -1:
-                k = text.rfind("\n", i + 1, j)
+    # If trace_tsv is specified, delegate to the internal function with detailed trace output
+    if trace_tsv is not None:
+        return _count_nouns_streaming_trace(
+            text=text,
+            nlp=nlp,
+            use_lemma=use_lemma,
+            upos_targets=upos_targets,
+            chunk_chars=chunk_chars,
+            label=label,
+            trace_tsv=trace_tsv,
+            trace_max_rows=trace_max_rows,
+            trace_only_keys=trace_only_keys,
+            trace_write_truncation_marker=trace_write_truncation_marker,
+            ref_tag_detector=ref_tag_detector,
+            ref_tag_counter=ref_tag_counter,
+        )
 
-            if k != -1 and k > i:
-                j = k + 1
+    counts = Counter()
+    for chunk in iter_char_chunks(text, chunk_chars):
+        doc = nlp(chunk)  # Returns the common data model (NLPDocument)
+        
+        for sent in doc.sentences:
+            for token in sent.tokens:
+                if token.upos in upos_targets:
+                    key = token.lemma.strip().lower() if (use_lemma and token.lemma) else token.text.strip().lower()
+                    if key:
+                        counts[key] += 1
+                        
+    return counts
 
-        yield text[i:j]
-        i = j
+def _count_nouns_streaming_trace(
+    text: str,
+    nlp: NLPBackend,
+    use_lemma: bool,
+    upos_targets: Set[str],
+    chunk_chars: int,
+    label: str,
+    trace_tsv: Path,
+    trace_max_rows: int,
+    trace_only_keys: Optional[Set[str]],
+    trace_write_truncation_marker: bool,
+    ref_tag_detector: Optional[Callable[[str], str]],
+    ref_tag_counter: Optional[CounterType[str]],
+) -> CounterType[str]:
+    """Streaming counting process with trace (TSV) output"""
+    counts = Counter()
+    
+    trace_tsv = Path(trace_tsv)
+    trace_tsv.parent.mkdir(parents=True, exist_ok=True)
+    
+    if trace_only_keys is not None:
+        trace_only_keys = {k.lower() for k in trace_only_keys}
 
+    with trace_tsv.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f, delimiter="\t")
+        writer.writerow([
+            "label", "chunk", "sent_idx", "token_idx",
+            "token_char_start_in_chunk", "token_char_start_in_text",
+            "sentence", "token", "lemma", "upos", "ref_tag", "global_row"
+        ])  #
+
+        global_row = 0
+        chunk_base_offset = 0
+        truncated = False
+
+        for chunk_idx, chunk in enumerate(iter_char_chunks(text, chunk_chars)):
+            doc = nlp(chunk)
+            
+            for sent_idx, sent in enumerate(doc.sentences):
+                # Full sentence text (if not retained, concatenate tokens)
+                sent_text_str = sent.text if sent.text else " ".join([t.text for t in sent.tokens])
+                
+                for token_idx, token in enumerate(sent.tokens):
+                    if token.upos in upos_targets:
+                        key = token.lemma.strip().lower() if (use_lemma and token.lemma) else token.text.strip().lower()
+                        if not key:
+                            continue
+                            
+                        counts[key] += 1
+                        
+                        # ------------------------------------------------
+                        # Trace write check
+                        # ------------------------------------------------
+                        if truncated:
+                            continue
+                            
+                        if trace_only_keys and key not in trace_only_keys:
+                            continue
+                            
+                        if trace_max_rows > 0 and global_row >= trace_max_rows:
+                            if trace_write_truncation_marker:
+                                writer.writerow([
+                                    label, chunk_idx, sent_idx, token_idx,
+                                    token.start_char, chunk_base_offset + token.start_char,
+                                    sent_text_str, "(trace stopped; counting continues)",
+                                    "", "TRACE_TRUNCATED", "", global_row + 1
+                                ])  #
+                            truncated = True
+                            continue
+
+                        # Detect reference tags
+                        ref_tag = ""
+                        if ref_tag_detector:
+                            ref_tag = ref_tag_detector(token.text)
+                            if ref_tag and ref_tag_counter is not None:
+                                ref_tag_counter[ref_tag] += 1
+
+                        # Write to TSV
+                        writer.writerow([
+                            label,
+                            chunk_idx,
+                            sent_idx,
+                            token_idx,
+                            token.start_char,
+                            chunk_base_offset + token.start_char,
+                            sent_text_str,
+                            token.text,
+                            token.lemma or "",
+                            token.upos,
+                            ref_tag,
+                            global_row + 1
+                        ])
+                        global_row += 1
+                        
+            # Update absolute position offset for the next chunk
+            chunk_base_offset += len(chunk)
+
+    return counts
+
+def _count_nouns_streaming_trace(
+    text: str,
+    nlp: NLPBackend,
+    use_lemma: bool,
+    upos_targets: Set[str],
+    chunk_chars: int,
+    label: str,
+    trace_tsv: Path,
+    trace_max_rows: int,
+    trace_only_keys: Optional[Set[str]],
+    trace_write_truncation_marker: bool,
+    ref_tag_detector: Optional[Callable[[str], str]],
+    ref_tag_counter: Optional[CounterType[str]],
+) -> CounterType[str]:
+    """Streaming counting process with trace (TSV) output"""
+    counts = Counter()
+    
+    trace_tsv = Path(trace_tsv)
+    trace_tsv.parent.mkdir(parents=True, exist_ok=True)
+    
+    if trace_only_keys is not None:
+        trace_only_keys = {k.lower() for k in trace_only_keys}
+
+    with trace_tsv.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f, delimiter="\t")
+        writer.writerow([
+            "label", "chunk", "sent_idx", "token_idx",
+            "token_char_start_in_chunk", "token_char_start_in_text",
+            "sentence", "token", "lemma", "upos", "ref_tag", "global_row"
+        ])  #
+
+        global_row = 0
+        chunk_base_offset = 0
+        truncated = False
+
+        for chunk_idx, chunk in enumerate(iter_char_chunks(text, chunk_chars)):
+            doc = nlp(chunk)
+            
+            for sent_idx, sent in enumerate(doc.sentences):
+                # Full sentence text (if not retained, concatenate tokens)
+                sent_text_str = sent.text if sent.text else " ".join([t.text for t in sent.tokens])
+                
+                for token_idx, token in enumerate(sent.tokens):
+                    if token.upos in upos_targets:
+                        key = token.lemma.strip().lower() if (use_lemma and token.lemma) else token.text.strip().lower()
+                        if not key:
+                            continue
+                            
+                        counts[key] += 1
+                        
+                        # ------------------------------------------------
+                        # Trace write check
+                        # ------------------------------------------------
+                        if truncated:
+                            continue
+                            
+                        if trace_only_keys and key not in trace_only_keys:
+                            continue
+                            
+                        if trace_max_rows > 0 and global_row >= trace_max_rows:
+                            if trace_write_truncation_marker:
+                                writer.writerow([
+                                    label, chunk_idx, sent_idx, token_idx,
+                                    token.start_char, chunk_base_offset + token.start_char,
+                                    sent_text_str, "(trace stopped; counting continues)",
+                                    "", "TRACE_TRUNCATED", "", global_row + 1
+                                ])  #
+                            truncated = True
+                            continue
+
+                        # Detect reference tags
+                        ref_tag = ""
+                        if ref_tag_detector:
+                            ref_tag = ref_tag_detector(token.text)
+                            if ref_tag and ref_tag_counter is not None:
+                                ref_tag_counter[ref_tag] += 1
+
+                        # Write to TSV
+                        writer.writerow([
+                            label,
+                            chunk_idx,
+                            sent_idx,
+                            token_idx,
+                            token.start_char,
+                            chunk_base_offset + token.start_char,
+                            sent_text_str,
+                            token.text,
+                            token.lemma or "",
+                            token.upos,
+                            ref_tag,
+                            global_row + 1
+                        ])
+                        global_row += 1
+                        
+            # Update absolute position offset for the next chunk
+            chunk_base_offset += len(chunk)
+
+    return counts
 
 def _count_nouns_streaming_fast(
     text: str,
-    nlp,
+    nlp: NLPBackend,  # <- ★ Changed this to the common interface
     use_lemma: bool = True,
     upos_targets: Set[str] = frozenset({"NOUN"}),
     chunk_chars: int = 200_000,
     label: str = "",
     *,
     ref_tag_detector: Optional[Callable[[str], str]] = None,
-    ref_tag_counter: Optional[Counter] = None,
-) -> Counter:
+    ref_tag_counter: Optional[CounterType[str]] = None,
+) -> CounterType[str]:
     """
     Fast path: streaming without materializing chunk list (memory-friendly).
     """
@@ -342,181 +557,6 @@ def _count_nouns_streaming_fast(
 
         if label:
             print(f"[NLP] {label}: chunk {k} processed (chars {len(chunk):,})")
-
-    return total
-
-def _count_nouns_streaming_trace(
-    text: str,
-    nlp,
-    use_lemma: bool = True,
-    upos_targets: Set[str] = frozenset({"NOUN"}),
-    chunk_chars: int = 200_000,
-    label: str = "",
-    *,
-    trace_tsv: Path,
-    trace_max_rows: int = 0,  # 0 => unlimited
-    trace_only_keys: Optional[Set[str]] = None,
-    trace_write_truncation_marker: bool = True,
-    ref_tag_detector: Optional[Callable[[str], str]] = None,
-    ref_tag_counter: Optional[Counter] = None,
-) -> Counter:
-    """
-    Trace path: dump evidence rows to TSV while counting nouns.
-
-    TSV columns (MUST match tests/test_trace_offsets.py):
-      label
-      chunk
-      sent_idx
-      token_idx
-      token_char_start_in_chunk
-      token_char_start_in_text
-      sentence
-      token
-      lemma
-      upos
-      ref_tag
-      global_row
-
-    - token_char_start_in_text = chunk_base_offset + token_char_start_in_chunk
-    - If trace_max_rows > 0 and the limit is reached:
-        → stop writing trace rows
-        → continue counting normally
-        → (optionally) write one marker row to indicate truncation
-    - If trace_only_keys is given:
-        → only write trace rows where `key` is in trace_only_keys
-        → counting still includes all upos-matching tokens
-    """
-    total = Counter()
-    if not text:
-        return total
-
-    trace_tsv.parent.mkdir(parents=True, exist_ok=True)
-
-    rows_written = 0
-    trace_enabled = True
-    truncation_marked = False  # ★追加
-    global_row = 0
-
-    chunk_base_offset = 0  # cumulative offset in the full text
-
-    header = [
-        "label",
-        "chunk",
-        "sent_idx",
-        "token_idx",
-        "token_char_start_in_chunk",
-        "token_char_start_in_text",
-        "sentence",
-        "token",
-        "lemma",
-        "upos",
-        "ref_tag",
-        "global_row",
-    ]
-
-    # normalize trace_only_keys to lowercase, since `key` is lowercased
-    trace_only_keys_lc: Optional[Set[str]] = None
-    if trace_only_keys is not None:
-        trace_only_keys_lc = {str(x).strip().lower() for x in trace_only_keys if str(x).strip()}
-
-    with trace_tsv.open("w", encoding="utf-8", newline="") as fp:
-        w = csv.writer(fp, delimiter="\t")
-        w.writerow(header)
-
-        for k, chunk in enumerate(iter_char_chunks(text, chunk_chars=chunk_chars), 1):
-            doc = nlp(chunk)
-
-            for s_i, sent in enumerate(getattr(doc, "sentences", []) or [], 1):
-                # If trace disabled, avoid storing sentence text (memory / privacy)
-                sent_text = getattr(sent, "text", "") if trace_enabled else ""
-
-                for t_i, (wd, start_in_chunk) in enumerate(_iter_sentence_words_with_offsets(sent), 1):
-                    upos = getattr(wd, "upos", None)
-                    if upos not in upos_targets:
-                        continue
-
-                    token = getattr(wd, "text", None)
-                    lemma = getattr(wd, "lemma", None)
-
-                    key = lemma if (use_lemma and lemma) else token
-                    key = (key or "").strip().lower()
-
-                    # ---- counting (always) ----
-                    tag = ""
-                    if key and ref_tag_detector is not None:
-                        tag = ref_tag_detector(key)
-                        if tag:
-                            if ref_tag_counter is not None:
-                                ref_tag_counter[tag] += 1
-                            # ref tags are excluded from normal counting
-                        else:
-                            total[key] += 1
-                    elif key:
-                        total[key] += 1
-
-                    # ---- trace writing (optional) ----
-                    if not trace_enabled:
-                        continue
-
-                    # ★追加: 指定キーだけ trace する
-                    if trace_only_keys_lc is not None and key not in trace_only_keys_lc:
-                        continue
-
-                    # offset columns
-                    sic = "" if start_in_chunk is None else str(start_in_chunk)
-                    sit = (
-                        ""
-                        if start_in_chunk is None
-                        else str(chunk_base_offset + int(start_in_chunk))
-                    )
-
-                    global_row += 1
-                    w.writerow(
-                        [
-                            label or "",
-                            k,
-                            s_i,
-                            t_i,
-                            sic,
-                            sit,
-                            sent_text,
-                            token or "",
-                            lemma or "",
-                            upos or "",
-                            tag,
-                            global_row,
-                        ]
-                    )
-                    rows_written += 1
-
-                    # ★変更: trace_max_rows 到達時に打ち切り marker 行を 1回だけ書く
-                    if trace_max_rows and rows_written >= trace_max_rows:
-                        trace_enabled = False
-                        if trace_write_truncation_marker and not truncation_marked:
-                            truncation_marked = True
-                            global_row += 1
-                            w.writerow(
-                                [
-                                    label or "",
-                                    k,
-                                    s_i,
-                                    t_i,
-                                    "",  # token_char_start_in_chunk
-                                    "",  # token_char_start_in_text
-                                    "",  # sentence
-                                    "(trace stopped; counting continues)",
-                                    "",  # lemma
-                                    "TRACE_TRUNCATED",
-                                    "",
-                                    global_row,
-                                ]
-                            )
-
-            if label:
-                print(f"[NLP] {label}: chunk {k} processed (chars {len(chunk):,})")
-
-            # advance base offset after processing this chunk
-            chunk_base_offset += len(chunk)
 
     return total
 
