@@ -4,10 +4,7 @@ from typing import Set, Optional, Counter as CounterType, Dict, List, Iterable, 
 from .models import NLPDocument, NLPToken
 from .interfaces import NLPBackend
 
-from collections import Counter
-import unicodedata
-import re
-import csv
+import unicodedata, string, re, csv
 from pathlib import Path
 
 _LIG_MAP = {
@@ -24,6 +21,7 @@ PackageType = Union[str, Mapping[str, str], None]
 # Simple tokenizer
 TOKEN_RE = re.compile(r"[A-Za-zĀāĒēĪīŌōŪūÆæŒœ]+")
 
+_STRIP_PUNCT = string.punctuation + "“”‘’«»…—–-­"
 
 def build_stanza_pipeline(
     lang: str = "la",
@@ -42,39 +40,6 @@ def build_stanza_pipeline(
         use_gpu=use_gpu,
         processors=processors
     )
-
-def count_nouns(
-    text: str,
-    nlp: NLPBackend,
-    use_lemma: bool = True,
-    upos_targets: Optional[Set[str]] = None,
-    ref_tag_detector: Optional[Callable[[str], str]] = None,
-    ref_tag_counter: Optional[CounterType[str]] = None,
-) -> CounterType[str]:
-    """
-    Analyzes text using the NLP backend and counts the occurrences of the specified parts of speech.
-    """
-    if upos_targets is None:
-        upos_targets = {"NOUN"}
-
-    doc: NLPDocument = nlp(text)
-    counts = Counter()
-
-    for sent in doc.sentences:
-        for token in sent.tokens:
-            # Count specified parts of speech (e.g., NOUN)
-            if token.upos in upos_targets:
-                key = token.lemma.strip().lower() if (use_lemma and token.lemma) else token.text.strip().lower()
-                if key:
-                    counts[key] += 1
-            
-            # Detect and count reference tags (REF)
-            if ref_tag_detector is not None:
-                ref_tag = ref_tag_detector(token.text)
-                if ref_tag and ref_tag_counter is not None:
-                    ref_tag_counter[ref_tag] += 1
-
-    return counts
 
 def build_sentence_splitter(language: str, stanza_package: str, cpu_only: bool):
     return build_stanza_pipeline(
@@ -139,6 +104,7 @@ def count_nouns_doc(
     *,
     ref_tag_detector: Optional[Callable[[str], str]] = None,
     ref_tag_counter: Optional[Counter] = None,
+    min_token_length: int = 0,
 ) -> Counter:
     counter = Counter()
 
@@ -155,7 +121,7 @@ def count_nouns_doc(
                 continue
 
             key = token.strip().lower()
-            if not key:
+            if not key or len(key) < min_token_length:
                 continue
 
             if ref_tag_detector is not None:
@@ -172,12 +138,13 @@ def count_nouns_doc(
 
 def count_nouns(
     text: str,
-    nlp,
+    nlp: NLPBackend,
     use_lemma: bool = True,
     upos_targets: Set[str] = frozenset({"NOUN"}),
     *,
     ref_tag_detector: Optional[Callable[[str], str]] = None,
     ref_tag_counter: Optional[Counter] = None,
+    min_token_length: int = 0,
 ) -> Counter:
     if not text or not text.strip():
         return Counter()
@@ -188,6 +155,7 @@ def count_nouns(
         upos_targets=upos_targets,
         ref_tag_detector=ref_tag_detector,
         ref_tag_counter=ref_tag_counter,
+        min_token_length=min_token_length,
     )
 
 
@@ -223,7 +191,7 @@ def count_nouns_normalized(
 
 
 def render_stanza_package_table(
-    nlp,
+    nlp: NLPBackend,
     requested_package: Optional[Dict[str, str]] = None,
     processors: Iterable[str] = ("tokenize", "mwt", "pos", "lemma"),
 ) -> List[str]:
@@ -278,55 +246,6 @@ def iter_char_chunks(text: str, chunk_chars: int) -> Iterable[str]:
         yield text[start:end]
         start = end
 
-def count_nouns_streaming(
-    text: str,
-    nlp: NLPBackend,
-    use_lemma: bool = True,
-    upos_targets: Optional[Set[str]] = None,
-    chunk_chars: int = 200_000,
-    label: str = "",
-    ref_tag_detector: Optional[Callable[[str], str]] = None,
-    ref_tag_counter: Optional[CounterType[str]] = None,
-    trace_tsv: Optional[Path] = None,
-    trace_max_rows: int = 0,
-    trace_only_keys: Optional[Set[str]] = None,
-    trace_write_truncation_marker: bool = True,
-) -> CounterType[str]:
-    """
-    Performs streaming NLP analysis and counting while splitting the text into chunks.
-    """
-    if upos_targets is None:
-        upos_targets = {"NOUN"}
-
-    # If trace_tsv is specified, delegate to the internal function with detailed trace output
-    if trace_tsv is not None:
-        return _count_nouns_streaming_trace(
-            text=text,
-            nlp=nlp,
-            use_lemma=use_lemma,
-            upos_targets=upos_targets,
-            chunk_chars=chunk_chars,
-            label=label,
-            trace_tsv=trace_tsv,
-            trace_max_rows=trace_max_rows,
-            trace_only_keys=trace_only_keys,
-            trace_write_truncation_marker=trace_write_truncation_marker,
-            ref_tag_detector=ref_tag_detector,
-            ref_tag_counter=ref_tag_counter,
-        )
-
-    counts = Counter()
-    for chunk in iter_char_chunks(text, chunk_chars):
-        doc = nlp(chunk)  # Returns the common data model (NLPDocument)
-        
-        for sent in doc.sentences:
-            for token in sent.tokens:
-                if token.upos in upos_targets:
-                    key = token.lemma.strip().lower() if (use_lemma and token.lemma) else token.text.strip().lower()
-                    if key:
-                        counts[key] += 1
-                        
-    return counts
 
 def _count_nouns_streaming_trace(
     text: str,
@@ -341,7 +260,8 @@ def _count_nouns_streaming_trace(
     trace_write_truncation_marker: bool,
     ref_tag_detector: Optional[Callable[[str], str]],
     ref_tag_counter: Optional[CounterType[str]],
-) -> CounterType[str]:
+    min_token_length: int = 0,
+) -> Counter:
     """Streaming counting process with trace (TSV) output"""
     counts = Counter()
     
@@ -357,7 +277,7 @@ def _count_nouns_streaming_trace(
             "label", "chunk", "sent_idx", "token_idx",
             "token_char_start_in_chunk", "token_char_start_in_text",
             "sentence", "token", "lemma", "upos", "ref_tag", "global_row"
-        ])  #
+        ]) 
 
         global_row = 0
         chunk_base_offset = 0
@@ -373,108 +293,9 @@ def _count_nouns_streaming_trace(
                 for token_idx, token in enumerate(sent.tokens):
                     if token.upos in upos_targets:
                         key = token.lemma.strip().lower() if (use_lemma and token.lemma) else token.text.strip().lower()
-                        if not key:
+                        if not key or len(key) < min_token_length:
                             continue
-                            
-                        counts[key] += 1
-                        
-                        # ------------------------------------------------
-                        # Trace write check
-                        # ------------------------------------------------
-                        if truncated:
-                            continue
-                            
-                        if trace_only_keys and key not in trace_only_keys:
-                            continue
-                            
-                        if trace_max_rows > 0 and global_row >= trace_max_rows:
-                            if trace_write_truncation_marker:
-                                writer.writerow([
-                                    label, chunk_idx, sent_idx, token_idx,
-                                    token.start_char, chunk_base_offset + token.start_char,
-                                    sent_text_str, "(trace stopped; counting continues)",
-                                    "", "TRACE_TRUNCATED", "", global_row + 1
-                                ])  #
-                            truncated = True
-                            continue
-
-                        # Detect reference tags
-                        ref_tag = ""
-                        if ref_tag_detector:
-                            ref_tag = ref_tag_detector(token.text)
-                            if ref_tag and ref_tag_counter is not None:
-                                ref_tag_counter[ref_tag] += 1
-
-                        # Write to TSV
-                        writer.writerow([
-                            label,
-                            chunk_idx,
-                            sent_idx,
-                            token_idx,
-                            token.start_char,
-                            chunk_base_offset + token.start_char,
-                            sent_text_str,
-                            token.text,
-                            token.lemma or "",
-                            token.upos,
-                            ref_tag,
-                            global_row + 1
-                        ])
-                        global_row += 1
-                        
-            # Update absolute position offset for the next chunk
-            chunk_base_offset += len(chunk)
-
-    return counts
-
-def _count_nouns_streaming_trace(
-    text: str,
-    nlp: NLPBackend,
-    use_lemma: bool,
-    upos_targets: Set[str],
-    chunk_chars: int,
-    label: str,
-    trace_tsv: Path,
-    trace_max_rows: int,
-    trace_only_keys: Optional[Set[str]],
-    trace_write_truncation_marker: bool,
-    ref_tag_detector: Optional[Callable[[str], str]],
-    ref_tag_counter: Optional[CounterType[str]],
-) -> CounterType[str]:
-    """Streaming counting process with trace (TSV) output"""
-    counts = Counter()
-    
-    trace_tsv = Path(trace_tsv)
-    trace_tsv.parent.mkdir(parents=True, exist_ok=True)
-    
-    if trace_only_keys is not None:
-        trace_only_keys = {k.lower() for k in trace_only_keys}
-
-    with trace_tsv.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.writer(f, delimiter="\t")
-        writer.writerow([
-            "label", "chunk", "sent_idx", "token_idx",
-            "token_char_start_in_chunk", "token_char_start_in_text",
-            "sentence", "token", "lemma", "upos", "ref_tag", "global_row"
-        ])  #
-
-        global_row = 0
-        chunk_base_offset = 0
-        truncated = False
-
-        for chunk_idx, chunk in enumerate(iter_char_chunks(text, chunk_chars)):
-            doc = nlp(chunk)
-            
-            for sent_idx, sent in enumerate(doc.sentences):
-                # Full sentence text (if not retained, concatenate tokens)
-                sent_text_str = sent.text if sent.text else " ".join([t.text for t in sent.tokens])
-                
-                for token_idx, token in enumerate(sent.tokens):
-                    if token.upos in upos_targets:
-                        key = token.lemma.strip().lower() if (use_lemma and token.lemma) else token.text.strip().lower()
-                        if not key:
-                            continue
-                            
+  
                         counts[key] += 1
                         
                         # ------------------------------------------------
@@ -528,7 +349,7 @@ def _count_nouns_streaming_trace(
 
 def _count_nouns_streaming_fast(
     text: str,
-    nlp: NLPBackend,  # <- ★ Changed this to the common interface
+    nlp: NLPBackend,
     use_lemma: bool = True,
     upos_targets: Set[str] = frozenset({"NOUN"}),
     chunk_chars: int = 200_000,
@@ -536,7 +357,8 @@ def _count_nouns_streaming_fast(
     *,
     ref_tag_detector: Optional[Callable[[str], str]] = None,
     ref_tag_counter: Optional[CounterType[str]] = None,
-) -> CounterType[str]:
+    min_token_length: int = 0,
+) -> Counter:
     """
     Fast path: streaming without materializing chunk list (memory-friendly).
     """
@@ -553,7 +375,11 @@ def _count_nouns_streaming_fast(
             ref_tag_detector=ref_tag_detector,
             ref_tag_counter=ref_tag_counter,
         )
-        total.update(nouns)
+        if min_token_length > 0:
+            filtered_nouns = {key: count for key, count in nouns.items() if len(key) >= min_token_length}
+            total.update(filtered_nouns)
+        else:
+            total.update(nouns)
 
         if label:
             print(f"[NLP] {label}: chunk {k} processed (chars {len(chunk):,})")
@@ -562,7 +388,7 @@ def _count_nouns_streaming_fast(
 
 def count_nouns_streaming(
     text: str,
-    nlp,
+    nlp: NLPBackend,
     use_lemma: bool = True,
     upos_targets: Set[str] = frozenset({"NOUN"}),
     chunk_chars: int = 200_000,
@@ -574,6 +400,7 @@ def count_nouns_streaming(
     trace_write_truncation_marker: bool = True,
     ref_tag_detector: Optional[Callable[[str], str]] = None,
     ref_tag_counter: Optional[Counter] = None,
+    min_token_length: int = 0,
 ) -> Counter:
     """
     Public API:
@@ -593,6 +420,7 @@ def count_nouns_streaming(
             label=label,
             ref_tag_detector=ref_tag_detector,
             ref_tag_counter=ref_tag_counter,
+            min_token_length=min_token_length,
         )
 
     return _count_nouns_streaming_trace(
@@ -608,6 +436,7 @@ def count_nouns_streaming(
         trace_only_keys=trace_only_keys,
         ref_tag_detector=ref_tag_detector,
         ref_tag_counter=ref_tag_counter,
+        min_token_length=min_token_length,
     )
 
 
