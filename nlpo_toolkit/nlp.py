@@ -22,6 +22,8 @@ PackageType = Union[str, Mapping[str, str], None]
 TOKEN_RE = re.compile(r"[A-Za-zĀāĒēĪīŌōŪūÆæŒœ]+")
 
 _STRIP_PUNCT = string.punctuation + "“”‘’«»…—–-­"
+_ROMAN_RE = re.compile(r"^(m{0,4}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|v?i{0,3}))$", re.I)
+_SURFACE_ROMAN_EXCEPTIONS = frozenset({"vi", "di"}) # Surface時に保護する単語
 
 def build_stanza_pipeline(
     lang: str = "la",
@@ -105,6 +107,7 @@ def count_nouns_doc(
     ref_tag_detector: Optional[Callable[[str], str]] = None,
     ref_tag_counter: Optional[Counter] = None,
     min_token_length: int = 0,
+    drop_roman_numerals: bool = False,
 ) -> Counter:
     counter = Counter()
 
@@ -123,6 +126,12 @@ def count_nouns_doc(
             key = token.strip().lower()
             if not key or len(key) < min_token_length:
                 continue
+
+            if drop_roman_numerals and _ROMAN_RE.fullmatch(key):
+                if not use_lemma and key in _SURFACE_ROMAN_EXCEPTIONS:
+                    pass
+                else:
+                    continue
 
             if ref_tag_detector is not None:
                 tag = ref_tag_detector(key)
@@ -145,6 +154,7 @@ def count_nouns(
     ref_tag_detector: Optional[Callable[[str], str]] = None,
     ref_tag_counter: Optional[Counter] = None,
     min_token_length: int = 0,
+    drop_roman_numerals: bool = False,
 ) -> Counter:
     if not text or not text.strip():
         return Counter()
@@ -156,6 +166,7 @@ def count_nouns(
         ref_tag_detector=ref_tag_detector,
         ref_tag_counter=ref_tag_counter,
         min_token_length=min_token_length,
+        drop_roman_numerals=drop_roman_numerals,
     )
 
 
@@ -165,6 +176,7 @@ def count_nouns_normalized(
     use_lemma: bool = True,
     upos_targets: Set[str] = frozenset({"NOUN"}),
     normalizer: Optional[Callable[[str], str]] = None,
+    drop_roman_numerals: bool = False,
 ):
     if normalizer is None:
         normalizer = normalize_token
@@ -261,6 +273,7 @@ def _count_nouns_streaming_trace(
     ref_tag_detector: Optional[Callable[[str], str]],
     ref_tag_counter: Optional[CounterType[str]],
     min_token_length: int = 0,
+    drop_roman_numerals: bool = False,
 ) -> Counter:
     """Streaming counting process with trace (TSV) output"""
     counts = Counter()
@@ -296,6 +309,12 @@ def _count_nouns_streaming_trace(
                         if not key or len(key) < min_token_length:
                             continue
   
+                        if drop_roman_numerals and _ROMAN_RE.fullmatch(key):
+                            if not use_lemma and key in _SURFACE_ROMAN_EXCEPTIONS:
+                                pass
+                            else:
+                                continue
+
                         counts[key] += 1
                         
                         # ------------------------------------------------
@@ -314,7 +333,7 @@ def _count_nouns_streaming_trace(
                                     token.start_char, chunk_base_offset + token.start_char,
                                     sent_text_str, "(trace stopped; counting continues)",
                                     "", "TRACE_TRUNCATED", "", global_row + 1
-                                ])  #
+                                ])
                             truncated = True
                             continue
 
@@ -358,6 +377,7 @@ def _count_nouns_streaming_fast(
     ref_tag_detector: Optional[Callable[[str], str]] = None,
     ref_tag_counter: Optional[CounterType[str]] = None,
     min_token_length: int = 0,
+    drop_roman_numerals: bool = False,
 ) -> Counter:
     """
     Fast path: streaming without materializing chunk list (memory-friendly).
@@ -401,6 +421,7 @@ def count_nouns_streaming(
     ref_tag_detector: Optional[Callable[[str], str]] = None,
     ref_tag_counter: Optional[Counter] = None,
     min_token_length: int = 0,
+    drop_roman_numerals: bool = False,
 ) -> Counter:
     """
     Public API:
@@ -421,6 +442,7 @@ def count_nouns_streaming(
             ref_tag_detector=ref_tag_detector,
             ref_tag_counter=ref_tag_counter,
             min_token_length=min_token_length,
+            drop_roman_numerals=drop_roman_numerals,
         )
 
     return _count_nouns_streaming_trace(
@@ -437,6 +459,7 @@ def count_nouns_streaming(
         ref_tag_detector=ref_tag_detector,
         ref_tag_counter=ref_tag_counter,
         min_token_length=min_token_length,
+        drop_roman_numerals=drop_roman_numerals,
     )
 
 
