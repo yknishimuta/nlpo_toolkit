@@ -1,0 +1,7 @@
+services:
+  nlpo:
+    build: .
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: ["count-vocabula", "--project-root", "/app"]

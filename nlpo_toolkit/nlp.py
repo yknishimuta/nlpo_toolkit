@@ -108,7 +108,12 @@ def count_nouns_doc(
     ref_tag_counter: Optional[Counter] = None,
     min_token_length: int = 0,
     drop_roman_numerals: bool = False,
+    drop_roman: Optional[bool] = None,
+    roman_exceptions_file: Optional[Path] = None,
 ) -> Counter:
+    if drop_roman is not None:
+        drop_roman_numerals = drop_roman
+
     counter = Counter()
 
     for sent in getattr(doc, "sentences", []) or []:
@@ -155,6 +160,8 @@ def count_nouns(
     ref_tag_counter: Optional[Counter] = None,
     min_token_length: int = 0,
     drop_roman_numerals: bool = False,
+    drop_roman: Optional[bool] = None,
+    roman_exceptions_file: Optional[Path] = None,
 ) -> Counter:
     if not text or not text.strip():
         return Counter()
@@ -167,6 +174,8 @@ def count_nouns(
         ref_tag_counter=ref_tag_counter,
         min_token_length=min_token_length,
         drop_roman_numerals=drop_roman_numerals,
+        drop_roman=drop_roman,
+        roman_exceptions_file=roman_exceptions_file,
     )
 
 
@@ -274,6 +283,7 @@ def _count_nouns_streaming_trace(
     ref_tag_counter: Optional[CounterType[str]],
     min_token_length: int = 0,
     drop_roman_numerals: bool = False,
+    roman_exceptions_file: Optional[Path] = None,
 ) -> Counter:
     """Streaming counting process with trace (TSV) output"""
     counts = Counter()
@@ -378,6 +388,7 @@ def _count_nouns_streaming_fast(
     ref_tag_counter: Optional[CounterType[str]] = None,
     min_token_length: int = 0,
     drop_roman_numerals: bool = False,
+    roman_exceptions_file: Optional[Path] = None,
 ) -> Counter:
     """
     Fast path: streaming without materializing chunk list (memory-friendly).
@@ -394,12 +405,11 @@ def _count_nouns_streaming_fast(
             upos_targets=upos_targets,
             ref_tag_detector=ref_tag_detector,
             ref_tag_counter=ref_tag_counter,
+            min_token_length=min_token_length,
+            drop_roman_numerals=drop_roman_numerals,
+            roman_exceptions_file=roman_exceptions_file,
         )
-        if min_token_length > 0:
-            filtered_nouns = {key: count for key, count in nouns.items() if len(key) >= min_token_length}
-            total.update(filtered_nouns)
-        else:
-            total.update(nouns)
+        total.update(nouns)
 
         if label:
             print(f"[NLP] {label}: chunk {k} processed (chars {len(chunk):,})")
@@ -422,6 +432,7 @@ def count_nouns_streaming(
     ref_tag_counter: Optional[Counter] = None,
     min_token_length: int = 0,
     drop_roman_numerals: bool = False,
+    roman_exceptions_file: Optional[Path] = None,
 ) -> Counter:
     """
     Public API:
@@ -443,6 +454,7 @@ def count_nouns_streaming(
             ref_tag_counter=ref_tag_counter,
             min_token_length=min_token_length,
             drop_roman_numerals=drop_roman_numerals,
+            roman_exceptions_file=roman_exceptions_file,
         )
 
     return _count_nouns_streaming_trace(
@@ -460,6 +472,7 @@ def count_nouns_streaming(
         ref_tag_counter=ref_tag_counter,
         min_token_length=min_token_length,
         drop_roman_numerals=drop_roman_numerals,
+        roman_exceptions_file=roman_exceptions_file,
     )
 
 
