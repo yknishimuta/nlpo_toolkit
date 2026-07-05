@@ -61,6 +61,30 @@ nlpo count-vocabula \
   --group-by-file
 ```
 
+To validate the config without running preprocessing or NLP, use `--dry-run`:
+
+```bash
+nlpo count-vocabula \
+  --dry-run \
+  --project-root . \
+  --config config/groups.config.yml
+```
+
+Example output:
+
+```text
+[OK] config loaded
+[OK] preprocess cleaner config found: config/cleaner.yml
+[OK] input files: 3
+[OK] cleaned output dir: cleaned
+[OK] group text matched files: 3
+[WARN] duplicate YAML key: trace
+[WARN] unknown config key: roman_exception_files
+[OK] dictcheck wordlist found
+[OK] ref_tags patterns found
+[OK] output dir: output
+```
+
 If `--config` is omitted, the CLI uses:
 
 ```text

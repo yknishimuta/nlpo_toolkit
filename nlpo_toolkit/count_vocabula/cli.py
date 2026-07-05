@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from typing import Sequence
 
 from .config import load_config
+from .dry_run import dry_run_count_vocabula
 from .nlp_hooks import (
     build_pipeline,
     build_sentence_splitter,
@@ -62,6 +63,11 @@ def build_parser() -> argparse.ArgumentParser:
             action="store_true",
             help="Write one frequency CSV per input file instead of one CSV per configured group.",
         )
+        count_parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Validate config, paths, and matched files without running NLP.",
+        )
 
     return parser
 
@@ -78,6 +84,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         config_path = (project_root / config_path).resolve()
 
     if args.command in {"count-vocabula", "count"}:
+        if args.dry_run:
+            return dry_run_count_vocabula(
+                project_root=project_root,
+                config_path=config_path,
+                group_by_file=bool(args.group_by_file),
+            )
         return run_count_vocabula(
             project_root=project_root,
             config_path=config_path,
