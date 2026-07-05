@@ -1,45 +1,169 @@
 # nlpo_toolkit
 
-A lightweight Python toolkit for processing and analyzing Latin (and other classical / scholarly) corpora. Designed to support digital-humanities research, NLP preprocessing, and reproducible vocabulary / frequency analysis workflows.
+`nlpo_toolkit` is the canonical Python package for Latin corpus cleaning,
+NLP-backed vocabulary counting, and reproducible frequency-table workflows.
 
-### Prerequisites
+Vocabulary-counting functionality lives in `nlpo_toolkit.count_vocabula` and is
+exposed through the `nlpo` command.
 
-- Python **3.8** (or a reasonably recent 3.x)
-- Recommended: use a virtual environment
+## What Is Included
 
-### Installation
+- Latin corpus cleaning utilities under `nlpo_toolkit.latin.cleaners`
+- Stanza-backed NLP helpers under `nlpo_toolkit.nlp`
+- Vocabulary counting CLI:
+  - `nlpo count-vocabula`
+  - `nlpo count`
+- Config-driven grouping, preprocessing, normalization, dictionary checks,
+  reference-tag handling, trace output, and run metadata
+- Docker setup with cached Stanza resources
 
+## Install
+
+Local development:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
 ```
-# Option 1: install via pip from PyPI or GitHub (if packaged)
+
+From GitHub:
+
+```bash
 pip install git+https://github.com/yknishimuta/nlpo_toolkit.git
-
-# Option 2: install from source
-git clone https://github.com/yknishimuta/nlpo_toolkit.git
-cd nlpo_toolkit
-pip install -r requirements.txt
 ```
 
-### Count Vocabula CLI
+Stanza model download is required for real NLP runs unless you use Docker:
 
-`count_corpus_vocabula` is integrated as an `nlpo_toolkit` subcommand. The
-package and repository name remain `nlpo_toolkit`.
-
+```bash
+python -c "import stanza; stanza.download('la', package='perseus')"
 ```
+
+## Count Vocabula CLI
+
+Use `nlpo count-vocabula` when you want the full vocabulary-counting workflow:
+optional cleaning, input grouping, NLP processing, frequency CSV output,
+dictionary checks, tracing, and run metadata.
+
+Run with an explicit project root and config:
+
+```bash
 nlpo count-vocabula --project-root . --config config/groups.config.yml
 nlpo count --project-root . --config config/groups.config.yml
 ```
 
-`--project-root` is used to resolve relative paths in the YAML config. If
-`--config` is omitted, the CLI uses `<project-root>/config/groups.config.yml`.
-The legacy script name is kept as a wrapper:
+If `--config` is omitted, the CLI uses:
 
-```
-python count_corpus_vocabula_local.py --project-root . --config config/groups.config.yml
+```text
+<project-root>/config/groups.config.yml
 ```
 
-### Docker
+Relative paths in the YAML config are resolved from `--project-root`, not from
+the location of Python source files.
 
-Build an image with Python dependencies and Stanza resources:
+### Minimal Workflow
+
+1. Put UTF-8 text files under `input/`.
+
+```text
+input/
+  text1.txt
+  text2.txt
+```
+
+2. Create `config/groups.config.yml`.
+
+```yaml
+groups:
+  text:
+    files:
+      - input/*.txt
+
+out_dir: output
+language: la
+stanza_package: perseus
+cpu_only: true
+analysis_unit: lemma
+```
+
+3. Run the counter.
+
+```bash
+nlpo count-vocabula --project-root . --config config/groups.config.yml
+```
+
+4. Read the generated files.
+
+```text
+output/
+  noun_frequency_text.csv
+  summary.txt
+  run_meta.json
+```
+
+## Example Config
+
+```yaml
+groups:
+  text:
+    files:
+      - input/*.txt
+
+out_dir: output
+language: la
+stanza_package: perseus
+cpu_only: true
+analysis_unit: lemma
+
+filters:
+  min_token_length: 2
+  drop_roman_numerals: true
+```
+
+With cleaner preprocessing:
+
+```yaml
+preprocess:
+  kind: cleaner
+  config: config/cleaner.yml
+
+groups:
+  cleaned:
+    files:
+      - "{cleaned_dir}/*.txt"
+
+out_dir: output
+```
+
+Useful config options:
+
+```yaml
+analysis_unit: lemma      # "lemma" or "surface"
+
+filters:
+  min_token_length: 2
+  drop_roman_numerals: true
+
+dictcheck:
+  enabled: true
+  wordlist: data/wordlist/latin_words.txt
+  lemma_normalize: config/lemma_normalize.tsv
+
+ref_tags:
+  enabled: true
+  patterns: config/ref_tags.txt
+
+trace:
+  enabled: true
+  path: output/trace.tsv
+  max_rows: 500000
+```
+
+## Docker
+
+Docker is the recommended way to avoid repeated local Stanza setup.
+
+Build the image:
 
 ```bash
 docker compose build
@@ -52,17 +176,40 @@ docker compose run --rm nlpo count-vocabula --project-root /workspace --config c
 docker compose run --rm nlpo count --project-root /workspace --config config/groups.config.yml
 ```
 
-Stanza resources are stored under `/opt/stanza_resources` in a named Docker
-volume, so normal container runs do not reinstall or redownload the models.
-Avoid `docker compose down -v` unless you intentionally want to remove that
-cache.
+Inside the container, the repository is mounted at `/workspace`, so use
+`--project-root /workspace` for project-relative paths.
 
-To skip model download during image build:
+Stanza resources are stored at `/opt/stanza_resources` in a named Docker
+volume. Normal container runs reuse that volume, so models are not redownloaded
+each time.
+
+Avoid this unless you intentionally want to remove the model cache:
+
+```bash
+docker compose down -v
+```
+
+To skip Stanza model download during image build:
 
 ```bash
 docker compose build --build-arg DOWNLOAD_STANZA_MODELS=false
 ```
 
+## Development Checks
+
+Fast unit tests:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 pytest -q -p no:cacheprovider --ignore=tests/test_latin_vocab_pipeline.py
+```
+
+Full tests that need real Stanza resources:
+
+```bash
+STANZA_RESOURCES_DIR=.stanza_resources \
+PYTHONDONTWRITEBYTECODE=1 pytest -q -p no:cacheprovider
+```
+
 ## License
 
-Licensed under the **MIT License** 
+Licensed under the MIT License.
