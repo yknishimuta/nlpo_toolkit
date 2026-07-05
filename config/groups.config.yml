@@ -1,0 +1,81 @@
+preprocess:
+  kind: cleaner
+  config: config/cleaner.yml
+
+groups:
+  text:
+    files:
+      - "{cleaned_dir}/*.txt"
+
+out_dir: output
+language: la
+stanza_package: perseus
+cpu_only: true
+nlp:
+  backend: "transformers"
+  model_name: "pranaydeep/latin-bert"
+  # when backend is stanza
+  language: "la"
+  package: "perseus" 
+
+ref_tags:
+  enabled: true
+  patterns: config/ref_tags.txt
+
+dictcheck:
+  enabled: true
+  wordlist: data/wordlist/latin_words.txt
+  lemma_normalize: config/lemma_normalize.tsv
+
+trace:
+  enabled: true
+  dir: trace
+  max_rows: 20000
+
+upos_targets:
+  - NOUN
+  - PROPN
+
+lemma_cache:
+  enabled: true
+  dir: .lemma_cache
+  use_manifest: true
+  # absolute or relative
+  manifest_key_mode: relative
+  lock_timeout_sec: 300.0
+  include_ref_tags_in_config_hash: true
+
+prune:
+  keep_days: 30
+  keep_files: 50000
+  lock_ttl_sec: 3600
+# lemma or surface
+analysis_unit: lemma
+
+normalization:
+  casefold: false
+  map_u_v: true
+  map_i_j: true
+  strip_diacritics: true
+  normalize_ligatures: true
+  unicode_nf: NFC
+
+trace:
+  enabled: true
+  #path: output/trace.tsv
+  max_rows: 500000
+  only_keys:
+    - ly
+    - uiii
+    - sensibile
+    - successivus
+    - omninus
+    - ium
+    - ibus
+
+  write_truncation_marker: true
+
+filters:
+  min_token_length: 2
+  drop_roman_numerals: true
+  roman_exception_files: config/roman_numeral_exceptions.txt
