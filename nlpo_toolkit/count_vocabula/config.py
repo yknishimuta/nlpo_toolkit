@@ -26,6 +26,7 @@ class Config(TypedDict, total=False):
     stanza_package: Optional[str]
     cpu_only: bool
     analysis_unit: str
+    grouping: Dict[str, Any]
 
 
 def normalize_groups(cfg: dict) -> dict:
@@ -86,6 +87,16 @@ def _validate_analysis_unit(cfg: dict) -> None:
     if unit not in {"lemma", "surface"}:
         raise ValueError("analysis_unit must be 'lemma' or 'surface'")
 
+def _validate_grouping(cfg: dict) -> None:
+    grouping = cfg.get("grouping")
+    if grouping is None:
+        return
+    if not isinstance(grouping, dict):
+        raise ValueError("'grouping' must be a mapping.")
+    mode = grouping.get("mode", "groups")
+    if mode not in {"groups", "per_file"}:
+        raise ValueError("grouping.mode must be 'groups' or 'per_file'")
+
 def load_config(path: Path) -> Config:
     if not path.exists():
         raise FileNotFoundError(f"Config not found: {path}")
@@ -109,5 +120,6 @@ def load_config(path: Path) -> Config:
 
     _validate_preprocess(config_data.get("preprocess"))
     _validate_analysis_unit(config_data)
+    _validate_grouping(config_data)
 
     return config_data  # type: ignore[return-value]

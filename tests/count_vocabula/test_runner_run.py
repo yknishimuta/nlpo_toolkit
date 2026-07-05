@@ -254,3 +254,100 @@ def test_run_passes_filter_args_to_count_group(tmp_path: Path, monkeypatch):
     assert captured_kwargs.get("min_token_length") == 3
     assert captured_kwargs.get("drop_roman_numerals") is True
     assert captured_kwargs.get("roman_exceptions_file") == (script_dir / "rom.txt").resolve()
+
+
+def test_run_group_by_file_writes_one_csv_per_input_file(tmp_path: Path, monkeypatch):
+    project_root = tmp_path
+    config_path = tmp_path / "cfg.yml"
+    config_path.write_text("dummy", encoding="utf-8")
+
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    (input_dir / "virgil-aeneis.txt").write_text("arma virumque", encoding="utf-8")
+    (input_dir / "file2.txt").write_text("cano", encoding="utf-8")
+
+    def load_config_fn(_p: Path):
+        return {
+            "out_dir": "output",
+            "groups": {"all": {"files": ["input/*.txt"]}},
+            "grouping": {"mode": "per_file"},
+        }
+
+    monkeypatch.setattr(runner_mod, "run_preprocess_if_needed", lambda **kwargs: None)
+    monkeypatch.setattr(runner_mod, "build_run_meta", lambda **kwargs: {"groups_files": kwargs["groups_files"]})
+    monkeypatch.setattr(runner_mod, "collect_runtime_environment", lambda _sd: {})
+
+    csv_calls = []
+    monkeypatch.setattr(
+        runner_mod,
+        "write_frequency_csv",
+        lambda path, c, header: csv_calls.append((Path(path).name, dict(c))),
+    )
+
+    meta_calls = []
+    monkeypatch.setattr(runner_mod, "write_run_meta", lambda meta, out_dir: meta_calls.append(meta))
+
+    def count_group_fn(text, nlp, **kwargs):
+        return Counter({text: 1})
+
+    rc = runner_mod.run(
+        project_root=project_root,
+        config_path=config_path,
+        load_config_fn=load_config_fn,
+        clean_mod=object(),
+        build_pipeline_fn=lambda *a, **k: (object(), "perseus"),
+        build_sentence_splitter_fn=None,
+        count_group_fn=count_group_fn,
+        render_stanza_package_table_fn=lambda *a, **k: [],
+    )
+
+    assert rc == 0
+    assert [name for name, _counter in csv_calls] == [
+        "noun_frequency_file2.csv",
+        "noun_frequency_virgil_aeneis.csv",
+    ]
+    assert meta_calls[0]["grouping"] == {"mode": "per_file"}
+    assert sorted(meta_calls[0]["groups_files"]) == ["file2", "virgil_aeneis"]
+
+
+def test_run_group_by_file_cli_override(tmp_path: Path, monkeypatch):
+    project_root = tmp_path
+    config_path = tmp_path / "cfg.yml"
+    config_path.write_text("dummy", encoding="utf-8")
+
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    (input_dir / "file3.txt").write_text("rosa", encoding="utf-8")
+
+    def load_config_fn(_p: Path):
+        return {
+            "out_dir": "output",
+            "groups": {"all": {"files": ["input/*.txt"]}},
+        }
+
+    monkeypatch.setattr(runner_mod, "run_preprocess_if_needed", lambda **kwargs: None)
+    monkeypatch.setattr(runner_mod, "build_run_meta", lambda **kwargs: {"groups_files": kwargs["groups_files"]})
+    monkeypatch.setattr(runner_mod, "collect_runtime_environment", lambda _sd: {})
+    monkeypatch.setattr(runner_mod, "write_run_meta", lambda meta, out_dir: None)
+
+    csv_names = []
+    monkeypatch.setattr(
+        runner_mod,
+        "write_frequency_csv",
+        lambda path, c, header: csv_names.append(Path(path).name),
+    )
+
+    rc = runner_mod.run(
+        project_root=project_root,
+        config_path=config_path,
+        group_by_file=True,
+        load_config_fn=load_config_fn,
+        clean_mod=object(),
+        build_pipeline_fn=lambda *a, **k: (object(), "perseus"),
+        build_sentence_splitter_fn=None,
+        count_group_fn=lambda *a, **k: Counter({"rosa": 1}),
+        render_stanza_package_table_fn=lambda *a, **k: [],
+    )
+
+    assert rc == 0
+    assert csv_names == ["noun_frequency_file3.csv"]

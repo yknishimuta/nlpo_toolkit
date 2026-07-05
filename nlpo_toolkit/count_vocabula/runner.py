@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections import Counter
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -23,6 +24,99 @@ def _resolve_project_path(project_root: Path, raw: Any) -> Path:
     if path.is_absolute():
         return path
     return (project_root / path).resolve()
+
+
+_LABEL_SAFE_RE = re.compile(r"[^0-9A-Za-z]+")
+
+
+def _label_from_file(path: Path) -> str:
+    label = _LABEL_SAFE_RE.sub("_", path.stem).strip("_").lower()
+    return label or "file"
+
+
+def _unique_label(base: str, used: set[str]) -> str:
+    label = base
+    i = 2
+    while label in used:
+        label = f"{base}_{i}"
+        i += 1
+    used.add(label)
+    return label
+
+
+def _resolve_group_files(
+    *,
+    groups: Dict[str, Any],
+    project_root: Path,
+    cleaned_dir: Optional[Path],
+) -> Dict[str, List[Path]]:
+    resolved: Dict[str, List[Path]] = {}
+
+    for gname, gdef in groups.items():
+        if not isinstance(gdef, dict):
+            raise ValueError(f"groups.{gname} must be mapping")
+
+        patterns = gdef.get("files") or []
+        if not isinstance(patterns, list):
+            raise ValueError(f"groups.{gname}.files must be list[str]")
+
+        patterns = [
+            str(_resolve_project_path(project_root, p))
+            if not Path(str(p)).is_absolute() and "{cleaned_dir}" not in str(p)
+            else str(p)
+            for p in patterns
+        ]
+        patterns = expand_cleaned_dir_placeholders(patterns, cleaned_dir)
+        resolved[gname] = expand_globs(patterns)
+
+    return resolved
+
+
+def _build_work_items(
+    *,
+    group_files: Dict[str, List[Path]],
+    group_by_file: bool,
+) -> List[Tuple[str, List[Path]]]:
+    if not group_by_file:
+        return [(gname, files) for gname, files in group_files.items()]
+
+    items: List[Tuple[str, List[Path]]] = []
+    seen_files: set[Path] = set()
+    used_labels: set[str] = set()
+
+    for files in group_files.values():
+        for file_path in files:
+            file_path = file_path.resolve()
+            if file_path in seen_files:
+                continue
+            seen_files.add(file_path)
+            label = _unique_label(_label_from_file(file_path), used_labels)
+            items.append((label, [file_path]))
+
+    return items
+
+
+def _trace_path_for_label(
+    trace_cfg: Dict[str, Any],
+    out_dir: Path,
+    project_root: Path,
+    label: str,
+    per_file: bool,
+) -> Path:
+    raw_path = trace_cfg.get("path")
+    if raw_path:
+        trace_path = Path(str(raw_path))
+        if not trace_path.is_absolute():
+            trace_path = (project_root / trace_path).resolve()
+    else:
+        trace_path = out_dir / "trace.tsv"
+
+    if not per_file:
+        return trace_path
+
+    suffix = trace_path.suffix or ".tsv"
+    stem = trace_path.stem or "trace"
+    return trace_path.with_name(f"{stem}_{label}{suffix}")
 
 
 def _resolve_analysis_unit(cfg: Dict[str, Any]) -> tuple[str, bool, tuple[str, str]]:
@@ -86,6 +180,7 @@ def run(
     project_root: Path | None = None,
     script_dir: Path | None = None,
     config_path: Path,
+    group_by_file: Optional[bool] = None,
     load_config_fn: Callable[[Path], Dict[str, Any]],
     clean_mod: Any,
     build_pipeline_fn: Callable[[str, str, bool], Tuple[Any, str]],
@@ -117,6 +212,11 @@ def run(
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
     cfg = load_config_fn(config_path)
+    grouping_cfg = cfg.get("grouping") or {}
+    grouping_mode = str(grouping_cfg.get("mode", "groups")).strip().lower()
+    if grouping_mode not in {"groups", "per_file"}:
+        raise ValueError("grouping.mode must be 'groups' or 'per_file'")
+    per_file = bool(group_by_file) or grouping_mode == "per_file"
 
     # preprocess (optional)
     cleaned_dir = run_preprocess_if_needed(cfg=cfg, project_root=project_root, clean_mod=clean_mod)
@@ -168,25 +268,16 @@ def run(
     if not isinstance(groups, dict) or not groups:
         raise ValueError("config.groups must be a non-empty mapping")
 
-    group_counts: Dict[str, Counter] = {}
     group_ref_tags: Dict[str, Counter] = {}
     groups_files: Dict[str, List[str]] = {}
+    group_files = _resolve_group_files(
+        groups=groups,
+        project_root=project_root,
+        cleaned_dir=cleaned_dir,
+    )
+    work_items = _build_work_items(group_files=group_files, group_by_file=per_file)
 
-    for gname, gdef in groups.items():
-        if not isinstance(gdef, dict):
-            raise ValueError(f"groups.{gname} must be mapping")
-
-        patterns = gdef.get("files") or []
-        if not isinstance(patterns, list):
-            raise ValueError(f"groups.{gname}.files must be list[str]")
-
-        patterns = [
-            str(_resolve_project_path(project_root, p)) if not Path(str(p)).is_absolute() and "{cleaned_dir}" not in str(p) else str(p)
-            for p in patterns
-        ]
-        patterns = expand_cleaned_dir_placeholders(patterns, cleaned_dir)
-
-        files = expand_globs(patterns)  # List[Path]
+    for gname, files in work_items:
         groups_files[gname] = [str(p) for p in files]
 
         whole = read_concat(files)
@@ -231,9 +322,7 @@ def run(
         trace_kwargs: Dict[str, Any] = {}
 
         if bool(trace_cfg.get("enabled", False)):
-            trace_path = Path(str(trace_cfg.get("path", out_dir / "trace.tsv")))
-            if not trace_path.is_absolute():
-                trace_path = (project_root / trace_path).resolve()
+            trace_path = _trace_path_for_label(trace_cfg, out_dir, project_root, gname, per_file)
 
             trace_kwargs = {
                 "trace_tsv": trace_path,
@@ -244,7 +333,15 @@ def run(
                 ),
             }
 
-        c = count_group_fn(joined, nlp, use_lemma=use_lemma, min_token_length=min_token_length, drop_roman_numerals=drop_roman_numerals, roman_exceptions_file=roman_exceptions_file, **trace_kwargs)
+        c = count_group_fn(
+            joined,
+            nlp,
+            use_lemma=use_lemma,
+            min_token_length=min_token_length,
+            drop_roman_numerals=drop_roman_numerals,
+            roman_exceptions_file=roman_exceptions_file,
+            **trace_kwargs,
+        )
         
         dc_cfg = cfg.get("dictcheck") or {}
         norm_map_rel_path = dc_cfg.get("lemma_normalize")
@@ -263,9 +360,6 @@ def run(
                     target_lemma = lemma_map.get(lemma, lemma)
                     new_c[target_lemma] += count
                 c = new_c
-        
-        group_counts[gname] = c
-
         # base csv
         base = f"noun_frequency_{gname}"
         write_frequency_csv(out_dir / f"{base}.csv", c, header=csv_header)
@@ -335,6 +429,7 @@ def run(
     )
 
     meta["analysis_unit"] = unit
+    meta["grouping"] = {"mode": "per_file" if per_file else "groups"}
     meta["environment"] = collect_runtime_environment(project_root)
 
     norm_canon = json.dumps(norm, ensure_ascii=False, sort_keys=True)

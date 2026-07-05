@@ -76,3 +76,45 @@ def test_load_config_rejects_deprecated_cleaner_config(tmp_path: Path):
     with pytest.raises(ValueError, match=r"Deprecated key 'cleaner_config'"):
         load_config(cfg_path)
 
+
+def test_load_config_accepts_grouping_per_file(tmp_path: Path):
+    cfg_path = tmp_path / "cfg.yml"
+    cfg_path.write_text(
+        "\n".join(
+            [
+                "groups:",
+                "  text:",
+                "    files:",
+                "      - input/*.txt",
+                "grouping:",
+                "  mode: per_file",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    cfg = load_config(cfg_path)
+
+    assert cfg["grouping"]["mode"] == "per_file"
+
+
+def test_load_config_rejects_invalid_grouping_mode(tmp_path: Path):
+    cfg_path = tmp_path / "cfg.yml"
+    cfg_path.write_text(
+        "\n".join(
+            [
+                "groups:",
+                "  text:",
+                "    files:",
+                "      - input/*.txt",
+                "grouping:",
+                "  mode: by_author",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=r"grouping\.mode"):
+        load_config(cfg_path)

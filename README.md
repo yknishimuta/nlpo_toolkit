@@ -52,6 +52,15 @@ nlpo count-vocabula --project-root . --config config/groups.config.yml
 nlpo count --project-root . --config config/groups.config.yml
 ```
 
+To write one frequency table per input file, add `--group-by-file`:
+
+```bash
+nlpo count-vocabula \
+  --project-root . \
+  --config config/groups.config.yml \
+  --group-by-file
+```
+
 If `--config` is omitted, the CLI uses:
 
 ```text
@@ -101,6 +110,58 @@ output/
   run_meta.json
 ```
 
+### One Output Per Input File
+
+Use this when you do not want multiple input files combined into one frequency
+table.
+
+CLI option:
+
+```bash
+nlpo count-vocabula \
+  --project-root . \
+  --config config/groups.config.yml \
+  --group-by-file
+```
+
+YAML option:
+
+```yaml
+grouping:
+  mode: per_file
+
+groups:
+  all:
+    files:
+      - input/*.txt
+
+out_dir: output
+language: la
+stanza_package: perseus
+cpu_only: true
+analysis_unit: lemma
+```
+
+Each expanded input file is counted independently:
+
+```text
+input/
+  virgil-aeneis.txt
+  file2.txt
+  file3.txt
+
+output/
+  noun_frequency_virgil_aeneis.csv
+  noun_frequency_file2.csv
+  noun_frequency_file3.csv
+  summary.txt
+  run_meta.json
+```
+
+The output label is derived from the input file stem. Non-alphanumeric
+characters are converted to underscores. If two files have the same stem, a
+numeric suffix is added to keep output names unique.
+
 ## Example Config
 
 ```yaml
@@ -138,6 +199,9 @@ out_dir: output
 Useful config options:
 
 ```yaml
+grouping:
+  mode: groups          # "groups" or "per_file"
+
 analysis_unit: lemma      # "lemma" or "surface"
 
 filters:

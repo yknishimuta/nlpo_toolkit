@@ -24,10 +24,12 @@ def run_count_vocabula(
     *,
     project_root: Path,
     config_path: Path,
+    group_by_file: bool = False,
 ) -> int:
     return run(
         project_root=project_root,
         config_path=config_path,
+        group_by_file=group_by_file,
         load_config_fn=load_config,
         clean_mod=clean_mod,
         build_pipeline_fn=build_pipeline,
@@ -55,6 +57,11 @@ def build_parser() -> argparse.ArgumentParser:
             default=None,
             help="YAML config path. Defaults to <project-root>/config/groups.config.yml.",
         )
+        count_parser.add_argument(
+            "--group-by-file",
+            action="store_true",
+            help="Write one frequency CSV per input file instead of one CSV per configured group.",
+        )
 
     return parser
 
@@ -71,7 +78,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         config_path = (project_root / config_path).resolve()
 
     if args.command in {"count-vocabula", "count"}:
-        return run_count_vocabula(project_root=project_root, config_path=config_path)
+        return run_count_vocabula(
+            project_root=project_root,
+            config_path=config_path,
+            group_by_file=bool(args.group_by_file),
+        )
 
     parser.error(f"unknown command: {args.command}")
     return 2
