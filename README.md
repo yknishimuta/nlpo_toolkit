@@ -277,6 +277,20 @@ trace:
   max_rows: 500000
 ```
 
+## Configuration Roles
+
+`nlpo_toolkit` uses several configuration files at different stages of the
+workflow. These files should not be merged into a single file, because they have
+different responsibilities.
+
+| Setting | Role | When It Applies | Example |
+|---|---|---|---|
+| `lexicon_map.tsv` | Corrects or normalizes the input text itself | Before Stanza / NLP | `uod -> quod` |
+| `lemma_normalize.tsv` | Corrects lemmas after NLP analysis | After Stanza / NLP | `omninus -> omnino` |
+| `filters` | Mechanically removes tokens from counting | Before frequency counting | Drop one-character tokens; drop Roman numerals |
+| `exclude_lemmas.txt` | Manually excludes unwanted lemmas | Before or after frequency output, depending on the workflow | Remove `idest`, `omnino`, etc. from the final table |
+| `dictcheck.wordlist` | Classifies lemmas as known or unknown | After frequency tables are created | Check whether a lemma exists in the dictionary wordlist |
+
 ## Docker
 
 Docker is the recommended way to avoid repeated local Stanza setup.
