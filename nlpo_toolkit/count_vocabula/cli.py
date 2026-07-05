@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Sequence
 
+from .cache import CacheClearError, clear_cache
 from .config import load_config
 from .dry_run import dry_run_count_vocabula
 from .nlp_hooks import (
@@ -69,6 +71,22 @@ def build_parser() -> argparse.ArgumentParser:
             help="Validate config, paths, and matched files without running NLP.",
         )
 
+    cache_parser = subparsers.add_parser("cache")
+    cache_subparsers = cache_parser.add_subparsers(dest="cache_command", required=True)
+    cache_clear_parser = cache_subparsers.add_parser("clear")
+    cache_clear_parser.add_argument(
+        "--project-root",
+        type=Path,
+        default=Path.cwd(),
+        help="Project root used to resolve the configured cache directory.",
+    )
+    cache_clear_parser.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="YAML config path. Defaults to <project-root>/config/groups.config.yml when it exists.",
+    )
+
     return parser
 
 
@@ -76,14 +94,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    project_root = args.project_root.resolve()
-    config_path = args.config
-    if config_path is None:
-        config_path = project_root / "config" / "groups.config.yml"
-    elif not config_path.is_absolute():
-        config_path = (project_root / config_path).resolve()
-
     if args.command in {"count-vocabula", "count"}:
+        project_root = args.project_root.resolve()
+        config_path = args.config
+        if config_path is None:
+            config_path = project_root / "config" / "groups.config.yml"
+        elif not config_path.is_absolute():
+            config_path = (project_root / config_path).resolve()
+
         if args.dry_run:
             return dry_run_count_vocabula(
                 project_root=project_root,
@@ -95,6 +113,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             config_path=config_path,
             group_by_file=bool(args.group_by_file),
         )
+
+    if args.command == "cache" and args.cache_command == "clear":
+        project_root = args.project_root.resolve()
+        config_path = args.config
+        if config_path is not None and not config_path.is_absolute():
+            config_path = (project_root / config_path).resolve()
+        try:
+            return clear_cache(project_root=project_root, config_path=config_path)
+        except CacheClearError as exc:
+            print(f"[ERROR] {exc}", file=sys.stderr)
+            return 1
 
     parser.error(f"unknown command: {args.command}")
     return 2

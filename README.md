@@ -94,6 +94,36 @@ If `--config` is omitted, the CLI uses:
 Relative paths in the YAML config are resolved from `--project-root`, not from
 the location of Python source files.
 
+## Cache Management
+
+Use `nlpo cache clear` to remove the lemma cache for a project instead of
+running `rm -rf .lemma_cache` manually.
+
+```bash
+nlpo cache clear
+```
+
+By default, the current directory is treated as the project root. If
+`config/groups.config.yml` exists, the command reads `lemma_cache.dir` from that
+config and clears that directory. If the config or `lemma_cache.dir` is missing,
+it clears `.lemma_cache` under the project root.
+
+Use an explicit project root:
+
+```bash
+nlpo cache clear --project-root /path/to/project
+```
+
+Use an explicit config file:
+
+```bash
+nlpo cache clear --project-root . --config config/groups.config.yml
+```
+
+The resolved cache directory must stay inside the project root. The command
+refuses to delete paths such as `../cache`, absolute paths outside the project,
+or the project root itself.
+
 ### Minimal Workflow
 
 1. Put UTF-8 text files under `input/`.
