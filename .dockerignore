@@ -1,0 +1,10 @@
+.git
+.idea
+.pytest_cache
+__pycache__
+*.py[cod]
+*.egg-info
+.DS_Store
+.stanza_resources
+output
+cleaned

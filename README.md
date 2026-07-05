@@ -37,6 +37,32 @@ The legacy script name is kept as a wrapper:
 python count_corpus_vocabula_local.py --project-root . --config config/groups.config.yml
 ```
 
+### Docker
+
+Build an image with Python dependencies and Stanza resources:
+
+```bash
+docker compose build
+```
+
+Run the CLI:
+
+```bash
+docker compose run --rm nlpo count-vocabula --project-root /workspace --config config/groups.config.yml
+docker compose run --rm nlpo count --project-root /workspace --config config/groups.config.yml
+```
+
+Stanza resources are stored under `/opt/stanza_resources` in a named Docker
+volume, so normal container runs do not reinstall or redownload the models.
+Avoid `docker compose down -v` unless you intentionally want to remove that
+cache.
+
+To skip model download during image build:
+
+```bash
+docker compose build --build-arg DOWNLOAD_STANZA_MODELS=false
+```
+
 ## License
 
 Licensed under the **MIT License** 

@@ -1,7 +1,17 @@
 services:
   nlpo:
-    build: .
-    working_dir: /app
+    build:
+      context: .
+      args:
+        DOWNLOAD_STANZA_MODELS: "true"
+    image: nlpo-toolkit:local
+    working_dir: /workspace
+    environment:
+      STANZA_RESOURCES_DIR: /opt/stanza_resources
     volumes:
-      - .:/app
-    command: ["count-vocabula", "--project-root", "/app"]
+      - .:/workspace
+      - stanza_resources:/opt/stanza_resources
+    command: ["--help"]
+
+volumes:
+  stanza_resources:
