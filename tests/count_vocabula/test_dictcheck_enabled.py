@@ -4,7 +4,7 @@ from pathlib import Path
 from collections import Counter
 import csv
 
-import count_corpus_vocabula_local as mod
+from nlpo_toolkit.count_vocabula import cli as mod
 
 
 def test_dictcheck_enabled_creates_known_unknown(tmp_path, monkeypatch):
@@ -63,9 +63,7 @@ def test_dictcheck_enabled_creates_known_unknown(tmp_path, monkeypatch):
 
     monkeypatch.setattr(mod.Path, "exists", fake_exists)
 
-    # Patch __file__ so script_dir resolves to our tmp runner_dir
-    monkeypatch.setattr(mod, "__file__", str(script_dir / "count_corpus_vocabula_local.py"))
-
+    
     # Stub NLP build + counting so we don't download Stanza models
     monkeypatch.setattr(mod, "build_pipeline", lambda *a, **k: (object(), "perseus"))
     monkeypatch.setattr(
@@ -76,7 +74,7 @@ def test_dictcheck_enabled_creates_known_unknown(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "render_stanza_package_table", lambda nlp, pkg: ["[stanza stub]"])
 
     # --- Act ---
-    rc = mod.main(["--project-root", str(script_dir)])
+    rc = mod.main(["count-vocabula", "--project-root", str(script_dir)])
     assert rc == 0
 
     # --- Assert ---
@@ -136,12 +134,11 @@ def test_dictcheck_enabled_requires_wordlist(tmp_path, monkeypatch):
         return real_exists(self)
 
     monkeypatch.setattr(mod.Path, "exists", fake_exists)
-    monkeypatch.setattr(mod, "__file__", str(script_dir / "count_corpus_vocabula_local.py"))
-
+    
     monkeypatch.setattr(mod, "build_pipeline", lambda *a, **k: (object(), "perseus"))
     monkeypatch.setattr(mod, "count_group", lambda text, nlp, **kwargs: Counter({"rosa": 1}))
     monkeypatch.setattr(mod, "render_stanza_package_table", lambda nlp, pkg: ["[stanza stub]"])
 
     import pytest
     with pytest.raises(ValueError, match=r"dictcheck\.wordlist"):
-        mod.main(["--project-root", str(script_dir)])
+        mod.main(["count-vocabula", "--project-root", str(script_dir)])

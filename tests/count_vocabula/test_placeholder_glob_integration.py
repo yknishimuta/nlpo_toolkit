@@ -1,14 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-import sys
 
-# count_corpus_vocabula_local を import できるようにする
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-import count_corpus_vocabula_local as local_mod
+from nlpo_toolkit.count_vocabula import preprocess as local_mod
 from nlpo_toolkit.count_vocabula.io_utils import expand_globs
 
 
@@ -27,7 +21,7 @@ def test_placeholder_expand_then_glob_finds_files(tmp_path: Path):
 
     patterns = ["{cleaned_dir}/*.txt"]
 
-    expanded = local_mod._expand_cleaned_dir_placeholders(patterns, cleaned_dir)
+    expanded = local_mod.expand_cleaned_dir_placeholders(patterns, cleaned_dir)
     files = expand_globs(expanded)
 
     assert files == sorted([f1.resolve(), f2.resolve()])
@@ -43,7 +37,7 @@ def test_placeholder_expand_then_glob_recursive(tmp_path: Path):
 
     patterns = ["{cleaned_dir}/**/*.txt"]
 
-    expanded = local_mod._expand_cleaned_dir_placeholders(patterns, cleaned_dir)
+    expanded = local_mod.expand_cleaned_dir_placeholders(patterns, cleaned_dir)
     files = expand_globs(expanded)
 
     assert files == [f1.resolve()]

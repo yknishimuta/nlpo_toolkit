@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-import count_corpus_vocabula_local as mod
+from nlpo_toolkit.count_vocabula import cli as mod
 
 
 def test_analysis_unit_invalid_raises_value_error(tmp_path, monkeypatch):
@@ -42,11 +42,10 @@ def test_analysis_unit_invalid_raises_value_error(tmp_path, monkeypatch):
 
     monkeypatch.setattr(mod.Path, "exists", fake_exists)
 
-    monkeypatch.setattr(mod, "__file__", str(script_dir / "count_corpus_vocabula_local.py"))
-
+    
     monkeypatch.setattr(mod, "build_pipeline", lambda *a, **k: (object(), "perseus"))
     monkeypatch.setattr(mod, "count_group", lambda *a, **k: Counter({"x": 1}))
     monkeypatch.setattr(mod, "render_stanza_package_table", lambda *a, **k: ["[stanza stub]"])
 
     with pytest.raises(ValueError, match=r"analysis_unit"):
-        mod.main(["--project-root", str(script_dir)])
+        mod.main(["count-vocabula", "--project-root", str(script_dir)])

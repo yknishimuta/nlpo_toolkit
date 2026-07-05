@@ -2,7 +2,7 @@ import csv
 from collections import Counter
 from pathlib import Path
 
-import count_corpus_vocabula_local as mod
+from nlpo_toolkit.count_vocabula import cli as mod
 
 
 def test_analysis_unit_surface_writes_word_frequency_and_passes_use_lemma_false(tmp_path, monkeypatch):
@@ -43,9 +43,7 @@ def test_analysis_unit_surface_writes_word_frequency_and_passes_use_lemma_false(
 
     monkeypatch.setattr(mod.Path, "exists", fake_exists)
 
-    # Patch __file__ so script_dir resolves to our tmp runner_dir
-    monkeypatch.setattr(mod, "__file__", str(script_dir / "count_corpus_vocabula_local.py"))
-
+    
     # Stub NLP build so we don't download Stanza models
     monkeypatch.setattr(mod, "build_pipeline", lambda *a, **k: (object(), "perseus"))
     monkeypatch.setattr(mod, "render_stanza_package_table", lambda *a, **k: ["[stanza stub]"])
@@ -58,7 +56,7 @@ def test_analysis_unit_surface_writes_word_frequency_and_passes_use_lemma_false(
     monkeypatch.setattr(mod, "count_group", fake_count_group)
 
     # --- Act ---
-    rc = mod.main(["--project-root", str(script_dir)])
+    rc = mod.main(["count-vocabula", "--project-root", str(script_dir)])
     assert rc == 0
 
     # --- Assert: header changes for surface ---

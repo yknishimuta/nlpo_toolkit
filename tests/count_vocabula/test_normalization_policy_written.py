@@ -2,7 +2,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
-import count_corpus_vocabula_local as mod
+from nlpo_toolkit.count_vocabula import cli as mod
 
 
 def test_normalization_policy_is_written_to_summary_and_run_meta(tmp_path, monkeypatch):
@@ -50,16 +50,14 @@ def test_normalization_policy_is_written_to_summary_and_run_meta(tmp_path, monke
 
     monkeypatch.setattr(mod.Path, "exists", fake_exists)
 
-    # Patch __file__ so script_dir resolves to our tmp runner_dir
-    monkeypatch.setattr(mod, "__file__", str(script_dir / "count_corpus_vocabula_local.py"))
-
+    
     # Stub NLP build/counter
     monkeypatch.setattr(mod, "build_pipeline", lambda *a, **k: (object(), "perseus"))
     monkeypatch.setattr(mod, "render_stanza_package_table", lambda *a, **k: ["[stanza stub]"])
     monkeypatch.setattr(mod, "count_group", lambda *a, **k: Counter({"x": 1}))
 
     # Act
-    rc = mod.main(["--project-root", str(script_dir)])
+    rc = mod.main(["count-vocabula", "--project-root", str(script_dir)])
     assert rc == 0
 
     # Assert: summary.txt contains policy line

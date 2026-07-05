@@ -396,7 +396,7 @@ def get_or_compute_cached(
 
 def _save_payload_json(path: Path, payload: LemmaCachePayload) -> None:
     obj = {
-        "format": "count_corpus_vocabula.lemma_cache",
+        "format": "nlpo_toolkit.count_vocabula.lemma_cache",
         "cache_version": CACHE_VERSION,
         "payload": payload.to_json_obj(),
     }

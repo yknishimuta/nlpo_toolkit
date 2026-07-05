@@ -6,7 +6,7 @@ import csv
 
 import pytest
 
-import count_corpus_vocabula_local as mod
+from nlpo_toolkit.count_vocabula import cli as mod
 
 # Dummy stanza-like objects
 class DummySentence:
@@ -72,9 +72,7 @@ def test_preprocess_cleaner_integration_fixed(tmp_path, monkeypatch):
         encoding="utf-8",
     )
 
-    # Legacy wrapper resolves paths from --project-root, not __file__.
-    monkeypatch.setattr(mod, "__file__", str(script_dir / "count_corpus_vocabula_local.py"))
-
+    
     # --- Stub cleaner runner: it should be invoked with argv=[<cleaner_cfg_path>]
     cleaner_called = {"ok": False}
 
@@ -97,7 +95,7 @@ def test_preprocess_cleaner_integration_fixed(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "render_stanza_package_table", lambda *a, **k: ["[stanza stub]"])
 
     # --- Act
-    rc = mod.main(["--project-root", str(script_dir)])
+    rc = mod.main(["count-vocabula", "--project-root", str(script_dir)])
     assert rc == 0
     assert cleaner_called["ok"] is True
 

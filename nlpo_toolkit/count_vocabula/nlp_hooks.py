@@ -1,4 +1,3 @@
-# count_corpus_vocabula/nlp_hooks.py
 from __future__ import annotations
 
 from collections import Counter
@@ -23,8 +22,7 @@ def build_pipeline(language: str, stanza_package: str, cpu_only: bool):
 
 
 def build_sentence_splitter(language: str, stanza_package: str, cpu_only: bool):
-    # Optional: tests may monkeypatch this on count_corpus_vocabula_local,
-    # but runner will accept any callable. Default is "not provided".
+    # Optional; runner accepts any callable. Default is "not provided".
     raise RuntimeError("build_sentence_splitter is optional and should not be required in tests")
 
 def count_group(text: str, nlp, **kwargs) -> Counter:
