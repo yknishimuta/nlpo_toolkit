@@ -268,6 +268,15 @@ def iter_char_chunks(text: str, chunk_chars: int) -> Iterable[str]:
         start = end
 
 
+def _trace_start_offsets(
+    start_char: Optional[int],
+    chunk_base_offset: int,
+) -> tuple[Union[int, str], Union[int, str]]:
+    if start_char is None:
+        return "", ""
+    return start_char, chunk_base_offset + start_char
+
+
 def _count_nouns_streaming_trace(
     text: str,
     nlp: NLPBackend,
@@ -338,9 +347,13 @@ def _count_nouns_streaming_trace(
                             
                         if trace_max_rows > 0 and global_row >= trace_max_rows:
                             if trace_write_truncation_marker:
+                                start_in_chunk, start_in_text = _trace_start_offsets(
+                                    token.start_char,
+                                    chunk_base_offset,
+                                )
                                 writer.writerow([
                                     label, chunk_idx, sent_idx, token_idx,
-                                    token.start_char, chunk_base_offset + token.start_char,
+                                    start_in_chunk, start_in_text,
                                     sent_text_str, "(trace stopped; counting continues)",
                                     "", "TRACE_TRUNCATED", "", global_row + 1
                                 ])
@@ -355,13 +368,17 @@ def _count_nouns_streaming_trace(
                                 ref_tag_counter[ref_tag] += 1
 
                         # Write to TSV
+                        start_in_chunk, start_in_text = _trace_start_offsets(
+                            token.start_char,
+                            chunk_base_offset,
+                        )
                         writer.writerow([
                             label,
                             chunk_idx,
                             sent_idx,
                             token_idx,
-                            token.start_char,
-                            chunk_base_offset + token.start_char,
+                            start_in_chunk,
+                            start_in_text,
                             sent_text_str,
                             token.text,
                             token.lemma or "",

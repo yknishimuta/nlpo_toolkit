@@ -128,3 +128,92 @@ def test_trace_text_offset_increments_across_chunks(tmp_path, monkeypatch):
     # Second row absolute offset should be 6 (= len(chunk1)=5 + start_char=1)
     assert data[1][4] == "1"
     assert data[1][5] == "6"
+
+
+def test_trace_writes_empty_offsets_when_start_char_is_none(tmp_path):
+    sent_text = "Puella rosam amat."
+    doc = NLPDocument(
+        sentences=[
+            NLPSentence(
+                text=sent_text,
+                tokens=[
+                    NLPToken(text="Puella", lemma="puella", upos="NOUN", start_char=None),
+                    NLPToken(text="rosam", lemma="rosa", upos="NOUN", start_char=7),
+                ],
+            )
+        ]
+    )
+
+    def dummy_nlp(_chunk: str) -> NLPDocument:
+        return doc
+
+    out = tmp_path / "trace.tsv"
+    cnt = nlp_mod._count_nouns_streaming_trace(
+        text=sent_text,
+        nlp=dummy_nlp,
+        use_lemma=True,
+        upos_targets=frozenset({"NOUN"}),
+        chunk_chars=200_000,
+        label="",
+        trace_tsv=out,
+        trace_max_rows=0,
+        trace_only_keys=None,
+        trace_write_truncation_marker=True,
+        ref_tag_detector=None,
+        ref_tag_counter=None,
+    )
+
+    assert cnt == Counter({"puella": 1, "rosa": 1})
+    rows = list(csv.reader(out.open(encoding="utf-8"), delimiter="\t"))
+    data = rows[1:]
+    assert data[0][7] == "Puella"
+    assert data[0][4] == ""
+    assert data[0][5] == ""
+    assert data[1][7] == "rosam"
+    assert data[1][4] == "7"
+    assert data[1][5] == "7"
+
+
+def test_trace_truncation_marker_writes_empty_offsets_when_start_char_is_none(tmp_path):
+    sent_text = "Puella rosam amat."
+    doc = NLPDocument(
+        sentences=[
+            NLPSentence(
+                text=sent_text,
+                tokens=[
+                    NLPToken(text="Puella", lemma="puella", upos="NOUN", start_char=0),
+                    NLPToken(text="rosam", lemma="rosa", upos="NOUN", start_char=None),
+                ],
+            )
+        ]
+    )
+
+    def dummy_nlp(_chunk: str) -> NLPDocument:
+        return doc
+
+    out = tmp_path / "trace.tsv"
+    cnt = nlp_mod._count_nouns_streaming_trace(
+        text=sent_text,
+        nlp=dummy_nlp,
+        use_lemma=True,
+        upos_targets=frozenset({"NOUN"}),
+        chunk_chars=200_000,
+        label="",
+        trace_tsv=out,
+        trace_max_rows=1,
+        trace_only_keys=None,
+        trace_write_truncation_marker=True,
+        ref_tag_detector=None,
+        ref_tag_counter=None,
+    )
+
+    assert cnt == Counter({"puella": 1, "rosa": 1})
+    rows = list(csv.reader(out.open(encoding="utf-8"), delimiter="\t"))
+    data = rows[1:]
+    assert len(data) == 2
+    assert data[0][7] == "Puella"
+    assert data[0][4] == "0"
+    assert data[0][5] == "0"
+    assert data[1][7] == "(trace stopped; counting continues)"
+    assert data[1][4] == ""
+    assert data[1][5] == ""
