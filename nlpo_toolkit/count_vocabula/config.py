@@ -52,6 +52,12 @@ def normalize_groups(cfg: dict) -> dict:
         cfg["groups"] = {name: {"files": files}}
         return cfg
 
+    grouping = cfg.get("grouping") or {}
+    if isinstance(grouping, dict) and grouping.get("mode") == "auto_single_cleaned":
+        name = str(grouping.get("auto_group_name") or "text")
+        cfg["groups"] = {name: {"files": []}}
+        return cfg
+
     raise ValueError("Config must define 'groups' or 'group'.")
 
 
@@ -94,8 +100,8 @@ def _validate_grouping(cfg: dict) -> None:
     if not isinstance(grouping, dict):
         raise ValueError("'grouping' must be a mapping.")
     mode = grouping.get("mode", "groups")
-    if mode not in {"groups", "per_file"}:
-        raise ValueError("grouping.mode must be 'groups' or 'per_file'")
+    if mode not in {"groups", "per_file", "auto_single_cleaned"}:
+        raise ValueError("grouping.mode must be 'groups', 'per_file', or 'auto_single_cleaned'")
 
 def load_config(path: Path) -> Config:
     if not path.exists():

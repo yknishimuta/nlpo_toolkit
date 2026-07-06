@@ -413,3 +413,100 @@ def test_run_error_on_empty_group(tmp_path: Path, monkeypatch):
             render_stanza_package_table_fn=lambda *a, **k: [],
             error_on_empty_group=True,
         )
+
+
+def test_run_auto_single_cleaned_records_selected_file(tmp_path: Path, monkeypatch):
+    project_root = tmp_path
+    config_path = tmp_path / "cfg.yml"
+    config_path.write_text("dummy", encoding="utf-8")
+    cleaned_dir = tmp_path / "cleaned"
+    cleaned_dir.mkdir()
+    selected = cleaned_dir / "satyricon.cleaned.txt"
+    selected.write_text("rosa", encoding="utf-8")
+
+    def load_config_fn(_p: Path):
+        return {
+            "out_dir": "output",
+            "groups": {"old": {"files": ["cleaned/*.txt"]}},
+            "grouping": {"mode": "auto_single_cleaned", "auto_group_name": "text"},
+        }
+
+    monkeypatch.setattr(runner_mod, "run_preprocess_if_needed", lambda **kwargs: cleaned_dir)
+
+    rc = runner_mod.run(
+        project_root=project_root,
+        config_path=config_path,
+        load_config_fn=load_config_fn,
+        clean_mod=object(),
+        build_pipeline_fn=lambda *a, **k: (object(), "perseus"),
+        build_sentence_splitter_fn=None,
+        count_group_fn=lambda *a, **k: Counter({"rosa": 1}),
+        render_stanza_package_table_fn=lambda *a, **k: [],
+    )
+
+    assert rc == 0
+    meta = json.loads((project_root / "output" / "run_meta.json").read_text(encoding="utf-8"))
+    assert meta["grouping"] == {"mode": "auto_single_cleaned", "auto_group_name": "text"}
+    assert meta["groups_files"] == {"text": [str(selected.resolve())]}
+
+
+def test_run_auto_single_cleaned_errors_on_zero_files(tmp_path: Path, monkeypatch):
+    project_root = tmp_path
+    config_path = tmp_path / "cfg.yml"
+    config_path.write_text("dummy", encoding="utf-8")
+    cleaned_dir = tmp_path / "cleaned"
+    cleaned_dir.mkdir()
+
+    def load_config_fn(_p: Path):
+        return {
+            "out_dir": "output",
+            "groups": {"old": {"files": ["cleaned/*.txt"]}},
+            "grouping": {"mode": "auto_single_cleaned"},
+        }
+
+    monkeypatch.setattr(runner_mod, "run_preprocess_if_needed", lambda **kwargs: cleaned_dir)
+
+    with pytest.raises(ValueError, match="no \\.txt files"):
+        runner_mod.run(
+            project_root=project_root,
+            config_path=config_path,
+            load_config_fn=load_config_fn,
+            clean_mod=object(),
+            build_pipeline_fn=lambda *a, **k: (object(), "perseus"),
+            build_sentence_splitter_fn=None,
+            count_group_fn=lambda *a, **k: Counter(),
+            render_stanza_package_table_fn=lambda *a, **k: [],
+        )
+
+
+def test_run_auto_single_cleaned_errors_on_multiple_files(tmp_path: Path, monkeypatch):
+    project_root = tmp_path
+    config_path = tmp_path / "cfg.yml"
+    config_path.write_text("dummy", encoding="utf-8")
+    cleaned_dir = tmp_path / "cleaned"
+    cleaned_dir.mkdir()
+    (cleaned_dir / "a.cleaned.txt").write_text("a", encoding="utf-8")
+    (cleaned_dir / "b.cleaned.txt").write_text("b", encoding="utf-8")
+    (cleaned_dir / ".DS_Store").write_text("ignored", encoding="utf-8")
+    (cleaned_dir / ".gitkeep").write_text("", encoding="utf-8")
+
+    def load_config_fn(_p: Path):
+        return {
+            "out_dir": "output",
+            "groups": {"old": {"files": ["cleaned/*.txt"]}},
+            "grouping": {"mode": "auto_single_cleaned"},
+        }
+
+    monkeypatch.setattr(runner_mod, "run_preprocess_if_needed", lambda **kwargs: cleaned_dir)
+
+    with pytest.raises(ValueError, match="expected exactly one"):
+        runner_mod.run(
+            project_root=project_root,
+            config_path=config_path,
+            load_config_fn=load_config_fn,
+            clean_mod=object(),
+            build_pipeline_fn=lambda *a, **k: (object(), "perseus"),
+            build_sentence_splitter_fn=None,
+            count_group_fn=lambda *a, **k: Counter(),
+            render_stanza_package_table_fn=lambda *a, **k: [],
+        )

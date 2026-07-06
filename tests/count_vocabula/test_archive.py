@@ -314,6 +314,39 @@ def test_create_run_archive_copies_only_generated_outputs_from_run_meta(tmp_path
     assert generated_names == {"noun_frequency_text.csv", "summary.txt", "run_meta.json"}
 
 
+def test_create_run_archive_prefers_run_meta_groups_files(tmp_path: Path) -> None:
+    project_root, config_path, config = _write_project(tmp_path)
+    stale = project_root / "cleaned" / "stale.cleaned.txt"
+    stale.write_text("stale", encoding="utf-8")
+    selected = project_root / "cleaned" / "a.cleaned.txt"
+    run_meta = project_root / "output" / "run_meta.json"
+    run_meta.write_text(
+        json.dumps(
+            {
+                "groups_files": {"text": [str(selected.resolve())]},
+                "generated_outputs": [str((project_root / "output" / "noun_frequency_text.csv").resolve())],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    run_dir = create_run_archive(
+        project_root=project_root,
+        config_path=config_path,
+        config=config,
+        run_name="meta-groups",
+        include_cleaned=True,
+    )
+
+    assert (run_dir / "cleaned" / "a.cleaned.txt").exists()
+    assert not (run_dir / "cleaned" / "stale.cleaned.txt").exists()
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert [Path(item["source_path"]).name for item in manifest["copied_cleaned_files"]] == [
+        "a.cleaned.txt"
+    ]
+
+
 def test_run_count_vocabula_creates_archive_after_success(tmp_path: Path, monkeypatch) -> None:
     project_root, config_path, _config = _write_project(tmp_path)
 

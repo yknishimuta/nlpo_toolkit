@@ -112,3 +112,42 @@ def test_dry_run_error_on_empty_group(tmp_path: Path, capsys):
     out = capsys.readouterr().out
     assert rc == 1
     assert "[ERROR] group empty matched files: 0" in out
+
+
+def test_dry_run_auto_single_cleaned_reports_selected_file(tmp_path: Path, capsys):
+    project_root = tmp_path
+    (project_root / "config").mkdir()
+    cleaned_dir = project_root / "cleaned"
+    cleaned_dir.mkdir()
+    selected = cleaned_dir / "satyricon.cleaned.txt"
+    selected.write_text("cleaned", encoding="utf-8")
+    (cleaned_dir / ".DS_Store").write_text("ignored", encoding="utf-8")
+    (project_root / "config" / "cleaner.yml").write_text(
+        "kind: scholastic_text\ninput: ../input\noutput: ../cleaned\n",
+        encoding="utf-8",
+    )
+    config_path = project_root / "config" / "groups.config.yml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "preprocess:",
+                "  kind: cleaner",
+                "  config: config/cleaner.yml",
+                "grouping:",
+                "  mode: auto_single_cleaned",
+                "  auto_group_name: text",
+                "out_dir: output",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    rc = dry_run_count_vocabula(project_root=project_root, config_path=config_path)
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "[OK] grouping mode: auto_single_cleaned" in out
+    assert "[OK] auto selected cleaned file: cleaned/satyricon.cleaned.txt" in out
+    assert "[OK] group text matched files: 1" in out
+    assert "  - cleaned/satyricon.cleaned.txt" in out

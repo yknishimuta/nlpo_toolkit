@@ -27,6 +27,7 @@ def _resolve_project_path(project_root: Path, raw: Any) -> Path:
 
 
 _LABEL_SAFE_RE = re.compile(r"[^0-9A-Za-z]+")
+_IGNORED_CLEANED_NAMES = {".DS_Store", ".gitkeep"}
 
 
 def _label_from_file(path: Path) -> str:
@@ -70,6 +71,42 @@ def _resolve_group_files(
         resolved[gname] = expand_globs(patterns)
 
     return resolved
+
+
+def _cleaned_txt_files(cleaned_dir: Optional[Path]) -> List[Path]:
+    if cleaned_dir is None:
+        raise ValueError("--auto-single-cleaned was enabled, but cleaned_dir is not available")
+    cleaned_dir = Path(cleaned_dir).resolve()
+    if not cleaned_dir.exists():
+        raise ValueError(
+            f"--auto-single-cleaned was enabled, but cleaned directory does not exist: {cleaned_dir}"
+        )
+    return sorted(
+        p.resolve()
+        for p in cleaned_dir.glob("*.txt")
+        if p.is_file() and p.name not in _IGNORED_CLEANED_NAMES
+    )
+
+
+def _resolve_auto_single_cleaned_group(
+    *,
+    cleaned_dir: Optional[Path],
+    group_name: str,
+) -> Dict[str, List[Path]]:
+    files = _cleaned_txt_files(cleaned_dir)
+    cleaned_display = str(Path(cleaned_dir).resolve()) if cleaned_dir is not None else "cleaned/"
+    if not files:
+        raise ValueError(
+            f"--auto-single-cleaned was enabled, but no .txt files were found in {cleaned_display}"
+        )
+    if len(files) > 1:
+        listed = "\n".join(f"  {p}" for p in files)
+        raise ValueError(
+            "--auto-single-cleaned expected exactly one cleaned .txt file, "
+            f"but found {len(files)}:\n{listed}\n\n"
+            "Remove stale cleaned files, or specify groups.files explicitly."
+        )
+    return {group_name: files}
 
 
 def _build_work_items(
@@ -188,6 +225,7 @@ def run(
     count_group_fn: Callable[..., Counter],
     render_stanza_package_table_fn: Callable[..., List[str]],
     error_on_empty_group: bool = False,
+    auto_single_cleaned: bool = False,
 ) -> int:
     """
     Core runner. Dependencies are injectable so tests can monkeypatch:
@@ -215,9 +253,10 @@ def run(
     cfg = load_config_fn(config_path)
     grouping_cfg = cfg.get("grouping") or {}
     grouping_mode = str(grouping_cfg.get("mode", "groups")).strip().lower()
-    if grouping_mode not in {"groups", "per_file"}:
-        raise ValueError("grouping.mode must be 'groups' or 'per_file'")
-    per_file = bool(group_by_file) or grouping_mode == "per_file"
+    if grouping_mode not in {"groups", "per_file", "auto_single_cleaned"}:
+        raise ValueError("grouping.mode must be 'groups', 'per_file', or 'auto_single_cleaned'")
+    auto_mode = bool(auto_single_cleaned) or grouping_mode == "auto_single_cleaned"
+    per_file = (bool(group_by_file) or grouping_mode == "per_file") and not auto_mode
 
     # preprocess (optional)
     cleaned_dir = run_preprocess_if_needed(cfg=cfg, project_root=project_root, clean_mod=clean_mod)
@@ -271,11 +310,18 @@ def run(
 
     group_ref_tags: Dict[str, Counter] = {}
     groups_files: Dict[str, List[str]] = {}
-    group_files = _resolve_group_files(
-        groups=groups,
-        project_root=project_root,
-        cleaned_dir=cleaned_dir,
-    )
+    auto_group_name = str(grouping_cfg.get("auto_group_name") or "text")
+    if auto_mode:
+        group_files = _resolve_auto_single_cleaned_group(
+            cleaned_dir=cleaned_dir,
+            group_name=auto_group_name,
+        )
+    else:
+        group_files = _resolve_group_files(
+            groups=groups,
+            project_root=project_root,
+            cleaned_dir=cleaned_dir,
+        )
     empty_groups = [name for name, files in group_files.items() if not files]
     if error_on_empty_group and empty_groups:
         names = ", ".join(empty_groups)
@@ -447,7 +493,13 @@ def run(
     )
 
     meta["analysis_unit"] = unit
-    meta["grouping"] = {"mode": "per_file" if per_file else "groups"}
+    if auto_mode:
+        meta["grouping"] = {
+            "mode": "auto_single_cleaned",
+            "auto_group_name": auto_group_name,
+        }
+    else:
+        meta["grouping"] = {"mode": "per_file" if per_file else "groups"}
     meta["environment"] = collect_runtime_environment(project_root)
 
     norm_canon = json.dumps(norm, ensure_ascii=False, sort_keys=True)

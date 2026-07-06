@@ -90,6 +90,21 @@ def test_count_vocabula_cli_accepts_run_archive_options(tmp_path, monkeypatch):
     assert calls[0]["command_line"][0:2] == ["nlpo", "count-vocabula"]
 
 
+def test_count_vocabula_cli_accepts_auto_single_cleaned(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_run_count_vocabula(**kwargs) -> int:
+        calls.append(kwargs)
+        return 0
+
+    monkeypatch.setattr(cli, "run_count_vocabula", fake_run_count_vocabula)
+
+    rc = cli.main(["count-vocabula", "--project-root", str(tmp_path), "--auto-single-cleaned"])
+
+    assert rc == 0
+    assert calls[0]["auto_single_cleaned"] is True
+
+
 def test_count_vocabula_cli_accepts_dry_run(tmp_path, monkeypatch):
     calls = []
 

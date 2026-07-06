@@ -8,6 +8,7 @@ import yaml
 from .config import load_config
 from .io_utils import expand_globs
 from .preprocess import expand_cleaned_dir_placeholders, resolve_cleaner_output_dir
+from .runner import _cleaned_txt_files
 
 
 KNOWN_TOP_LEVEL_KEYS = {
@@ -173,6 +174,7 @@ def dry_run_count_vocabula(
     config_path: Path,
     group_by_file: bool = False,
     error_on_empty_group: bool = False,
+    auto_single_cleaned: bool = False,
 ) -> int:
     project_root = Path(project_root).resolve()
     config_path = Path(config_path)
@@ -215,7 +217,46 @@ def dry_run_count_vocabula(
         group_files = _group_files(cfg, project_root, None)
         lines.append(f"[OK] input files: {sum(len(files) for files in group_files.values())}")
 
-    group_files = _group_files(cfg, project_root, cleaned_dir)
+    grouping = cfg.get("grouping") or {}
+    grouping_mode = str(grouping.get("mode", "groups")).strip().lower()
+    auto_mode = bool(auto_single_cleaned) or grouping_mode == "auto_single_cleaned"
+
+    if auto_mode:
+        auto_group_name = str(grouping.get("auto_group_name") or "text")
+        try:
+            cleaned_files = _cleaned_txt_files(cleaned_dir)
+            if not cleaned_files:
+                lines.append(
+                    "[ERROR] --auto-single-cleaned was enabled, "
+                    f"but no .txt files were found in {_display_path(cleaned_dir or Path('cleaned'), project_root)}"
+                )
+                group_files = {auto_group_name: []}
+                exit_code = 1
+            elif len(cleaned_files) > 1:
+                lines.append(
+                    "[ERROR] --auto-single-cleaned expected exactly one cleaned .txt file, "
+                    f"but found {len(cleaned_files)}:"
+                )
+                for file_path in cleaned_files:
+                    lines.append(f"  {_display_path(file_path, project_root)}")
+                lines.append("")
+                lines.append("Remove stale cleaned files, or specify groups.files explicitly.")
+                group_files = {auto_group_name: cleaned_files}
+                exit_code = 1
+            else:
+                lines.append("[OK] grouping mode: auto_single_cleaned")
+                lines.append(
+                    "[OK] auto selected cleaned file: "
+                    f"{_display_path(cleaned_files[0], project_root)}"
+                )
+                group_files = {auto_group_name: cleaned_files}
+        except ValueError as exc:
+            lines.append(f"[ERROR] {exc}")
+            group_files = {auto_group_name: []}
+            exit_code = 1
+    else:
+        group_files = _group_files(cfg, project_root, cleaned_dir)
+
     for group_name, files in group_files.items():
         if not files and error_on_empty_group:
             lines.append(f"[ERROR] group {group_name} matched files: 0")
@@ -254,8 +295,7 @@ def dry_run_count_vocabula(
     out_dir = _resolve_project_path(project_root, cfg.get("out_dir", "output"))
     lines.append(f"[OK] output dir: {_display_path(out_dir, project_root)}")
 
-    grouping = cfg.get("grouping") or {}
-    mode = "per_file" if group_by_file else str(grouping.get("mode", "groups"))
+    mode = "auto_single_cleaned" if auto_mode else ("per_file" if group_by_file else grouping_mode)
     if mode == "per_file":
         lines.append("[OK] grouping mode: per_file")
 

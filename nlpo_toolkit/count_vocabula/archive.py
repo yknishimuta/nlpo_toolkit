@@ -306,7 +306,24 @@ def _collect_group_files(
     config: dict[str, Any],
     project_root: Path,
     cleaned_dir: Path | None,
+    out_dir: Path | None = None,
 ) -> list[Path]:
+    if out_dir is not None:
+        run_meta_path = out_dir / "run_meta.json"
+        if run_meta_path.exists():
+            try:
+                meta = json.loads(run_meta_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                meta = {}
+            groups_files = meta.get("groups_files")
+            if isinstance(groups_files, dict):
+                files: list[Path] = []
+                for group_paths in groups_files.values():
+                    if isinstance(group_paths, list):
+                        files.extend(Path(str(p)).resolve() for p in group_paths if str(p).strip())
+                if files:
+                    return list(dict.fromkeys(p for p in files if _is_archivable_file(p)))
+
     groups = config.get("groups") or {}
     if not isinstance(groups, dict):
         return []
@@ -495,7 +512,7 @@ def create_run_archive(
         out_dir = (project_root / out_dir).resolve()
 
     cleaned_dir = _cleaned_dir(config, project_root)
-    group_files = _collect_group_files(config, project_root, cleaned_dir)
+    group_files = _collect_group_files(config, project_root, cleaned_dir, out_dir=out_dir)
     input_files = _collect_input_files(config, project_root, group_files)
     cleaned_files = _collect_cleaned_files(cleaned_dir, group_files)
     output_sources = _collect_output_files(out_dir)

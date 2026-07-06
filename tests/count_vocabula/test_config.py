@@ -99,6 +99,26 @@ def test_load_config_accepts_grouping_per_file(tmp_path: Path):
     assert cfg["grouping"]["mode"] == "per_file"
 
 
+def test_load_config_accepts_auto_single_cleaned_without_groups(tmp_path: Path):
+    cfg_path = tmp_path / "config.yml"
+    cfg_path.write_text(
+        "\n".join(
+            [
+                "grouping:",
+                "  mode: auto_single_cleaned",
+                "  auto_group_name: text",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    cfg = load_config(cfg_path)
+
+    assert cfg["grouping"]["mode"] == "auto_single_cleaned"
+    assert cfg["groups"] == {"text": {"files": []}}
+
+
 def test_load_config_rejects_invalid_grouping_mode(tmp_path: Path):
     cfg_path = tmp_path / "cfg.yml"
     cfg_path.write_text(

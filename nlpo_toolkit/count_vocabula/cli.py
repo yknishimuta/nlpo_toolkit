@@ -37,20 +37,28 @@ def run_count_vocabula(
     include_cleaned: bool = False,
     include_input: bool = False,
     error_on_empty_group: bool = False,
+    auto_single_cleaned: bool = False,
     command_line: list[str] | None = None,
 ) -> int:
-    rc = run(
-        project_root=project_root,
-        config_path=config_path,
-        group_by_file=group_by_file,
-        load_config_fn=load_config,
-        clean_mod=clean_mod,
-        build_pipeline_fn=build_pipeline,
-        build_sentence_splitter_fn=build_sentence_splitter,
-        count_group_fn=count_group,
-        render_stanza_package_table_fn=render_stanza_package_table,
-        error_on_empty_group=error_on_empty_group,
-    )
+    try:
+        rc = run(
+            project_root=project_root,
+            config_path=config_path,
+            group_by_file=group_by_file,
+            load_config_fn=load_config,
+            clean_mod=clean_mod,
+            build_pipeline_fn=build_pipeline,
+            build_sentence_splitter_fn=build_sentence_splitter,
+            count_group_fn=count_group,
+            render_stanza_package_table_fn=render_stanza_package_table,
+            error_on_empty_group=error_on_empty_group,
+            auto_single_cleaned=auto_single_cleaned,
+        )
+    except ValueError as exc:
+        if auto_single_cleaned and "--auto-single-cleaned" in str(exc):
+            print(f"[ERROR] {exc}", file=sys.stderr)
+            return 1
+        raise
     cfg = load_config(config_path)
     archive_cfg = cfg.get("archive") or {}
     if not isinstance(archive_cfg, dict):
@@ -154,6 +162,11 @@ def build_parser() -> argparse.ArgumentParser:
             "--error-on-empty-group",
             action="store_true",
             help="Fail when any configured group matches zero files.",
+        )
+        count_parser.add_argument(
+            "--auto-single-cleaned",
+            action="store_true",
+            help="Use the only .txt file in cleaned_dir as the count target; fail if zero or multiple files exist.",
         )
 
     cache_parser = subparsers.add_parser("cache")
@@ -293,6 +306,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 config_path=config_path,
                 group_by_file=bool(args.group_by_file),
                 error_on_empty_group=bool(args.error_on_empty_group),
+                auto_single_cleaned=bool(args.auto_single_cleaned),
             )
         return run_count_vocabula(
             project_root=project_root,
@@ -304,6 +318,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             include_cleaned=bool(args.include_cleaned),
             include_input=bool(args.include_input),
             error_on_empty_group=bool(args.error_on_empty_group),
+            auto_single_cleaned=bool(args.auto_single_cleaned),
             command_line=["nlpo", *argv_list],
         )
 

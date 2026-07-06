@@ -336,11 +336,36 @@ groups:
 out_dir: output
 ```
 
+`groups.files: "{cleaned_dir}/*.txt"` counts every `.txt` file currently in the
+cleaned directory. If you want to safely run one cleaned file at a time without
+editing `groups`, use `--auto-single-cleaned`:
+
+```bash
+nlpo count-vocabula \
+  --project-root . \
+  --config config/groups.config.yml \
+  --auto-single-cleaned \
+  --run-name satyricon-cena
+```
+
+The same behavior can be enabled in YAML:
+
+```yaml
+grouping:
+  mode: auto_single_cleaned
+  auto_group_name: text
+```
+
+Auto-single-cleaned selects the only `.txt` file in the resolved cleaned
+directory. If there are zero or multiple cleaned `.txt` files, the command
+fails instead of silently counting stale files. `--run-name` only names the run
+archive; it does not change which input or cleaned file is counted.
+
 Useful config options:
 
 ```yaml
 grouping:
-  mode: groups          # "groups" or "per_file"
+  mode: groups          # "groups", "per_file", or "auto_single_cleaned"
 
 analysis_unit: lemma      # "lemma" or "surface"
 
