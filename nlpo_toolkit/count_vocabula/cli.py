@@ -6,6 +6,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Sequence
 
+from nlpo_toolkit.compare import CompareError, run_compare
+
 from .archive import RunArchiveError, create_run_archive
 from .cache import CacheClearError, clear_cache
 from .config import load_config
@@ -223,6 +225,83 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output file path. Defaults to standard output.",
     )
 
+    compare_parser = subparsers.add_parser("compare")
+    compare_parser.add_argument(
+        "--inputs",
+        nargs="+",
+        type=Path,
+        required=True,
+        help="Two or more frequency CSV files to compare.",
+    )
+    compare_parser.add_argument(
+        "--labels",
+        nargs="+",
+        default=None,
+        help="Display labels corresponding to --inputs.",
+    )
+    compare_parser.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Output path. Defaults to standard output.",
+    )
+    compare_parser.add_argument(
+        "--format",
+        choices=("csv", "tsv"),
+        default="csv",
+        help="Output format.",
+    )
+    compare_parser.add_argument(
+        "--metric",
+        choices=("relative", "difference", "ratio", "log-ratio"),
+        default="log-ratio",
+        help="Primary comparison metric. Rows include all available comparison columns.",
+    )
+    compare_parser.add_argument(
+        "--smoothing",
+        type=float,
+        default=0.5,
+        help="Additive smoothing used for ratio and log-ratio calculations.",
+    )
+    compare_parser.add_argument(
+        "--sort",
+        choices=("abs-log-ratio", "log-ratio", "difference", "range-relative", "total", "term"),
+        default=None,
+        help="Sort key. Defaults to abs-log-ratio for two inputs and range-relative for three or more.",
+    )
+    compare_parser.add_argument(
+        "--ascending",
+        action="store_true",
+        help="Sort ascending.",
+    )
+    compare_parser.add_argument(
+        "--descending",
+        action="store_true",
+        help="Sort descending. This is the default.",
+    )
+    compare_parser.add_argument(
+        "--top",
+        type=int,
+        default=None,
+        help="Limit output to the top N rows after sorting.",
+    )
+    compare_parser.add_argument(
+        "--min-total-count",
+        type=float,
+        default=1,
+        help="Exclude terms whose summed count across inputs is below this value.",
+    )
+    compare_parser.add_argument(
+        "--key-column",
+        default=None,
+        help="Explicit key column name. Defaults to automatic detection.",
+    )
+    compare_parser.add_argument(
+        "--count-column",
+        default=None,
+        help="Explicit count column name. Defaults to automatic detection.",
+    )
+
     ngram_parser = subparsers.add_parser("ngram")
     ngram_parser.add_argument(
         "--n",
@@ -344,6 +423,26 @@ def main(argv: Sequence[str] | None = None) -> int:
                 out_path=args.out,
             )
         except ConcordanceError as exc:
+            print(f"[ERROR] {exc}", file=sys.stderr)
+            return 1
+
+    if args.command == "compare":
+        try:
+            return run_compare(
+                inputs=list(args.inputs),
+                labels=list(args.labels) if args.labels is not None else None,
+                out=args.out,
+                output_format=args.format,
+                metric=args.metric,
+                smoothing=args.smoothing,
+                min_total_count=args.min_total_count,
+                top=args.top,
+                sort=args.sort,
+                ascending=bool(args.ascending) and not bool(args.descending),
+                key_column=args.key_column,
+                count_column=args.count_column,
+            )
+        except CompareError as exc:
             print(f"[ERROR] {exc}", file=sys.stderr)
             return 1
 

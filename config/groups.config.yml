@@ -7,6 +7,11 @@ groups:
     files:
       - "{cleaned_dir}/*.txt"
 
+grouping:
+  mode: auto_single_cleaned
+  auto_group_name: text
+
+
 out_dir: output
 language: la
 stanza_package: perseus
