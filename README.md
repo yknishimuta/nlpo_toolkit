@@ -363,6 +363,48 @@ trace:
   max_rows: 500000
 ```
 
+## Run Archive
+
+`nlpo count-vocabula` can save a reproducible snapshot of one successful run
+under `runs/<run-name>/`. The archive includes frequency CSVs, `summary.txt`,
+`run_meta.json`, trace files when enabled, a config snapshot, `manifest.json`,
+and a short archive README.
+
+```bash
+nlpo count-vocabula \
+  --project-root . \
+  --config config/groups.config.yml \
+  --run-name virgil_noun_test_01
+```
+
+If `--archive-run` is used without `--run-name`, the directory name is a
+timestamp such as `runs/20260706-123456`.
+
+```bash
+nlpo count-vocabula \
+  --project-root . \
+  --config config/groups.config.yml \
+  --archive-run
+```
+
+Use `--runs-dir` to choose another archive root. Existing run directories are
+never overwritten.
+
+By default, large source corpora are not copied. Add these flags when the
+archive should contain the files themselves:
+
+```bash
+nlpo count-vocabula \
+  --project-root . \
+  --config config/groups.config.yml \
+  --run-name virgil_noun_test_01 \
+  --include-cleaned \
+  --include-input
+```
+
+`dictcheck.wordlist` is recorded in `manifest.json` with its path, size, and
+SHA-256 hash, but is not copied into `config_snapshot/` by default.
+
 ## Configuration Roles
 
 `nlpo_toolkit` uses several configuration files at different stages of the

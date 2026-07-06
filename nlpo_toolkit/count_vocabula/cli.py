@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Sequence
 
+from .archive import RunArchiveError, create_run_archive
 from .cache import CacheClearError, clear_cache
 from .config import load_config
 from .concordance import ConcordanceError, write_concordance
@@ -30,8 +31,14 @@ def run_count_vocabula(
     project_root: Path,
     config_path: Path,
     group_by_file: bool = False,
+    archive_run: bool = False,
+    run_name: str | None = None,
+    runs_dir: Path = Path("runs"),
+    include_cleaned: bool = False,
+    include_input: bool = False,
+    command_line: list[str] | None = None,
 ) -> int:
-    return run(
+    rc = run(
         project_root=project_root,
         config_path=config_path,
         group_by_file=group_by_file,
@@ -42,6 +49,25 @@ def run_count_vocabula(
         count_group_fn=count_group,
         render_stanza_package_table_fn=render_stanza_package_table,
     )
+    if rc != 0 or not (archive_run or run_name):
+        return rc
+
+    cfg = load_config(config_path)
+    try:
+        create_run_archive(
+            project_root=project_root,
+            config_path=config_path,
+            config=cfg,
+            run_name=run_name,
+            runs_dir=runs_dir,
+            include_cleaned=include_cleaned,
+            include_input=include_input,
+            command_line=command_line,
+        )
+    except (RunArchiveError, ValueError) as exc:
+        print(f"[ERROR] {exc}", file=sys.stderr)
+        return 1
+    return rc
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -71,6 +97,32 @@ def build_parser() -> argparse.ArgumentParser:
             "--dry-run",
             action="store_true",
             help="Validate config, paths, and matched files without running NLP.",
+        )
+        count_parser.add_argument(
+            "--archive-run",
+            action="store_true",
+            help="Archive this successful count-vocabula run under --runs-dir.",
+        )
+        count_parser.add_argument(
+            "--run-name",
+            default=None,
+            help="Run archive directory name. Implies --archive-run.",
+        )
+        count_parser.add_argument(
+            "--runs-dir",
+            type=Path,
+            default=Path("runs"),
+            help="Directory where run archives are stored. Defaults to runs.",
+        )
+        count_parser.add_argument(
+            "--include-cleaned",
+            action="store_true",
+            help="Copy cleaned files into the run archive.",
+        )
+        count_parser.add_argument(
+            "--include-input",
+            action="store_true",
+            help="Copy input files into the run archive.",
         )
 
     cache_parser = subparsers.add_parser("cache")
@@ -193,7 +245,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    argv_list = list(argv) if argv is not None else sys.argv[1:]
+    args = parser.parse_args(argv_list)
 
     if args.command in {"count-vocabula", "count"}:
         project_root = args.project_root.resolve()
@@ -213,6 +266,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             project_root=project_root,
             config_path=config_path,
             group_by_file=bool(args.group_by_file),
+            archive_run=bool(args.archive_run),
+            run_name=args.run_name,
+            runs_dir=args.runs_dir,
+            include_cleaned=bool(args.include_cleaned),
+            include_input=bool(args.include_input),
+            command_line=["nlpo", *argv_list],
         )
 
     if args.command == "cache" and args.cache_command == "clear":
