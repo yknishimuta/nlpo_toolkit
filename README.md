@@ -254,6 +254,54 @@ nlpo concordance \
 If the trace contains `file`, `group`, or `sentence` columns, those columns are
 included in the concordance output.
 
+## N-Gram CLI
+
+Use `nlpo ngram` to build n-gram frequency tables from a trace TSV or from
+text files listed in `config/groups.config.yml`.
+
+Trace input is the recommended first workflow because it can use either the
+`token` or `lemma` column:
+
+```bash
+nlpo ngram \
+  --trace output/trace.tsv \
+  --n 2 \
+  --field lemma \
+  --min-count 2 \
+  --top 100 \
+  --out output/ngram_2.tsv
+```
+
+Group-specific output:
+
+```bash
+nlpo ngram \
+  --trace output/trace.tsv \
+  --n 3 \
+  --field token \
+  --by-group \
+  --min-count 2 \
+  --format csv \
+  --out output/ngram_3_by_group.csv
+```
+
+If the trace has `sentence` or `sent_idx`, n-grams do not cross sentence
+boundaries. Empty values and punctuation-only tokens are skipped.
+
+Raw text input through config groups is also available for token n-grams:
+
+```bash
+nlpo ngram \
+  --project-root . \
+  --config config/groups.config.yml \
+  --field token \
+  --n 2 \
+  --out output/ngram_text.tsv
+```
+
+Output columns are `ngram`, `count`, `n`, and `field`. When `--by-group` is
+used, `group` is added.
+
 ## Example Config
 
 ```yaml
