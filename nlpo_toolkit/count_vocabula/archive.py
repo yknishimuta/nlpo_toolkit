@@ -214,6 +214,18 @@ def _metadata(files: Iterable[Path]) -> list[dict[str, Any]]:
     return out
 
 
+def _source_metadata(files: Iterable[Path]) -> list[dict[str, Any]]:
+    return [
+        {
+            "path": str(path.resolve()),
+            "sha256": file_sha256(path),
+            "size": path.stat().st_size,
+        }
+        for path in files
+        if _is_archivable_file(path)
+    ]
+
+
 def _is_archivable_file(path: Path) -> bool:
     return path.exists() and path.is_file() and path.name not in _IGNORED_ARCHIVE_NAMES
 
@@ -231,6 +243,17 @@ def _archive_metadata(files: Iterable[ArchiveFile]) -> list[dict[str, Any]]:
 
 
 def _collect_output_files(out_dir: Path) -> list[Path]:
+    run_meta_path = out_dir / "run_meta.json"
+    if run_meta_path.exists():
+        try:
+            meta = json.loads(run_meta_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            meta = {}
+        generated = meta.get("generated_outputs")
+        if isinstance(generated, list):
+            files = [Path(str(p)).resolve() for p in generated if str(p).strip()]
+            return list(dict.fromkeys(p for p in files if _is_archivable_file(p)))
+
     if not out_dir.exists():
         return []
     files: list[Path] = []
@@ -526,7 +549,9 @@ def create_run_archive(
             },
             "input_files": _metadata(input_files),
             "cleaned_files": _metadata(cleaned_files),
+            "generated_outputs": _source_metadata(output_sources),
             "output_files": _archive_metadata(output_copied),
+            "copied_outputs": _archive_metadata(output_copied),
             "trace_files": _archive_metadata(trace_copied),
             "config_snapshot_files": _archive_metadata(config_copied),
             "included_cleaned_files": _archive_metadata(cleaned_copied),

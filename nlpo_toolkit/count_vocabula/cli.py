@@ -36,6 +36,7 @@ def run_count_vocabula(
     runs_dir: Path | None = None,
     include_cleaned: bool = False,
     include_input: bool = False,
+    error_on_empty_group: bool = False,
     command_line: list[str] | None = None,
 ) -> int:
     rc = run(
@@ -48,6 +49,7 @@ def run_count_vocabula(
         build_sentence_splitter_fn=build_sentence_splitter,
         count_group_fn=count_group,
         render_stanza_package_table_fn=render_stanza_package_table,
+        error_on_empty_group=error_on_empty_group,
     )
     cfg = load_config(config_path)
     archive_cfg = cfg.get("archive") or {}
@@ -147,6 +149,11 @@ def build_parser() -> argparse.ArgumentParser:
             "--include-input",
             action="store_true",
             help="Copy input files into the run archive.",
+        )
+        count_parser.add_argument(
+            "--error-on-empty-group",
+            action="store_true",
+            help="Fail when any configured group matches zero files.",
         )
 
     cache_parser = subparsers.add_parser("cache")
@@ -285,6 +292,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 project_root=project_root,
                 config_path=config_path,
                 group_by_file=bool(args.group_by_file),
+                error_on_empty_group=bool(args.error_on_empty_group),
             )
         return run_count_vocabula(
             project_root=project_root,
@@ -295,6 +303,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             runs_dir=args.runs_dir,
             include_cleaned=bool(args.include_cleaned),
             include_input=bool(args.include_input),
+            error_on_empty_group=bool(args.error_on_empty_group),
             command_line=["nlpo", *argv_list],
         )
 

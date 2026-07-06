@@ -187,6 +187,7 @@ def run(
     build_sentence_splitter_fn: Optional[Callable[..., Any]],
     count_group_fn: Callable[..., Counter],
     render_stanza_package_table_fn: Callable[..., List[str]],
+    error_on_empty_group: bool = False,
 ) -> int:
     """
     Core runner. Dependencies are injectable so tests can monkeypatch:
@@ -275,7 +276,13 @@ def run(
         project_root=project_root,
         cleaned_dir=cleaned_dir,
     )
+    empty_groups = [name for name, files in group_files.items() if not files]
+    if error_on_empty_group and empty_groups:
+        names = ", ".join(empty_groups)
+        raise ValueError(f"No files matched for group(s): {names}")
+
     work_items = _build_work_items(group_files=group_files, group_by_file=per_file)
+    generated_outputs: List[Path] = []
 
     for gname, files in work_items:
         groups_files[gname] = [str(p) for p in files]
@@ -316,6 +323,7 @@ def run(
                 ref_counter,
                 header=("tag", "count"),
             )
+            generated_outputs.append(out_dir / f"ref_tags_{gname}.csv")
         
         # ---- trace (optional) ----
         trace_cfg = cfg.get("trace") or {}
@@ -362,7 +370,9 @@ def run(
                 c = new_c
         # base csv
         base = f"noun_frequency_{gname}"
-        write_frequency_csv(out_dir / f"{base}.csv", c, header=csv_header)
+        base_csv_path = out_dir / f"{base}.csv"
+        write_frequency_csv(base_csv_path, c, header=csv_header)
+        generated_outputs.append(base_csv_path)
 
         # dictcheck
         dc = cfg.get("dictcheck") or {}
@@ -387,16 +397,20 @@ def run(
             known_c = Counter({w: n for (w, n) in c.items() if w in known})
             unknown_c = Counter({w: n for (w, n) in c.items() if w not in known})
 
+            known_path = out_dir / f"noun_frequency_{gname}.known.csv"
             write_frequency_csv(
-                out_dir / f"noun_frequency_{gname}.known.csv",
+                known_path,
                 known_c,
                 header=csv_header,
             )
+            generated_outputs.append(known_path)
+            unknown_path = out_dir / f"noun_frequency_{gname}.unknown.csv"
             write_frequency_csv(
-                out_dir / f"noun_frequency_{gname}.unknown.csv",
+                unknown_path,
                 unknown_c,
                 header=csv_header,
             )
+            generated_outputs.append(unknown_path)
 
     # ---- summary.txt ----
     summary_lines: List[str] = []
@@ -420,9 +434,13 @@ def run(
                 f"- group={gn} ref_tag_types={len(rc)} ref_tag_tokens={sum(rc.values())}"
             )
 
-    (out_dir / "summary.txt").write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+    summary_path = out_dir / "summary.txt"
+    summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+    generated_outputs.append(summary_path)
 
     # ---- run_meta.json ----
+    run_meta_path = out_dir / "run_meta.json"
+    generated_outputs.append(run_meta_path)
     meta = build_run_meta(
         groups_files=groups_files,
         hash_inputs=False,
@@ -435,6 +453,7 @@ def run(
     norm_canon = json.dumps(norm, ensure_ascii=False, sort_keys=True)
     meta["normalization"] = norm
     meta["normalization_hash_sha256"] = hashlib.sha256(norm_canon.encode("utf-8")).hexdigest()
+    meta["generated_outputs"] = [str(p.resolve()) for p in generated_outputs]
 
     write_run_meta(meta, out_dir)
 

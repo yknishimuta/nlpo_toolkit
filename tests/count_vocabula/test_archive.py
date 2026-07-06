@@ -238,6 +238,8 @@ def test_create_run_archive_copies_cleaned_and_input_only_when_requested(tmp_pat
     manifest = json.loads((with_files / "manifest.json").read_text(encoding="utf-8"))
     assert len(manifest["copied_input_files"]) == 1
     assert len(manifest["copied_cleaned_files"]) == 1
+    assert "copied_outputs" in manifest
+    assert "generated_outputs" in manifest
     assert manifest["copied_input_files"][0]["source_path"] == str(
         (project_root / "input" / "a.txt").resolve()
     )
@@ -269,6 +271,47 @@ def test_create_run_archive_uses_config_archive_include_defaults(tmp_path: Path)
 
     assert (run_dir / "input" / "input" / "a.txt").exists()
     assert (run_dir / "cleaned" / "a.cleaned.txt").exists()
+
+
+def test_create_run_archive_copies_only_generated_outputs_from_run_meta(tmp_path: Path) -> None:
+    project_root, config_path, config = _write_project(tmp_path)
+    stale = project_root / "output" / "noun_frequency_old.csv"
+    stale.write_text("lemma,count\nold,99\n", encoding="utf-8")
+    generated = project_root / "output" / "noun_frequency_text.csv"
+    summary = project_root / "output" / "summary.txt"
+    run_meta = project_root / "output" / "run_meta.json"
+    run_meta.write_text(
+        json.dumps(
+            {
+                "groups_files": {"text": [str((project_root / "cleaned" / "a.cleaned.txt").resolve())]},
+                "generated_outputs": [
+                    str(generated.resolve()),
+                    str(summary.resolve()),
+                    str(run_meta.resolve()),
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    run_dir = create_run_archive(
+        project_root=project_root,
+        config_path=config_path,
+        config=config,
+        run_name="generated-only",
+    )
+
+    assert (run_dir / "outputs" / "noun_frequency_text.csv").exists()
+    assert (run_dir / "outputs" / "summary.txt").exists()
+    assert (run_dir / "outputs" / "run_meta.json").exists()
+    assert not (run_dir / "outputs" / "noun_frequency_old.csv").exists()
+
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    copied_names = {Path(item["archive_path"]).name for item in manifest["copied_outputs"]}
+    assert copied_names == {"noun_frequency_text.csv", "summary.txt", "run_meta.json"}
+    generated_names = {Path(item["path"]).name for item in manifest["generated_outputs"]}
+    assert generated_names == {"noun_frequency_text.csv", "summary.txt", "run_meta.json"}
 
 
 def test_run_count_vocabula_creates_archive_after_success(tmp_path: Path, monkeypatch) -> None:

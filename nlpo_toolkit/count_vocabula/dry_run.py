@@ -12,6 +12,7 @@ from .preprocess import expand_cleaned_dir_placeholders, resolve_cleaner_output_
 
 KNOWN_TOP_LEVEL_KEYS = {
     "analysis_unit",
+    "archive",
     "cpu_only",
     "csv_header",
     "dictcheck",
@@ -171,6 +172,7 @@ def dry_run_count_vocabula(
     project_root: Path,
     config_path: Path,
     group_by_file: bool = False,
+    error_on_empty_group: bool = False,
 ) -> int:
     project_root = Path(project_root).resolve()
     config_path = Path(config_path)
@@ -215,7 +217,13 @@ def dry_run_count_vocabula(
 
     group_files = _group_files(cfg, project_root, cleaned_dir)
     for group_name, files in group_files.items():
-        lines.append(f"[OK] group {group_name} matched files: {len(files)}")
+        if not files and error_on_empty_group:
+            lines.append(f"[ERROR] group {group_name} matched files: 0")
+            exit_code = 1
+        else:
+            lines.append(f"[OK] group {group_name} matched files: {len(files)}")
+        for file_path in files:
+            lines.append(f"  - {_display_path(file_path, project_root)}")
 
     for key in duplicate_keys:
         lines.append(f"[WARN] duplicate YAML key: {key}")

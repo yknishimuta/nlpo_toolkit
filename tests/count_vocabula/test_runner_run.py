@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections import Counter
 from pathlib import Path
 
@@ -351,3 +352,64 @@ def test_run_group_by_file_cli_override(tmp_path: Path, monkeypatch):
 
     assert rc == 0
     assert csv_names == ["noun_frequency_file3.csv"]
+
+
+def test_run_meta_records_generated_outputs_and_actual_group_files(tmp_path: Path, monkeypatch):
+    project_root = tmp_path
+    config_path = tmp_path / "cfg.yml"
+    config_path.write_text("dummy", encoding="utf-8")
+
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    used = input_dir / "used.txt"
+    used.write_text("rosa", encoding="utf-8")
+
+    def load_config_fn(_p: Path):
+        return {
+            "out_dir": "output",
+            "groups": {"text": {"files": ["input/*.txt"]}},
+            "dictcheck": {"enabled": False},
+        }
+
+    monkeypatch.setattr(runner_mod, "run_preprocess_if_needed", lambda **kwargs: None)
+
+    rc = runner_mod.run(
+        project_root=project_root,
+        config_path=config_path,
+        load_config_fn=load_config_fn,
+        clean_mod=object(),
+        build_pipeline_fn=lambda *a, **k: (object(), "perseus"),
+        build_sentence_splitter_fn=None,
+        count_group_fn=lambda *a, **k: Counter({"rosa": 1}),
+        render_stanza_package_table_fn=lambda *a, **k: [],
+    )
+
+    assert rc == 0
+    meta = json.loads((project_root / "output" / "run_meta.json").read_text(encoding="utf-8"))
+    assert meta["groups_files"] == {"text": [str(used.resolve())]}
+    generated_names = {Path(p).name for p in meta["generated_outputs"]}
+    assert generated_names == {"noun_frequency_text.csv", "summary.txt", "run_meta.json"}
+
+
+def test_run_error_on_empty_group(tmp_path: Path, monkeypatch):
+    project_root = tmp_path
+    config_path = tmp_path / "cfg.yml"
+    config_path.write_text("dummy", encoding="utf-8")
+
+    def load_config_fn(_p: Path):
+        return {"out_dir": "output", "groups": {"empty": {"files": ["input/*.txt"]}}}
+
+    monkeypatch.setattr(runner_mod, "run_preprocess_if_needed", lambda **kwargs: None)
+
+    with pytest.raises(ValueError, match="No files matched"):
+        runner_mod.run(
+            project_root=project_root,
+            config_path=config_path,
+            load_config_fn=load_config_fn,
+            clean_mod=object(),
+            build_pipeline_fn=lambda *a, **k: (object(), "perseus"),
+            build_sentence_splitter_fn=None,
+            count_group_fn=lambda *a, **k: Counter(),
+            render_stanza_package_table_fn=lambda *a, **k: [],
+            error_on_empty_group=True,
+        )

@@ -75,8 +75,40 @@ def test_dry_run_reports_config_paths_matches_and_warnings(tmp_path: Path, capsy
     assert "[OK] input files: 3" in out
     assert "[OK] cleaned output dir: cleaned" in out
     assert "[OK] group text matched files: 3" in out
+    assert "  - cleaned/a.txt" in out
+    assert "  - cleaned/b.txt" in out
+    assert "  - cleaned/c.txt" in out
     assert "[WARN] duplicate YAML key: trace" in out
     assert "[WARN] unknown config key: roman_exception_files" in out
     assert "[OK] dictcheck wordlist found" in out
     assert "[OK] ref_tags patterns found" in out
     assert "[OK] output dir: output" in out
+
+
+def test_dry_run_error_on_empty_group(tmp_path: Path, capsys):
+    project_root = tmp_path
+    (project_root / "config").mkdir()
+    config_path = project_root / "config" / "groups.config.yml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "groups:",
+                "  empty:",
+                "    files:",
+                "      - input/*.txt",
+                "out_dir: output",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    rc = dry_run_count_vocabula(
+        project_root=project_root,
+        config_path=config_path,
+        error_on_empty_group=True,
+    )
+
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "[ERROR] group empty matched files: 0" in out

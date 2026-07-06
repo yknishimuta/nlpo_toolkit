@@ -93,8 +93,8 @@ def test_count_vocabula_cli_accepts_run_archive_options(tmp_path, monkeypatch):
 def test_count_vocabula_cli_accepts_dry_run(tmp_path, monkeypatch):
     calls = []
 
-    def fake_dry_run_count_vocabula(*, project_root: Path, config_path: Path, group_by_file: bool) -> int:
-        calls.append((project_root, config_path, group_by_file))
+    def fake_dry_run_count_vocabula(**kwargs) -> int:
+        calls.append(kwargs)
         return 0
 
     monkeypatch.setattr(cli, "dry_run_count_vocabula", fake_dry_run_count_vocabula)
@@ -102,4 +102,7 @@ def test_count_vocabula_cli_accepts_dry_run(tmp_path, monkeypatch):
     rc = cli.main(["count-vocabula", "--dry-run", "--project-root", str(tmp_path), "--group-by-file"])
 
     assert rc == 0
-    assert calls == [(tmp_path.resolve(), tmp_path / "config" / "groups.config.yml", True)]
+    assert calls[0]["project_root"] == tmp_path.resolve()
+    assert calls[0]["config_path"] == tmp_path / "config" / "groups.config.yml"
+    assert calls[0]["group_by_file"] is True
+    assert calls[0]["error_on_empty_group"] is False
