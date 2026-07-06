@@ -24,7 +24,11 @@ def _write_project(tmp_path: Path) -> tuple[Path, Path, dict]:
     (project_root / "data" / "wordlist").mkdir(parents=True)
 
     (project_root / "input" / "a.txt").write_text("raw text\n", encoding="utf-8")
+    (project_root / "input" / ".DS_Store").write_text("metadata\n", encoding="utf-8")
+    (project_root / "input" / ".gitkeep").write_text("", encoding="utf-8")
     (project_root / "cleaned" / "a.cleaned.txt").write_text("cleaned text\n", encoding="utf-8")
+    (project_root / "cleaned" / ".DS_Store").write_text("metadata\n", encoding="utf-8")
+    (project_root / "cleaned" / ".gitkeep").write_text("", encoding="utf-8")
     (project_root / "output" / "noun_frequency_text.csv").write_text(
         "lemma,count\nrosa,1\n",
         encoding="utf-8",
@@ -65,7 +69,7 @@ def _write_project(tmp_path: Path) -> tuple[Path, Path, dict]:
 
     config = {
         "preprocess": {"kind": "cleaner", "config": "config/cleaner.yml"},
-        "groups": {"text": {"files": ["input/*.txt"]}},
+        "groups": {"text": {"files": ["{cleaned_dir}/*.txt"]}},
         "out_dir": "output",
         "dictcheck": {
             "enabled": True,
@@ -89,7 +93,7 @@ def _write_project(tmp_path: Path) -> tuple[Path, Path, dict]:
                 "groups:",
                 "  text:",
                 "    files:",
-                "      - input/*.txt",
+                '      - "{cleaned_dir}/*.txt"',
                 "out_dir: output",
                 "dictcheck:",
                 "  enabled: true",
@@ -226,6 +230,45 @@ def test_create_run_archive_copies_cleaned_and_input_only_when_requested(tmp_pat
     )
     assert (with_files / "cleaned" / "a.cleaned.txt").exists()
     assert (with_files / "input" / "input" / "a.txt").exists()
+    assert not (with_files / "cleaned" / ".DS_Store").exists()
+    assert not (with_files / "cleaned" / ".gitkeep").exists()
+    assert not (with_files / "input" / "input" / ".DS_Store").exists()
+    assert not (with_files / "input" / "input" / ".gitkeep").exists()
+
+    manifest = json.loads((with_files / "manifest.json").read_text(encoding="utf-8"))
+    assert len(manifest["copied_input_files"]) == 1
+    assert len(manifest["copied_cleaned_files"]) == 1
+    assert manifest["copied_input_files"][0]["source_path"] == str(
+        (project_root / "input" / "a.txt").resolve()
+    )
+    assert manifest["copied_cleaned_files"][0]["source_path"] == str(
+        (project_root / "cleaned" / "a.cleaned.txt").resolve()
+    )
+
+    readme = (with_files / "README.md").read_text(encoding="utf-8")
+    assert "Included input files: 1" in readme
+    assert "Included cleaned files: 1" in readme
+
+
+def test_create_run_archive_uses_config_archive_include_defaults(tmp_path: Path) -> None:
+    project_root, config_path, config = _write_project(tmp_path)
+    config["archive"] = {
+        "enabled": True,
+        "include_input": True,
+        "include_cleaned": True,
+    }
+
+    run_dir = create_run_archive(
+        project_root=project_root,
+        config_path=config_path,
+        config=config,
+        run_name="config-defaults",
+        include_input=bool(config["archive"]["include_input"]),
+        include_cleaned=bool(config["archive"]["include_cleaned"]),
+    )
+
+    assert (run_dir / "input" / "input" / "a.txt").exists()
+    assert (run_dir / "cleaned" / "a.cleaned.txt").exists()
 
 
 def test_run_count_vocabula_creates_archive_after_success(tmp_path: Path, monkeypatch) -> None:
@@ -246,3 +289,87 @@ def test_run_count_vocabula_creates_archive_after_success(tmp_path: Path, monkey
 
     assert rc == 0
     assert (project_root / "runs" / "from-cli" / "manifest.json").exists()
+
+
+def test_run_count_vocabula_uses_config_archive_enabled_without_cli_flag(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    project_root, config_path, _config = _write_project(tmp_path)
+    with config_path.open("a", encoding="utf-8") as f:
+        f.write(
+            "\n".join(
+                [
+                    "archive:",
+                    "  enabled: true",
+                    "  runs_dir: archives",
+                    "  include_input: true",
+                    "  include_cleaned: true",
+                    "",
+                ]
+            )
+        )
+
+    def fake_run(**_kwargs) -> int:
+        return 0
+
+    monkeypatch.setattr(cli, "run", fake_run)
+
+    rc = cli.run_count_vocabula(
+        project_root=project_root,
+        config_path=config_path,
+        group_by_file=False,
+        command_line=["nlpo", "count-vocabula"],
+    )
+
+    assert rc == 0
+    archive_dirs = list((project_root / "archives").iterdir())
+    assert len(archive_dirs) == 1
+    run_dir = archive_dirs[0]
+    assert (run_dir / "input" / "input" / "a.txt").exists()
+    assert (run_dir / "cleaned" / "a.cleaned.txt").exists()
+
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert len(manifest["copied_input_files"]) == 1
+    assert len(manifest["copied_cleaned_files"]) == 1
+
+    out = capsys.readouterr().out
+    assert "[ARCHIVE] saved run archive: archives/" in out
+    assert "[ARCHIVE] included input files: 1" in out
+    assert "[ARCHIVE] included cleaned files: 1" in out
+
+
+def test_cli_include_flags_override_config_false(tmp_path: Path, monkeypatch) -> None:
+    project_root, config_path, _config = _write_project(tmp_path)
+    with config_path.open("a", encoding="utf-8") as f:
+        f.write(
+            "\n".join(
+                [
+                    "archive:",
+                    "  enabled: true",
+                    "  include_input: false",
+                    "  include_cleaned: false",
+                    "",
+                ]
+            )
+        )
+
+    def fake_run(**_kwargs) -> int:
+        return 0
+
+    monkeypatch.setattr(cli, "run", fake_run)
+
+    rc = cli.run_count_vocabula(
+        project_root=project_root,
+        config_path=config_path,
+        group_by_file=False,
+        run_name="cli-overrides",
+        include_input=True,
+        include_cleaned=True,
+    )
+
+    assert rc == 0
+    run_dir = project_root / "runs" / "cli-overrides"
+    assert (run_dir / "input" / "input" / "a.txt").exists()
+    assert (run_dir / "cleaned" / "a.cleaned.txt").exists()

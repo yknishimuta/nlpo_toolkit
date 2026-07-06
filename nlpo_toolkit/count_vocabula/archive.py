@@ -32,6 +32,7 @@ class ArchiveFile:
 
 _RUN_NAME_SAFE_RE = re.compile(r"[^0-9A-Za-z._-]+")
 _UNDERSCORE_RE = re.compile(r"_+")
+_IGNORED_ARCHIVE_NAMES = {".DS_Store", ".gitkeep"}
 
 
 def sanitize_run_name(name: str) -> str:
@@ -175,7 +176,7 @@ def _copy_flat(files: Iterable[Path], dest_root: Path, run_dir: Path) -> list[Ar
     copied: list[ArchiveFile] = []
     used: set[Path] = set()
     for src in files:
-        if not src.exists() or not src.is_file():
+        if not _is_archivable_file(src):
             continue
         dest = _unique_dest(dest_root, Path(src.name), used)
         copied.append(_copy_file(src, dest, run_dir))
@@ -192,7 +193,7 @@ def _copy_preserve_root(
     copied: list[ArchiveFile] = []
     used: set[Path] = set()
     for src in files:
-        if not src.exists() or not src.is_file():
+        if not _is_archivable_file(src):
             continue
         dest = _unique_dest(dest_root, _safe_relative(src, source_root), used)
         copied.append(_copy_file(src, dest, run_dir))
@@ -213,6 +214,10 @@ def _metadata(files: Iterable[Path]) -> list[dict[str, Any]]:
     return out
 
 
+def _is_archivable_file(path: Path) -> bool:
+    return path.exists() and path.is_file() and path.name not in _IGNORED_ARCHIVE_NAMES
+
+
 def _archive_metadata(files: Iterable[ArchiveFile]) -> list[dict[str, Any]]:
     return [
         {
@@ -230,10 +235,10 @@ def _collect_output_files(out_dir: Path) -> list[Path]:
         return []
     files: list[Path] = []
     for pattern in ("noun_frequency*.csv", "ref_tags_*.csv"):
-        files.extend(sorted(p for p in out_dir.glob(pattern) if p.is_file()))
+        files.extend(sorted(p for p in out_dir.glob(pattern) if _is_archivable_file(p)))
     for name in ("summary.txt", "run_meta.json"):
         p = out_dir / name
-        if p.exists() and p.is_file():
+        if _is_archivable_file(p):
             files.append(p)
     return list(dict.fromkeys(files))
 
@@ -253,11 +258,11 @@ def _collect_trace_files(config: dict[str, Any], project_root: Path, out_dir: Pa
     if base is None:
         return []
     files: list[Path] = []
-    if base.exists() and base.is_file():
+    if _is_archivable_file(base):
         files.append(base)
     if base.parent.exists():
         pattern = f"{base.stem}_*{base.suffix or '.tsv'}"
-        files.extend(sorted(p for p in base.parent.glob(pattern) if p.is_file()))
+        files.extend(sorted(p for p in base.parent.glob(pattern) if _is_archivable_file(p)))
     return list(dict.fromkeys(files))
 
 
@@ -274,7 +279,7 @@ def _cleaned_dir(config: dict[str, Any], project_root: Path) -> Path | None:
     return resolve_cleaner_output_dir(cleaner_path)
 
 
-def _collect_input_files(
+def _collect_group_files(
     config: dict[str, Any],
     project_root: Path,
     cleaned_dir: Path | None,
@@ -297,13 +302,68 @@ def _collect_input_files(
         ]
         resolved_patterns = expand_cleaned_dir_placeholders(resolved_patterns, cleaned_dir)
         files.extend(expand_globs(resolved_patterns))
-    return list(dict.fromkeys(p.resolve() for p in files if p.exists() and p.is_file()))
+    return list(dict.fromkeys(p.resolve() for p in files if _is_archivable_file(p)))
 
 
-def _collect_cleaned_files(cleaned_dir: Path | None) -> list[Path]:
-    if cleaned_dir is None or not cleaned_dir.exists():
+def _cleaner_config_path(config: dict[str, Any], project_root: Path) -> Path | None:
+    preprocess = config.get("preprocess") or {}
+    if not isinstance(preprocess, dict) or preprocess.get("kind") != "cleaner":
+        return None
+    cleaner_raw = preprocess.get("config")
+    if not cleaner_raw:
+        return None
+    cleaner_path = _resolve_project_path(project_root, cleaner_raw)
+    if not cleaner_path.exists():
+        return None
+    return cleaner_path
+
+
+def _collect_cleaner_input_files(config: dict[str, Any], project_root: Path) -> list[Path]:
+    cleaner_path = _cleaner_config_path(config, project_root)
+    if cleaner_path is None:
         return []
-    return sorted(p.resolve() for p in cleaned_dir.rglob("*") if p.is_file())
+
+    cleaner_cfg = _load_yaml(cleaner_path)
+    raw_input = cleaner_cfg.get("input")
+    if not raw_input:
+        return []
+
+    input_path = _resolve_path(cleaner_path.parent, raw_input)
+    if input_path.is_file():
+        return [input_path.resolve()] if _is_archivable_file(input_path) else []
+    if input_path.is_dir():
+        return sorted(
+            p.resolve()
+            for p in input_path.iterdir()
+            if _is_archivable_file(p) and p.suffix.lower() == ".txt"
+        )
+    return []
+
+
+def _collect_input_files(
+    config: dict[str, Any],
+    project_root: Path,
+    group_files: list[Path],
+) -> list[Path]:
+    cleaner_input_files = _collect_cleaner_input_files(config, project_root)
+    if cleaner_input_files:
+        return cleaner_input_files
+    return group_files
+
+
+def _collect_cleaned_files(cleaned_dir: Path | None, group_files: list[Path]) -> list[Path]:
+    if cleaned_dir is None:
+        return []
+    cleaned_root = cleaned_dir.resolve()
+    cleaned_files: list[Path] = []
+    for path in group_files:
+        try:
+            path.resolve().relative_to(cleaned_root)
+        except ValueError:
+            continue
+        if _is_archivable_file(path):
+            cleaned_files.append(path.resolve())
+    return list(dict.fromkeys(cleaned_files))
 
 
 def _git_value(project_root: Path, args: list[str]) -> str | None:
@@ -340,6 +400,8 @@ def _write_readme(
     run_dir: Path,
     command_line: list[str] | None,
     input_count: int,
+    copied_input_count: int,
+    copied_cleaned_count: int,
     output_files: list[ArchiveFile],
     project_root: Path,
     config_path: Path,
@@ -356,6 +418,8 @@ def _write_readme(
         "## Inputs",
         "",
         f"- input files: {input_count}",
+        f"- Included input files: {copied_input_count}",
+        f"- Included cleaned files: {copied_cleaned_count}",
         "",
         "## Outputs",
         "",
@@ -408,8 +472,9 @@ def create_run_archive(
         out_dir = (project_root / out_dir).resolve()
 
     cleaned_dir = _cleaned_dir(config, project_root)
-    input_files = _collect_input_files(config, project_root, cleaned_dir)
-    cleaned_files = _collect_cleaned_files(cleaned_dir)
+    group_files = _collect_group_files(config, project_root, cleaned_dir)
+    input_files = _collect_input_files(config, project_root, group_files)
+    cleaned_files = _collect_cleaned_files(cleaned_dir, group_files)
     output_sources = _collect_output_files(out_dir)
     trace_sources = _collect_trace_files(config, project_root, out_dir)
     config_sources, external_refs = collect_referenced_config_files(
@@ -466,6 +531,8 @@ def create_run_archive(
             "config_snapshot_files": _archive_metadata(config_copied),
             "included_cleaned_files": _archive_metadata(cleaned_copied),
             "included_input_files": _archive_metadata(input_copied),
+            "copied_cleaned_files": _archive_metadata(cleaned_copied),
+            "copied_input_files": _archive_metadata(input_copied),
             "external_references": external_refs,
         }
         (run_dir / "manifest.json").write_text(
@@ -476,6 +543,8 @@ def create_run_archive(
             run_dir=run_dir,
             command_line=command_line or sys.argv,
             input_count=len(input_files),
+            copied_input_count=len(input_copied),
+            copied_cleaned_count=len(cleaned_copied),
             output_files=output_copied,
             project_root=project_root,
             config_path=config_path,

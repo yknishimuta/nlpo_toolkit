@@ -402,6 +402,29 @@ nlpo count-vocabula \
   --include-input
 ```
 
+The same defaults can be set in `config/groups.config.yml`:
+
+```yaml
+archive:
+  enabled: true
+  runs_dir: runs
+  include_input: true
+  include_cleaned: true
+```
+
+When `archive.enabled` is true, `nlpo count-vocabula` creates an archive even
+without `--archive-run` or `--run-name`. CLI flags such as `--include-input`,
+`--include-cleaned`, and `--runs-dir` override the config defaults.
+
+After a successful archive, the CLI prints the saved path and copied file
+counts:
+
+```text
+[ARCHIVE] saved run archive: runs/virgil_noun_test_01
+[ARCHIVE] included input files: 3
+[ARCHIVE] included cleaned files: 3
+```
+
 `dictcheck.wordlist` is recorded in `manifest.json` with its path, size, and
 SHA-256 hash, but is not copied into `config_snapshot/` by default.
 

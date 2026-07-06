@@ -33,7 +33,7 @@ def run_count_vocabula(
     group_by_file: bool = False,
     archive_run: bool = False,
     run_name: str | None = None,
-    runs_dir: Path = Path("runs"),
+    runs_dir: Path | None = None,
     include_cleaned: bool = False,
     include_input: bool = False,
     command_line: list[str] | None = None,
@@ -49,24 +49,48 @@ def run_count_vocabula(
         count_group_fn=count_group,
         render_stanza_package_table_fn=render_stanza_package_table,
     )
-    if rc != 0 or not (archive_run or run_name):
+    cfg = load_config(config_path)
+    archive_cfg = cfg.get("archive") or {}
+    if not isinstance(archive_cfg, dict):
+        archive_cfg = {}
+
+    archive_enabled = bool(archive_cfg.get("enabled", False))
+    should_archive = archive_run or bool(run_name) or archive_enabled
+    if rc != 0 or not should_archive:
         return rc
 
-    cfg = load_config(config_path)
+    effective_runs_dir = runs_dir
+    if effective_runs_dir is None:
+        effective_runs_dir = Path(str(archive_cfg.get("runs_dir", "runs")))
+
+    effective_include_input = include_input or bool(archive_cfg.get("include_input", False))
+    effective_include_cleaned = include_cleaned or bool(archive_cfg.get("include_cleaned", False))
+
     try:
-        create_run_archive(
+        run_dir = create_run_archive(
             project_root=project_root,
             config_path=config_path,
             config=cfg,
             run_name=run_name,
-            runs_dir=runs_dir,
-            include_cleaned=include_cleaned,
-            include_input=include_input,
+            runs_dir=effective_runs_dir,
+            include_cleaned=effective_include_cleaned,
+            include_input=effective_include_input,
             command_line=command_line,
         )
     except (RunArchiveError, ValueError) as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
         return 1
+
+    try:
+        display_run_dir = run_dir.relative_to(project_root)
+    except ValueError:
+        display_run_dir = run_dir
+    import json
+
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    print(f"[ARCHIVE] saved run archive: {display_run_dir}")
+    print(f"[ARCHIVE] included input files: {len(manifest.get('copied_input_files', []))}")
+    print(f"[ARCHIVE] included cleaned files: {len(manifest.get('copied_cleaned_files', []))}")
     return rc
 
 
@@ -111,7 +135,7 @@ def build_parser() -> argparse.ArgumentParser:
         count_parser.add_argument(
             "--runs-dir",
             type=Path,
-            default=Path("runs"),
+            default=None,
             help="Directory where run archives are stored. Defaults to runs.",
         )
         count_parser.add_argument(
