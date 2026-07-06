@@ -13,6 +13,7 @@ from .cache import CacheClearError, clear_cache
 from .config import load_config
 from .concordance import ConcordanceError, write_concordance
 from .dry_run import dry_run_count_vocabula
+from .features import FeatureError, run_features
 from .ngram import NgramError, write_ngrams_from_config, write_ngrams_from_trace
 from .nlp_hooks import (
     build_pipeline,
@@ -302,6 +303,85 @@ def build_parser() -> argparse.ArgumentParser:
         help="Explicit count column name. Defaults to automatic detection.",
     )
 
+    features_parser = subparsers.add_parser("features")
+    features_parser.add_argument(
+        "--project-root",
+        type=Path,
+        default=Path.cwd(),
+        help="Project root used to resolve relative paths in the config.",
+    )
+    features_parser.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="YAML config path. Defaults to <project-root>/config/groups.config.yml.",
+    )
+    features_parser.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Output CSV/TSV path. Defaults to standard output.",
+    )
+    features_parser.add_argument(
+        "--format",
+        choices=("csv", "tsv"),
+        default="csv",
+        help="Output format.",
+    )
+    features_parser.add_argument(
+        "--field",
+        choices=("lemma", "token"),
+        default="lemma",
+        help="Field used for MFW features.",
+    )
+    features_parser.add_argument(
+        "--mfw",
+        type=int,
+        default=0,
+        help="Add relative-frequency features for the top N most frequent words/lemmas.",
+    )
+    features_parser.add_argument(
+        "--include-upos",
+        dest="include_upos",
+        action="store_true",
+        default=True,
+        help="Include UPOS count and ratio features. Enabled by default.",
+    )
+    features_parser.add_argument(
+        "--no-upos",
+        dest="include_upos",
+        action="store_false",
+        help="Disable UPOS features.",
+    )
+    features_parser.add_argument(
+        "--include-basic",
+        dest="include_basic",
+        action="store_true",
+        default=True,
+        help="Include basic text statistics. Enabled by default.",
+    )
+    features_parser.add_argument(
+        "--no-basic",
+        dest="include_basic",
+        action="store_false",
+        help="Disable basic text statistics.",
+    )
+    features_parser.add_argument(
+        "--group-by-file",
+        action="store_true",
+        help="Write one feature row per input file instead of one row per configured group.",
+    )
+    features_parser.add_argument(
+        "--auto-single-cleaned",
+        action="store_true",
+        help="Use the only .txt file in cleaned_dir as the feature target; fail if zero or multiple files exist.",
+    )
+    features_parser.add_argument(
+        "--error-on-empty-group",
+        action="store_true",
+        help="Fail when any configured group matches zero files.",
+    )
+
     ngram_parser = subparsers.add_parser("ngram")
     ngram_parser.add_argument(
         "--n",
@@ -443,6 +523,34 @@ def main(argv: Sequence[str] | None = None) -> int:
                 count_column=args.count_column,
             )
         except CompareError as exc:
+            print(f"[ERROR] {exc}", file=sys.stderr)
+            return 1
+
+    if args.command == "features":
+        project_root = args.project_root.resolve()
+        config_path = args.config
+        if config_path is None:
+            config_path = project_root / "config" / "groups.config.yml"
+        elif not config_path.is_absolute():
+            config_path = (project_root / config_path).resolve()
+        try:
+            return run_features(
+                project_root=project_root,
+                config_path=config_path,
+                out=args.out,
+                output_format=args.format,
+                field=args.field,
+                mfw=args.mfw,
+                include_upos=bool(args.include_upos),
+                include_basic=bool(args.include_basic),
+                group_by_file=bool(args.group_by_file),
+                auto_single_cleaned=bool(args.auto_single_cleaned),
+                error_on_empty_group=bool(args.error_on_empty_group),
+                build_pipeline_fn=build_pipeline,
+                clean_mod=clean_mod,
+                load_config_fn=load_config,
+            )
+        except (FeatureError, ValueError, FileNotFoundError) as exc:
             print(f"[ERROR] {exc}", file=sys.stderr)
             return 1
 

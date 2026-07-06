@@ -292,6 +292,53 @@ are more characteristic of the second input. For three or more inputs, the
 output reports each label's count and relative frequency plus the max/min label
 and relative-frequency range.
 
+## Features CLI
+
+Use `nlpo features` to build a feature matrix with one row per configured
+group, or one row per file when `--group-by-file` is used. This is for
+stylistic comparison, clustering, classification, and authorship experiments;
+it is different from `count-vocabula`, which writes frequency tables for
+vocabulary inspection.
+
+Basic feature matrix:
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --out output/features.csv
+```
+
+Add most-frequent-lemma features:
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --mfw 100 \
+  --field lemma \
+  --out output/features_mfw100.csv
+```
+
+One row per input file:
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --group-by-file \
+  --out output/features_by_file.csv
+```
+
+When using `grouping.mode: auto_single_cleaned` or `--auto-single-cleaned`,
+features uses the same single-cleaned-file safety check as `count-vocabula`:
+exactly one cleaned `.txt` file must be present, otherwise the command fails.
+
+`exclude_lemmas.txt` is not applied by `nlpo features`. Feature matrices are
+intended for style and distributional statistics, so removing nouns or other
+terms for vocabulary analysis would distort function-word, UPOS, MFW, and
+type-token features.
+
 ## N-Gram CLI
 
 Use `nlpo ngram` to build n-gram frequency tables from a trace TSV or from
