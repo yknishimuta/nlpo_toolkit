@@ -19,11 +19,12 @@ dependencies = [
 [project.scripts]
 nlpo = "nlpo_toolkit.count_vocabula.cli:main"
 
+[tool.setuptools]
+include-package-data = true
+
 [tool.setuptools.packages.find]
 where = ["."]
+include = ["nlpo_toolkit*"]
 
 [tool.setuptools.package-data]
 nlpo_toolkit = ["**/*.yml", "**/*.yaml", "**/*.txt", "**/*.tsv"]
-
-[tool.setuptools]
-include-package-data = true
