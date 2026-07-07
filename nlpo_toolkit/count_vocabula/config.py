@@ -27,6 +27,7 @@ class Config(TypedDict, total=False):
     cpu_only: bool
     analysis_unit: str
     grouping: Dict[str, Any]
+    validations: Dict[str, Any]
 
 
 def normalize_groups(cfg: dict) -> dict:
@@ -103,6 +104,17 @@ def _validate_grouping(cfg: dict) -> None:
     if mode not in {"groups", "per_file", "auto_single_cleaned"}:
         raise ValueError("grouping.mode must be 'groups', 'per_file', or 'auto_single_cleaned'")
 
+def _validate_partition_validations(cfg: dict) -> None:
+    from .partition_validation import parse_partition_specs
+
+    specs = parse_partition_specs(cfg)
+    if not specs:
+        return
+
+    grouping = cfg.get("grouping") or {}
+    if isinstance(grouping, dict) and grouping.get("mode", "groups") == "per_file":
+        raise ValueError("validations.partitions cannot be used with grouping.mode: per_file")
+
 def load_config(path: Path) -> Config:
     if not path.exists():
         raise FileNotFoundError(f"Config not found: {path}")
@@ -127,5 +139,6 @@ def load_config(path: Path) -> Config:
     _validate_preprocess(config_data.get("preprocess"))
     _validate_analysis_unit(config_data)
     _validate_grouping(config_data)
+    _validate_partition_validations(config_data)
 
     return config_data  # type: ignore[return-value]

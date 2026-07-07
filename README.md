@@ -216,6 +216,57 @@ The output label is derived from the input file stem. Non-alphanumeric
 characters are converted to underscores. If two files have the same stem, a
 numeric suffix is added to keep output names unique.
 
+### Group Partition Validation
+
+Use `validations.partitions` to verify additive consistency between one
+configured whole group and two or more configured part groups. The check compares
+the final frequency `Counter` used for the base `noun_frequency_<group>.csv`
+files, after analysis unit selection, POS/token filters, Roman numeral filtering,
+text normalization, reference tag removal, and `dictcheck.lemma_normalize`.
+
+```yaml
+groups:
+  full:
+    files:
+      - input/full.txt
+  part_a:
+    files:
+      - input/part_a.txt
+  part_b:
+    files:
+      - input/part_b.txt
+
+validations:
+  partitions:
+    - name: full_split
+      whole: full
+      parts:
+        - part_a
+        - part_b
+      on_mismatch: error   # "warn" or "error"; default: "warn"
+      report: mismatches   # "mismatches" or "all"; default: "mismatches"
+```
+
+Each partition writes `output/partition_validation_<name>.csv`, and all
+partition summaries are written to `output/partition_validation.json`,
+`summary.txt`, and `run_meta.json`. `on_mismatch: warn` reports a mismatch but
+keeps exit code `0`; `on_mismatch: error` writes all validation outputs and then
+returns exit code `1`.
+
+`target_tokens` means the number of tokens accepted into the final frequency
+table. It is not the raw Stanza token count.
+
+The `whole` and `parts` groups are currently sent to Stanza independently, so a
+perfect textual split can still produce different lemma or POS decisions near
+section boundaries or chunk boundaries. This feature verifies additive
+consistency of the final frequency Counters; it does not prove that the source
+text was perfectly split as strings. For strict checks, use the same
+preprocessing settings for all groups and split as much as possible at sentence
+or clause boundaries.
+
+Partition validation cannot be combined with `grouping.mode: per_file` or
+`--group-by-file`, because configured group names no longer match output labels.
+
 ## Concordance CLI
 
 Use `nlpo concordance` to build KWIC/concordance output from a trace TSV

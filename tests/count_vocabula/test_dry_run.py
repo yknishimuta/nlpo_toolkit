@@ -151,3 +151,63 @@ def test_dry_run_auto_single_cleaned_reports_selected_file(tmp_path: Path, capsy
     assert "[OK] auto selected cleaned file: cleaned/satyricon.cleaned.txt" in out
     assert "[OK] group text matched files: 1" in out
     assert "  - cleaned/satyricon.cleaned.txt" in out
+
+
+def test_dry_run_reports_partition_validation_ok(tmp_path: Path, capsys):
+    project_root = tmp_path
+    (project_root / "config").mkdir()
+    (project_root / "input").mkdir()
+    for name in ("full", "part_a", "part_b"):
+        (project_root / "input" / f"{name}.txt").write_text(name, encoding="utf-8")
+    config_path = project_root / "config" / "groups.config.yml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "groups:",
+                "  full: {files: [input/full.txt]}",
+                "  part_a: {files: [input/part_a.txt]}",
+                "  part_b: {files: [input/part_b.txt]}",
+                "validations:",
+                "  partitions:",
+                "    - {name: full_split, whole: full, parts: [part_a, part_b]}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    rc = dry_run_count_vocabula(project_root=project_root, config_path=config_path)
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "[OK] partition full_split: whole=full parts=part_a,part_b" in out
+
+
+def test_dry_run_partition_empty_reference_is_error(tmp_path: Path, capsys):
+    project_root = tmp_path
+    (project_root / "config").mkdir()
+    (project_root / "input").mkdir()
+    (project_root / "input" / "full.txt").write_text("full", encoding="utf-8")
+    (project_root / "input" / "part_a.txt").write_text("part_a", encoding="utf-8")
+    config_path = project_root / "config" / "groups.config.yml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "groups:",
+                "  full: {files: [input/full.txt]}",
+                "  part_a: {files: [input/part_a.txt]}",
+                "  part_b: {files: [input/missing.txt]}",
+                "validations:",
+                "  partitions:",
+                "    - {name: full_split, whole: full, parts: [part_a, part_b]}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    rc = dry_run_count_vocabula(project_root=project_root, config_path=config_path)
+
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "[ERROR] partition full_split references empty group: part_b" in out

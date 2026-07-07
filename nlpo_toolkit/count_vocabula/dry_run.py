@@ -7,6 +7,7 @@ import yaml
 
 from .config import load_config
 from .io_utils import expand_globs
+from .partition_validation import parse_partition_specs
 from .preprocess import expand_cleaned_dir_placeholders, resolve_cleaner_output_dir
 from .runner import _cleaned_txt_files
 
@@ -33,6 +34,7 @@ KNOWN_TOP_LEVEL_KEYS = {
     "stanza_package",
     "trace",
     "upos_targets",
+    "validations",
     "vocab_path",
 }
 
@@ -265,6 +267,21 @@ def dry_run_count_vocabula(
             lines.append(f"[OK] group {group_name} matched files: {len(files)}")
         for file_path in files:
             lines.append(f"  - {_display_path(file_path, project_root)}")
+
+    partition_specs = parse_partition_specs(cfg)
+    if partition_specs and group_by_file:
+        lines.append("[ERROR] validations.partitions cannot be used with --group-by-file")
+        exit_code = 1
+    for spec in partition_specs:
+        empty_refs = [name for name in (spec.whole, *spec.parts) if not group_files.get(name)]
+        if empty_refs:
+            for group_name in empty_refs:
+                lines.append(f"[ERROR] partition {spec.name} references empty group: {group_name}")
+            exit_code = 1
+        else:
+            lines.append(
+                f"[OK] partition {spec.name}: whole={spec.whole} parts={','.join(spec.parts)}"
+            )
 
     for key in duplicate_keys:
         lines.append(f"[WARN] duplicate YAML key: {key}")

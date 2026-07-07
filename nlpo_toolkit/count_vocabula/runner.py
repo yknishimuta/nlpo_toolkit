@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -14,6 +15,15 @@ from .outputs import (
     collect_runtime_environment,
     write_frequency_csv,
     write_run_meta,
+)
+from .partition_validation import (
+    parse_partition_specs,
+    partition_result_meta,
+    partition_result_summary,
+    sanitize_partition_name,
+    validate_partitions,
+    write_partition_validation_csv,
+    write_partition_validation_json,
 )
 from .preprocess import expand_cleaned_dir_placeholders, run_preprocess_if_needed
 from .ref_tags import load_ref_tag_patterns, strip_and_count_ref_tags
@@ -257,6 +267,9 @@ def run(
         raise ValueError("grouping.mode must be 'groups', 'per_file', or 'auto_single_cleaned'")
     auto_mode = bool(auto_single_cleaned) or grouping_mode == "auto_single_cleaned"
     per_file = (bool(group_by_file) or grouping_mode == "per_file") and not auto_mode
+    partition_specs = parse_partition_specs(cfg)
+    if partition_specs and per_file:
+        raise ValueError("validations.partitions cannot be used with --group-by-file or grouping.mode: per_file")
 
     # preprocess (optional)
     cleaned_dir = run_preprocess_if_needed(cfg=cfg, project_root=project_root, clean_mod=clean_mod)
@@ -326,9 +339,17 @@ def run(
     if error_on_empty_group and empty_groups:
         names = ", ".join(empty_groups)
         raise ValueError(f"No files matched for group(s): {names}")
+    if partition_specs:
+        for spec in partition_specs:
+            for name in (spec.whole, *spec.parts):
+                if not group_files.get(name):
+                    raise ValueError(
+                        f"Partition {spec.name} references empty group: {name}"
+                    )
 
     work_items = _build_work_items(group_files=group_files, group_by_file=per_file)
     generated_outputs: List[Path] = []
+    group_counters: Dict[str, Counter] = {}
 
     for gname, files in work_items:
         groups_files[gname] = [str(p) for p in files]
@@ -414,6 +435,9 @@ def run(
                     target_lemma = lemma_map.get(lemma, lemma)
                     new_c[target_lemma] += count
                 c = new_c
+
+        group_counters[gname] = c.copy()
+
         # base csv
         base = f"noun_frequency_{gname}"
         base_csv_path = out_dir / f"{base}.csv"
@@ -458,6 +482,37 @@ def run(
             )
             generated_outputs.append(unknown_path)
 
+    partition_results = validate_partitions(partition_specs, group_counters)
+    partition_summaries: List[dict[str, Any]] = []
+    partition_meta: List[dict[str, Any]] = []
+    partition_exit_code = 0
+
+    for spec, result in zip(partition_specs, partition_results):
+        csv_name = f"partition_validation_{sanitize_partition_name(spec.name)}.csv"
+        csv_path = out_dir / csv_name
+        write_partition_validation_csv(csv_path, result)
+        generated_outputs.append(csv_path)
+
+        partition_summaries.append(
+            partition_result_summary(spec, result, csv_name=csv_name)
+        )
+        partition_meta.append(partition_result_meta(spec, result))
+
+        if not result.exact_match:
+            level = "ERROR" if spec.on_mismatch == "error" else "WARN"
+            print(
+                f"[{level}] partition {spec.name} mismatch: "
+                f"token_delta={result.token_delta} mismatched_items={result.mismatched_items}",
+                file=sys.stderr,
+            )
+            if spec.on_mismatch == "error":
+                partition_exit_code = 1
+
+    if partition_specs:
+        partition_json_path = out_dir / "partition_validation.json"
+        write_partition_validation_json(partition_json_path, partition_summaries)
+        generated_outputs.append(partition_json_path)
+
     # ---- summary.txt ----
     summary_lines: List[str] = []
     summary_lines.append("# Summary")
@@ -479,6 +534,30 @@ def run(
             summary_lines.append(
                 f"- group={gn} ref_tag_types={len(rc)} ref_tag_tokens={sum(rc.values())}"
             )
+
+    if partition_results:
+        summary_lines.append("")
+        summary_lines.append("# Partition validation")
+        summary_lines.append("")
+        for spec, result in zip(partition_specs, partition_results):
+            if result.exact_match:
+                summary_lines.append(
+                    f"- name={result.name} status=OK whole={result.whole} "
+                    f"parts={','.join(result.parts)} "
+                    f"target_tokens={result.whole_target_tokens} "
+                    f"parts_target_tokens={result.parts_target_tokens} "
+                    f"mismatched_items={result.mismatched_items}"
+                )
+            else:
+                status = "ERROR" if spec.on_mismatch == "error" else "WARN"
+                summary_lines.append(
+                    f"- name={result.name} status={status} whole={result.whole} "
+                    f"parts={','.join(result.parts)} "
+                    f"target_tokens={result.whole_target_tokens} "
+                    f"parts_target_tokens={result.parts_target_tokens} "
+                    f"token_delta={result.token_delta} "
+                    f"mismatched_items={result.mismatched_items}"
+                )
 
     summary_path = out_dir / "summary.txt"
     summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
@@ -505,8 +584,9 @@ def run(
     norm_canon = json.dumps(norm, ensure_ascii=False, sort_keys=True)
     meta["normalization"] = norm
     meta["normalization_hash_sha256"] = hashlib.sha256(norm_canon.encode("utf-8")).hexdigest()
+    meta["partition_validations"] = partition_meta
     meta["generated_outputs"] = [str(p.resolve()) for p in generated_outputs]
 
     write_run_meta(meta, out_dir)
 
-    return 0
+    return partition_exit_code
