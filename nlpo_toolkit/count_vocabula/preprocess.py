@@ -44,21 +44,10 @@ def run_preprocess_if_needed(
     If cfg.preprocess.kind == 'cleaner', run clean_mod.main([...]) and return cleaned_dir.
     Otherwise return None.
     """
-    config = ensure_app_config(cfg)
-    cleaned_dir: Optional[Path] = None
-    pp = config.preprocess
-    if pp.kind == "cleaner":
-        cleaner_config_raw = pp.config
-        if not cleaner_config_raw:
-            raise ValueError("'preprocess.config' is required when preprocess.kind=cleaner")
+    from .corpus import run_preprocess_if_needed as _run_preprocess_if_needed
 
-        cleaner_config_path = Path(str(cleaner_config_raw))
-        if not cleaner_config_path.is_absolute():
-            cleaner_config_path = (project_root / cleaner_config_path).resolve()
-
-        if not cleaner_config_path.exists():
-            raise FileNotFoundError(f"Cleaner config file not found: {cleaner_config_path}")
-
-        clean_mod.main([str(cleaner_config_path)])
-        cleaned_dir = resolve_cleaner_output_dir(cleaner_config_path)
-    return cleaned_dir
+    return _run_preprocess_if_needed(
+        config=ensure_app_config(cfg),
+        project_root=project_root,
+        clean_mod=clean_mod,
+    )

@@ -12,6 +12,8 @@ def test_run_minimal_success(tmp_path: Path, monkeypatch):
     script_dir = tmp_path
     config_path = tmp_path / "cfg.yml"
     config_path.write_text("dummy", encoding="utf-8")
+    (tmp_path / "a.txt").write_text("AAA", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("BBB", encoding="utf-8")
 
     # --- fake config
     def load_config_fn(_p: Path):
@@ -28,11 +30,6 @@ def test_run_minimal_success(tmp_path: Path, monkeypatch):
 
     # --- stub preprocess
     monkeypatch.setattr(runner_mod, "run_preprocess_if_needed", lambda **kwargs: None)
-    monkeypatch.setattr(runner_mod, "expand_cleaned_dir_placeholders", lambda patterns, cleaned_dir: patterns)
-
-    # --- stub IO
-    monkeypatch.setattr(runner_mod, "expand_globs", lambda patterns: [Path(p) for p in patterns])
-    monkeypatch.setattr(runner_mod, "read_concat", lambda files: "AAA BBB")
 
     # --- stub NLP & counter
     def build_pipeline_fn(language, stanza_package, cpu_only):
@@ -90,6 +87,7 @@ def test_run_analysis_unit_surface_passes_use_lemma_false(tmp_path: Path, monkey
     script_dir = tmp_path
     config_path = tmp_path / "cfg.yml"
     config_path.write_text("dummy", encoding="utf-8")
+    (tmp_path / "a.txt").write_text("X", encoding="utf-8")
 
     def load_config_fn(_p: Path):
         return {
@@ -99,9 +97,6 @@ def test_run_analysis_unit_surface_passes_use_lemma_false(tmp_path: Path, monkey
         }
 
     monkeypatch.setattr(runner_mod, "run_preprocess_if_needed", lambda **kwargs: None)
-    monkeypatch.setattr(runner_mod, "expand_cleaned_dir_placeholders", lambda patterns, cleaned_dir: patterns)
-    monkeypatch.setattr(runner_mod, "expand_globs", lambda patterns: [Path("a.txt")])
-    monkeypatch.setattr(runner_mod, "read_concat", lambda files: "X")
 
     monkeypatch.setattr(runner_mod, "build_run_meta", lambda **kwargs: {})
     monkeypatch.setattr(runner_mod, "collect_runtime_environment", lambda _sd: {})
@@ -131,6 +126,7 @@ def test_run_dictcheck_requires_wordlist(tmp_path: Path, monkeypatch):
     script_dir = tmp_path
     config_path = tmp_path / "cfg.yml"
     config_path.write_text("dummy", encoding="utf-8")
+    (tmp_path / "a.txt").write_text("X", encoding="utf-8")
 
     def load_config_fn(_p: Path):
         return {
@@ -140,9 +136,6 @@ def test_run_dictcheck_requires_wordlist(tmp_path: Path, monkeypatch):
         }
 
     monkeypatch.setattr(runner_mod, "run_preprocess_if_needed", lambda **kwargs: None)
-    monkeypatch.setattr(runner_mod, "expand_cleaned_dir_placeholders", lambda patterns, cleaned_dir: patterns)
-    monkeypatch.setattr(runner_mod, "expand_globs", lambda patterns: [Path("a.txt")])
-    monkeypatch.setattr(runner_mod, "read_concat", lambda files: "X")
     monkeypatch.setattr(runner_mod, "build_run_meta", lambda **kwargs: {})
     monkeypatch.setattr(runner_mod, "collect_runtime_environment", lambda _sd: {})
     monkeypatch.setattr(runner_mod, "write_run_meta", lambda meta, out_dir: None)
@@ -164,6 +157,7 @@ def test_run_dictcheck_writes_known_unknown(tmp_path: Path, monkeypatch):
     script_dir = tmp_path
     config_path = tmp_path / "cfg.yml"
     config_path.write_text("dummy", encoding="utf-8")
+    (tmp_path / "a.txt").write_text("X", encoding="utf-8")
 
     wl = tmp_path / "wordlist.txt"
     wl.write_text("deus\n", encoding="utf-8")
@@ -176,9 +170,6 @@ def test_run_dictcheck_writes_known_unknown(tmp_path: Path, monkeypatch):
         }
 
     monkeypatch.setattr(runner_mod, "run_preprocess_if_needed", lambda **kwargs: None)
-    monkeypatch.setattr(runner_mod, "expand_cleaned_dir_placeholders", lambda patterns, cleaned_dir: patterns)
-    monkeypatch.setattr(runner_mod, "expand_globs", lambda patterns: [Path("a.txt")])
-    monkeypatch.setattr(runner_mod, "read_concat", lambda files: "X")
     monkeypatch.setattr(runner_mod, "build_run_meta", lambda **kwargs: {})
     monkeypatch.setattr(runner_mod, "collect_runtime_environment", lambda _sd: {})
     monkeypatch.setattr(runner_mod, "write_run_meta", lambda meta, out_dir: None)
@@ -209,6 +200,7 @@ def test_run_passes_filter_args_to_count_group(tmp_path: Path, monkeypatch):
     script_dir = tmp_path
     config_path = tmp_path / "cfg.yml"
     config_path.write_text("dummy", encoding="utf-8")
+    (tmp_path / "a.txt").write_text("X", encoding="utf-8")
 
     exc_file = tmp_path / "rom.txt"
     exc_file.write_text("vi\n", encoding="utf-8")
@@ -226,9 +218,6 @@ def test_run_passes_filter_args_to_count_group(tmp_path: Path, monkeypatch):
         }
 
     monkeypatch.setattr(runner_mod, "run_preprocess_if_needed", lambda **kwargs: None)
-    monkeypatch.setattr(runner_mod, "expand_cleaned_dir_placeholders", lambda patterns, cleaned_dir: patterns)
-    monkeypatch.setattr(runner_mod, "expand_globs", lambda patterns: [Path("a.txt")])
-    monkeypatch.setattr(runner_mod, "read_concat", lambda files: "X")
 
     monkeypatch.setattr(runner_mod, "build_run_meta", lambda **kwargs: {})
     monkeypatch.setattr(runner_mod, "collect_runtime_environment", lambda _sd: {})

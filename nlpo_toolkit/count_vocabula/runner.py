@@ -2,16 +2,19 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import sys
 from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Callable, List, Mapping, Optional, Tuple
 
-from .config import AppConfig, GroupConfig, TraceConfig, ensure_app_config
-from .io_utils import expand_globs, read_concat
-from .normalizer import normalize_text
+from .config import AppConfig, TraceConfig, ensure_app_config
+from .corpus import (
+    prepare_corpora,
+    resolve_corpus_work_items,
+    resolve_project_path,
+    run_preprocess_if_needed,
+)
 from .comparison import (
     comparison_csv_name,
     comparison_result_meta,
@@ -35,115 +38,6 @@ from .partition_validation import (
     write_partition_validation_csv,
     write_partition_validation_json,
 )
-from .preprocess import expand_cleaned_dir_placeholders, run_preprocess_if_needed
-from .ref_tags import load_ref_tag_patterns, strip_and_count_ref_tags
-
-
-def _resolve_project_path(project_root: Path, raw: Any) -> Path:
-    path = Path(str(raw))
-    if path.is_absolute():
-        return path
-    return (project_root / path).resolve()
-
-
-_LABEL_SAFE_RE = re.compile(r"[^0-9A-Za-z]+")
-_IGNORED_CLEANED_NAMES = {".DS_Store", ".gitkeep"}
-
-
-def _label_from_file(path: Path) -> str:
-    label = _LABEL_SAFE_RE.sub("_", path.stem).strip("_").lower()
-    return label or "file"
-
-
-def _unique_label(base: str, used: set[str]) -> str:
-    label = base
-    i = 2
-    while label in used:
-        label = f"{base}_{i}"
-        i += 1
-    used.add(label)
-    return label
-
-
-def _resolve_group_files(
-    *,
-    groups: Mapping[str, GroupConfig],
-    project_root: Path,
-    cleaned_dir: Optional[Path],
-) -> dict[str, list[Path]]:
-    resolved: dict[str, list[Path]] = {}
-
-    for gname, gdef in groups.items():
-        patterns = [
-            str(_resolve_project_path(project_root, p))
-            if not Path(str(p)).is_absolute() and "{cleaned_dir}" not in str(p)
-            else str(p)
-            for p in gdef.files
-        ]
-        patterns = expand_cleaned_dir_placeholders(patterns, cleaned_dir)
-        resolved[gname] = expand_globs(patterns)
-
-    return resolved
-
-
-def _cleaned_txt_files(cleaned_dir: Optional[Path]) -> List[Path]:
-    if cleaned_dir is None:
-        raise ValueError("--auto-single-cleaned was enabled, but cleaned_dir is not available")
-    cleaned_dir = Path(cleaned_dir).resolve()
-    if not cleaned_dir.exists():
-        raise ValueError(
-            f"--auto-single-cleaned was enabled, but cleaned directory does not exist: {cleaned_dir}"
-        )
-    return sorted(
-        p.resolve()
-        for p in cleaned_dir.glob("*.txt")
-        if p.is_file() and p.name not in _IGNORED_CLEANED_NAMES
-    )
-
-
-def _resolve_auto_single_cleaned_group(
-    *,
-    cleaned_dir: Optional[Path],
-    group_name: str,
-) -> dict[str, list[Path]]:
-    files = _cleaned_txt_files(cleaned_dir)
-    cleaned_display = str(Path(cleaned_dir).resolve()) if cleaned_dir is not None else "cleaned/"
-    if not files:
-        raise ValueError(
-            f"--auto-single-cleaned was enabled, but no .txt files were found in {cleaned_display}"
-        )
-    if len(files) > 1:
-        listed = "\n".join(f"  {p}" for p in files)
-        raise ValueError(
-            "--auto-single-cleaned expected exactly one cleaned .txt file, "
-            f"but found {len(files)}:\n{listed}\n\n"
-            "Remove stale cleaned files, or specify groups.files explicitly."
-        )
-    return {group_name: files}
-
-
-def _build_work_items(
-    *,
-    group_files: dict[str, list[Path]],
-    group_by_file: bool,
-) -> list[tuple[str, list[Path]]]:
-    if not group_by_file:
-        return [(gname, files) for gname, files in group_files.items()]
-
-    items: List[Tuple[str, List[Path]]] = []
-    seen_files: set[Path] = set()
-    used_labels: set[str] = set()
-
-    for files in group_files.values():
-        for file_path in files:
-            file_path = file_path.resolve()
-            if file_path in seen_files:
-                continue
-            seen_files.add(file_path)
-            label = _unique_label(_label_from_file(file_path), used_labels)
-            items.append((label, [file_path]))
-
-    return items
 
 
 def _trace_path_for_label(
@@ -268,7 +162,7 @@ def run(
         raise ValueError("comparisons cannot be used with grouping.mode=per_file")
 
     # preprocess (optional)
-    cleaned_dir = run_preprocess_if_needed(cfg=config, project_root=project_root, clean_mod=clean_mod)
+    cleaned_dir = run_preprocess_if_needed(config=config, project_root=project_root, clean_mod=clean_mod)
 
     # output directory
     out_dir = Path(config.out_dir)
@@ -306,31 +200,23 @@ def run(
     drop_roman_numerals = config.filters.drop_roman_numerals
     roman_exceptions_file = config.filters.roman_exceptions_file
     if roman_exceptions_file:
-        roman_exceptions_file = _resolve_project_path(project_root, roman_exceptions_file)
+        roman_exceptions_file = resolve_project_path(project_root, roman_exceptions_file)
 
-    # groups
-    groups = config.groups
-    if not groups:
+    if not config.groups:
         raise ValueError("config.groups must be a non-empty mapping")
 
     group_ref_tags: dict[str, Counter] = {}
     groups_files: dict[str, list[str]] = {}
     auto_group_name = config.grouping.auto_group_name
-    if auto_mode:
-        group_files = _resolve_auto_single_cleaned_group(
-            cleaned_dir=cleaned_dir,
-            group_name=auto_group_name,
-        )
-    else:
-        group_files = _resolve_group_files(
-            groups=groups,
-            project_root=project_root,
-            cleaned_dir=cleaned_dir,
-        )
-    empty_groups = [name for name, files in group_files.items() if not files]
-    if error_on_empty_group and empty_groups:
-        names = ", ".join(empty_groups)
-        raise ValueError(f"No files matched for group(s): {names}")
+    resolved = resolve_corpus_work_items(
+        config=config,
+        project_root=project_root,
+        cleaned_dir=cleaned_dir,
+        group_by_file=bool(group_by_file),
+        auto_single_cleaned=auto_single_cleaned,
+        error_on_empty_group=error_on_empty_group,
+    )
+    group_files = resolved.group_files
     if partition_specs:
         for spec in partition_specs:
             for name in (spec.whole, *spec.parts):
@@ -339,47 +225,33 @@ def run(
                         f"Partition {spec.name} references empty group: {name}"
                     )
 
-    work_items = _build_work_items(group_files=group_files, group_by_file=per_file)
     generated_outputs: List[Path] = []
     group_counters: dict[str, Counter] = {}
+    prepared_corpora = prepare_corpora(
+        work_items=resolved.work_items,
+        config=config,
+        project_root=project_root,
+    )
 
-    for gname, files in work_items:
-        groups_files[gname] = [str(p) for p in files]
-
-        whole = read_concat(files)
+    for corpus in prepared_corpora:
+        gname = corpus.label
+        groups_files[gname] = [str(p) for p in corpus.files]
 
         if splitter_nlp is not None:
-            doc = splitter_nlp(whole)
+            doc = splitter_nlp(corpus.prepared_text)
             joined = "\n".join([s.text for s in getattr(doc, "sentences", [])])
             if not joined.strip():
-                joined = whole
+                joined = corpus.prepared_text
         else:
-            joined = whole
+            joined = corpus.prepared_text
 
-        # normalization (config-driven)
-        joined = normalize_text(joined, config)
-
-        # ref_tags stripping/counting
-        ref_counter = Counter()
         if ref_enabled:
-            ref_file = config.ref_tags.patterns
-            if not ref_file:
-                raise ValueError(
-                    "ref_tags.patterns (or ref_tags.ref_tags_file) is required when ref_tags.enabled=true"
-                )
-
-            ref_path = Path(str(ref_file))
-            if not ref_path.is_absolute():
-                ref_path = (project_root / ref_path).resolve()
-
-            ref_patterns = load_ref_tag_patterns(ref_path)
-            joined, ref_counter = strip_and_count_ref_tags(joined, ref_patterns)
-            group_ref_tags[gname] = ref_counter
+            group_ref_tags[gname] = corpus.ref_tag_counts
 
             # ref_tags csv (per group)
             write_frequency_csv(
                 out_dir / f"ref_tags_{gname}.csv",
-                ref_counter,
+                corpus.ref_tag_counts,
                 header=("tag", "count"),
             )
             generated_outputs.append(out_dir / f"ref_tags_{gname}.csv")

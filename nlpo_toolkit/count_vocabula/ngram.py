@@ -5,11 +5,11 @@ import re
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Iterable, TextIO
 
 from .config import load_config
-from .io_utils import expand_globs, read_concat
-from .runner import _resolve_project_path
+from .corpus import prepare_corpora, resolve_corpus_work_items, run_preprocess_if_needed
 
 
 class NgramError(ValueError):
@@ -185,16 +185,26 @@ def _rows_from_text(text: str, group: str) -> list[dict[str, str]]:
     ]
 
 
-def read_config_text_rows(project_root: Path, config_path: Path) -> list[dict[str, str]]:
+def read_config_text_rows(project_root: Path, config_path: Path, *, clean_mod: object | None = None) -> list[dict[str, str]]:
     cfg = load_config(config_path)
     rows: list[dict[str, str]] = []
-    for group, group_def in cfg.groups.items():
-        resolved_patterns = [
-            str(_resolve_project_path(project_root, pattern))
-            for pattern in group_def.files
-        ]
-        text = read_concat(expand_globs(resolved_patterns))
-        rows.extend(_rows_from_text(text, str(group)))
+    effective_clean_mod = clean_mod if clean_mod is not None else SimpleNamespace(main=lambda argv: 0)
+    cleaned_dir = run_preprocess_if_needed(
+        config=cfg,
+        project_root=project_root,
+        clean_mod=effective_clean_mod,
+    )
+    resolved = resolve_corpus_work_items(
+        config=cfg,
+        project_root=project_root,
+        cleaned_dir=cleaned_dir,
+    )
+    for corpus in prepare_corpora(
+        work_items=resolved.work_items,
+        config=cfg,
+        project_root=project_root,
+    ):
+        rows.extend(_rows_from_text(corpus.prepared_text, corpus.label))
     return rows
 
 
@@ -260,11 +270,12 @@ def write_ngrams_from_config(
     top: int | None,
     output_format: str,
     out_path: Path | None,
+    clean_mod: object | None = None,
 ) -> int:
     if field != "token":
         raise NgramError("Config input currently supports --field token only. Use --trace for lemma n-grams.")
     rows = build_ngrams_from_rows(
-        read_config_text_rows(project_root, config_path),
+        read_config_text_rows(project_root, config_path, clean_mod=clean_mod),
         n=n,
         field=field,
         by_group=by_group,

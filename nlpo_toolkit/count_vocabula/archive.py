@@ -14,9 +14,9 @@ from typing import Any, Iterable
 import yaml
 
 from .config import AppConfig, config_to_dict
+from .corpus import resolve_project_path
 from .io_utils import expand_globs
 from .preprocess import expand_cleaned_dir_placeholders, resolve_cleaner_output_dir
-from .runner import _resolve_project_path
 
 
 class RunArchiveError(RuntimeError):
@@ -102,7 +102,7 @@ def collect_referenced_config_files(
     if isinstance(preprocess, dict) and preprocess.get("kind") == "cleaner":
         cleaner_raw = preprocess.get("config")
         if cleaner_raw:
-            cleaner_config_path = _resolve_project_path(project_root, cleaner_raw)
+            cleaner_config_path = resolve_project_path(project_root, cleaner_raw)
             _append_existing(paths, cleaner_config_path)
             if cleaner_config_path.exists():
                 cleaner_cfg = _load_yaml(cleaner_config_path)
@@ -115,11 +115,11 @@ def collect_referenced_config_files(
     if isinstance(dictcheck, dict):
         lemma_normalize = dictcheck.get("lemma_normalize")
         if lemma_normalize:
-            _append_existing(paths, _resolve_project_path(project_root, lemma_normalize))
+            _append_existing(paths, resolve_project_path(project_root, lemma_normalize))
 
         wordlist = dictcheck.get("wordlist")
         if wordlist:
-            wordlist_path = _resolve_project_path(project_root, wordlist)
+            wordlist_path = resolve_project_path(project_root, wordlist)
             ref: dict[str, Any] = {
                 "kind": "dictcheck.wordlist",
                 "path": str(wordlist_path),
@@ -134,16 +134,16 @@ def collect_referenced_config_files(
     if isinstance(ref_tags, dict):
         ref_file = ref_tags.get("patterns") or ref_tags.get("ref_tags_file")
         if ref_file:
-            _append_existing(paths, _resolve_project_path(project_root, ref_file))
+            _append_existing(paths, resolve_project_path(project_root, ref_file))
 
     filters = config.get("filter") or config.get("filters") or {}
     if isinstance(filters, dict):
         roman = filters.get("roman_exceptions_file") or filters.get("roman_exception_files")
         if roman:
-            _append_existing(paths, _resolve_project_path(project_root, roman))
+            _append_existing(paths, resolve_project_path(project_root, roman))
         exclude = filters.get("exclude_lemmas") or filters.get("exclude_lemmas_file")
         if exclude:
-            _append_existing(paths, _resolve_project_path(project_root, exclude))
+            _append_existing(paths, resolve_project_path(project_root, exclude))
 
     return paths, external_refs
 
@@ -281,7 +281,7 @@ def _trace_base_path(config: dict[str, Any] | AppConfig, project_root: Path, out
         return None
     raw_path = trace_cfg.get("path")
     if raw_path:
-        return _resolve_project_path(project_root, raw_path)
+        return resolve_project_path(project_root, raw_path)
     return out_dir / "trace.tsv"
 
 
@@ -306,7 +306,7 @@ def _cleaned_dir(config: dict[str, Any] | AppConfig, project_root: Path) -> Path
     cleaner_raw = preprocess.get("config")
     if not cleaner_raw:
         return None
-    cleaner_path = _resolve_project_path(project_root, cleaner_raw)
+    cleaner_path = resolve_project_path(project_root, cleaner_raw)
     if not cleaner_path.exists():
         return None
     return resolve_cleaner_output_dir(cleaner_path)
@@ -346,7 +346,7 @@ def _collect_group_files(
         if not isinstance(patterns, list):
             continue
         resolved_patterns = [
-            str(_resolve_project_path(project_root, p))
+            str(resolve_project_path(project_root, p))
             if not Path(str(p)).is_absolute() and "{cleaned_dir}" not in str(p)
             else str(p)
             for p in patterns
@@ -364,7 +364,7 @@ def _cleaner_config_path(config: dict[str, Any] | AppConfig, project_root: Path)
     cleaner_raw = preprocess.get("config")
     if not cleaner_raw:
         return None
-    cleaner_path = _resolve_project_path(project_root, cleaner_raw)
+    cleaner_path = resolve_project_path(project_root, cleaner_raw)
     if not cleaner_path.exists():
         return None
     return cleaner_path

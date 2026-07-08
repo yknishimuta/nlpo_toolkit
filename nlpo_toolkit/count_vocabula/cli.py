@@ -582,6 +582,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 top=args.top,
                 output_format=args.format,
                 out_path=args.out,
+                clean_mod=clean_mod,
             )
         except NgramError as exc:
             print(f"[ERROR] {exc}", file=sys.stderr)

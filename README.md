@@ -449,6 +449,12 @@ When using `grouping.mode: auto_single_cleaned` or `--auto-single-cleaned`,
 features uses the same single-cleaned-file safety check as `count-vocabula`:
 exactly one cleaned `.txt` file must be present, otherwise the command fails.
 
+`nlpo features` uses the same prepared text as `count-vocabula`: cleaner output
+is resolved first, group globs and `{cleaned_dir}` are expanded, files are
+concatenated, configured text normalization is applied, and reference tags are
+removed before NLP. If `ref_tags.enabled=true`, the pattern file must exist; a
+missing pattern file is a configuration error.
+
 `exclude_lemmas.txt` is not applied by `nlpo features`. Feature matrices are
 intended for style and distributional statistics, so removing nouns or other
 terms for vocabulary analysis would distort function-word, UPOS, MFW, and
@@ -498,6 +504,13 @@ nlpo ngram \
   --n 2 \
   --out output/ngram_text.tsv
 ```
+
+Config input uses the same corpus preparation layer as `count-vocabula` and
+`features`: cleaner preprocessing, grouping mode, `{cleaned_dir}` expansion,
+text normalization, and reference tag removal are applied before token n-grams
+are counted. Trace input is different: it reads the existing trace TSV directly
+and does not re-run cleaner or text normalization. Config input supports
+`--field token`; use trace input for lemma n-grams.
 
 Output columns are `ngram`, `count`, `n`, and `field`. When `--by-group` is
 used, `group` is added.
@@ -560,6 +573,13 @@ Auto-single-cleaned selects the only `.txt` file in the resolved cleaned
 directory. If there are zero or multiple cleaned `.txt` files, the command
 fails instead of silently counting stale files. `--run-name` only names the run
 archive; it does not change which input or cleaned file is counted.
+
+For `count-vocabula`, the input preparation order is: run cleaner if configured,
+resolve the cleaned directory, resolve groups or per-file work items, concatenate
+files, apply text normalization, remove and count reference tags, then run the
+command-specific NLP/counting step. With `--group-by-file`, the output label is
+derived from each file stem, duplicate files matched by multiple groups are
+processed once, and label collisions receive numeric suffixes.
 
 Useful config options:
 

@@ -12,10 +12,15 @@ from .config import (
     unknown_top_level_keys,
 )
 from .comparison import parse_comparison_specs
+from .corpus import (
+    cleaned_txt_files,
+    inspect_preprocess,
+    resolve_cleaner_plan,
+    resolve_corpus_work_items,
+    resolve_project_path,
+)
 from .io_utils import expand_globs
 from .partition_validation import parse_partition_specs
-from .preprocess import expand_cleaned_dir_placeholders, resolve_cleaner_output_dir
-from .runner import _cleaned_txt_files
 
 
 class DuplicateKeyLoader(yaml.SafeLoader):
@@ -63,29 +68,11 @@ def _display_path(path: Path, project_root: Path) -> str:
         return str(path)
 
 
-def _resolve_project_path(project_root: Path, raw: Any) -> Path:
-    path = Path(str(raw))
-    if path.is_absolute():
-        return path
-    return (project_root / path).resolve()
-
-
 def _warn_unknown_keys(raw_cfg: dict[str, Any], lines: list[str]) -> None:
     for key in unknown_top_level_keys(raw_cfg):
         lines.append(f"[WARN] unknown config key: {key}")
     for key in unknown_filter_keys(raw_cfg):
         lines.append(f"[WARN] unknown config key: {key}")
-
-
-def _cleaner_config_path(cfg: AppConfig, project_root: Path) -> Path | None:
-    if cfg.preprocess.kind != "cleaner":
-        return None
-
-    raw_path = cfg.preprocess.config
-    if not raw_path:
-        return None
-
-    return _resolve_project_path(project_root, raw_path)
 
 
 def _count_cleaner_input_files(cleaner_config_path: Path) -> int:
@@ -107,21 +94,6 @@ def _count_cleaner_input_files(cleaner_config_path: Path) -> int:
         return len([p for p in input_path.rglob("*") if p.is_file()])
 
     return len(expand_globs([str(input_path)]))
-
-
-def _group_files(cfg: AppConfig, project_root: Path, cleaned_dir: Path | None) -> dict[str, list[Path]]:
-    results: dict[str, list[Path]] = {}
-    for group_name, group_def in cfg.groups.items():
-        resolved_patterns = [
-            str(_resolve_project_path(project_root, p))
-            if not Path(str(p)).is_absolute() and "{cleaned_dir}" not in str(p)
-            else str(p)
-            for p in group_def.files
-        ]
-        resolved_patterns = expand_cleaned_dir_placeholders(resolved_patterns, cleaned_dir)
-        results[str(group_name)] = expand_globs(resolved_patterns)
-
-    return results
 
 
 def dry_run_count_vocabula(
@@ -148,7 +120,11 @@ def dry_run_count_vocabula(
         print(f"[ERROR] config: {exc}")
         return 1
 
-    cleaner_config_path = _cleaner_config_path(cfg, project_root)
+    grouping_mode = cfg.grouping.mode
+    auto_mode = bool(auto_single_cleaned) or grouping_mode == "auto_single_cleaned"
+
+    cleaner_plan = resolve_cleaner_plan(cfg, project_root)
+    cleaner_config_path = cleaner_plan.config_path if cleaner_plan is not None else None
     cleaned_dir: Path | None = None
     if cleaner_config_path is not None:
         if cleaner_config_path.exists():
@@ -157,7 +133,7 @@ def dry_run_count_vocabula(
                 f"{_display_path(cleaner_config_path, project_root)}"
             )
             try:
-                cleaned_dir = resolve_cleaner_output_dir(cleaner_config_path)
+                cleaned_dir = inspect_preprocess(cleaner_plan)
                 lines.append(f"[OK] input files: {_count_cleaner_input_files(cleaner_config_path)}")
                 lines.append(f"[OK] cleaned output dir: {_display_path(cleaned_dir, project_root)}")
             except Exception as exc:
@@ -170,16 +146,24 @@ def dry_run_count_vocabula(
             )
             exit_code = 1
     else:
-        group_files = _group_files(cfg, project_root, None)
+        if auto_mode:
+            group_files = {}
+        else:
+            resolved = resolve_corpus_work_items(
+                config=cfg,
+                project_root=project_root,
+                cleaned_dir=None,
+                group_by_file=group_by_file,
+                auto_single_cleaned=False,
+                error_on_empty_group=False,
+            )
+            group_files = resolved.group_files
         lines.append(f"[OK] input files: {sum(len(files) for files in group_files.values())}")
-
-    grouping_mode = cfg.grouping.mode
-    auto_mode = bool(auto_single_cleaned) or grouping_mode == "auto_single_cleaned"
 
     if auto_mode:
         auto_group_name = cfg.grouping.auto_group_name
         try:
-            cleaned_files = _cleaned_txt_files(cleaned_dir)
+            cleaned_files = cleaned_txt_files(cleaned_dir)
             if not cleaned_files:
                 lines.append(
                     "[ERROR] --auto-single-cleaned was enabled, "
@@ -210,7 +194,15 @@ def dry_run_count_vocabula(
             group_files = {auto_group_name: []}
             exit_code = 1
     else:
-        group_files = _group_files(cfg, project_root, cleaned_dir)
+        resolved = resolve_corpus_work_items(
+            config=cfg,
+            project_root=project_root,
+            cleaned_dir=cleaned_dir,
+            group_by_file=group_by_file,
+            auto_single_cleaned=auto_single_cleaned,
+            error_on_empty_group=False,
+        )
+        group_files = resolved.group_files
 
     for group_name, files in group_files.items():
         if not files and error_on_empty_group:
@@ -260,7 +252,7 @@ def dry_run_count_vocabula(
     if cfg.dictcheck.enabled:
         wordlist = cfg.dictcheck.wordlist
         if wordlist:
-            wordlist_path = _resolve_project_path(project_root, wordlist)
+            wordlist_path = resolve_project_path(project_root, wordlist)
             if wordlist_path.exists():
                 lines.append("[OK] dictcheck wordlist found")
             else:
@@ -270,14 +262,14 @@ def dry_run_count_vocabula(
     if cfg.ref_tags.enabled:
         patterns = cfg.ref_tags.patterns
         if patterns:
-            patterns_path = _resolve_project_path(project_root, patterns)
+            patterns_path = resolve_project_path(project_root, patterns)
             if patterns_path.exists():
                 lines.append("[OK] ref_tags patterns found")
             else:
                 lines.append(f"[ERROR] ref_tags patterns missing: {_display_path(patterns_path, project_root)}")
                 exit_code = 1
 
-    out_dir = _resolve_project_path(project_root, cfg.out_dir)
+    out_dir = resolve_project_path(project_root, cfg.out_dir)
     lines.append(f"[OK] output dir: {_display_path(out_dir, project_root)}")
 
     mode = "auto_single_cleaned" if auto_mode else ("per_file" if group_by_file else grouping_mode)

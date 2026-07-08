@@ -10,15 +10,10 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, TextIO
 
 from .config import AppConfig, ensure_app_config, load_config
-from .io_utils import read_concat
-from .normalizer import normalize_text
-from .preprocess import run_preprocess_if_needed
-from .ref_tags import load_ref_tag_patterns, strip_and_count_ref_tags
-from .runner import (
-    _build_work_items,
-    _resolve_auto_single_cleaned_group,
-    _resolve_group_files,
-    _resolve_project_path,
+from .corpus import (
+    prepare_corpora,
+    resolve_corpus_work_items,
+    run_preprocess_if_needed,
 )
 
 
@@ -294,19 +289,6 @@ def write_feature_matrix(rows: list[dict[str, Any]], out: Path | TextIO | None, 
             f.close()
 
 
-def _strip_ref_tags_if_configured(text: str, config: AppConfig, project_root: Path) -> str:
-    if not config.ref_tags.enabled:
-        return text
-    ref_file = config.ref_tags.patterns
-    if not ref_file:
-        return text
-    ref_path = _resolve_project_path(project_root, ref_file)
-    if not ref_path.exists():
-        return text
-    stripped, _counter = strip_and_count_ref_tags(text, load_ref_tag_patterns(ref_path))
-    return stripped
-
-
 def run_features(
     *,
     project_root: Path,
@@ -332,26 +314,15 @@ def run_features(
         raise FeatureError(f"Config file not found: {config_path}")
 
     config = ensure_app_config(load_config_fn(config_path))
-    cleaned_dir = run_preprocess_if_needed(cfg=config, project_root=project_root, clean_mod=clean_mod)
-    grouping_mode = config.grouping.mode
-    auto_mode = bool(auto_single_cleaned) or grouping_mode == "auto_single_cleaned"
-    per_file = (bool(group_by_file) or grouping_mode == "per_file") and not auto_mode
-
-    if auto_mode:
-        group_files = _resolve_auto_single_cleaned_group(
-            cleaned_dir=cleaned_dir,
-            group_name=config.grouping.auto_group_name,
-        )
-    else:
-        group_files = _resolve_group_files(
-            groups=config.groups,
-            project_root=project_root,
-            cleaned_dir=cleaned_dir,
-        )
-
-    empty_groups = [name for name, files in group_files.items() if not files]
-    if error_on_empty_group and empty_groups:
-        raise FeatureError(f"No files matched for group(s): {', '.join(empty_groups)}")
+    cleaned_dir = run_preprocess_if_needed(config=config, project_root=project_root, clean_mod=clean_mod)
+    resolved = resolve_corpus_work_items(
+        config=config,
+        project_root=project_root,
+        cleaned_dir=cleaned_dir,
+        group_by_file=group_by_file,
+        auto_single_cleaned=auto_single_cleaned,
+        error_on_empty_group=error_on_empty_group,
+    )
 
     options = FeatureOptions(
         field=field,
@@ -368,11 +339,12 @@ def run_features(
     nlp, _package = build_pipeline_fn(language, stanza_package, cpu_only)
 
     groups_texts: list[tuple[str, list[Path], str]] = []
-    for group, files in _build_work_items(group_files=group_files, group_by_file=per_file):
-        text = read_concat(files)
-        text = _strip_ref_tags_if_configured(text, config, project_root)
-        text = normalize_text(text, config)
-        groups_texts.append((group, files, text))
+    for corpus in prepare_corpora(
+        work_items=resolved.work_items,
+        config=config,
+        project_root=project_root,
+    ):
+        groups_texts.append((corpus.label, list(corpus.files), corpus.prepared_text))
 
     rows = build_feature_rows(groups_texts, nlp, options)
     write_feature_matrix(rows, out=out, format=output_format)
