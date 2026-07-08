@@ -5,46 +5,17 @@ from typing import Any
 
 import yaml
 
-from .config import load_config
+from .config import (
+    AppConfig,
+    load_config,
+    unknown_filter_keys,
+    unknown_top_level_keys,
+)
 from .comparison import parse_comparison_specs
 from .io_utils import expand_globs
 from .partition_validation import parse_partition_specs
 from .preprocess import expand_cleaned_dir_placeholders, resolve_cleaner_output_dir
 from .runner import _cleaned_txt_files
-
-
-KNOWN_TOP_LEVEL_KEYS = {
-    "analysis_unit",
-    "archive",
-    "comparisons",
-    "cpu_only",
-    "csv_header",
-    "dictcheck",
-    "filter",
-    "filters",
-    "group",
-    "grouping",
-    "groups",
-    "language",
-    "lemma_cache",
-    "nlp",
-    "normalization",
-    "out_dir",
-    "preprocess",
-    "prune",
-    "ref_tags",
-    "stanza_package",
-    "trace",
-    "upos_targets",
-    "validations",
-    "vocab_path",
-}
-
-KNOWN_FILTER_KEYS = {
-    "drop_roman_numerals",
-    "min_token_length",
-    "roman_exceptions_file",
-}
 
 
 class DuplicateKeyLoader(yaml.SafeLoader):
@@ -100,23 +71,17 @@ def _resolve_project_path(project_root: Path, raw: Any) -> Path:
 
 
 def _warn_unknown_keys(raw_cfg: dict[str, Any], lines: list[str]) -> None:
-    for key in raw_cfg:
-        if key not in KNOWN_TOP_LEVEL_KEYS:
-            lines.append(f"[WARN] unknown config key: {key}")
-
-    filters = raw_cfg.get("filter") or raw_cfg.get("filters") or {}
-    if isinstance(filters, dict):
-        for key in filters:
-            if key not in KNOWN_FILTER_KEYS:
-                lines.append(f"[WARN] unknown config key: {key}")
+    for key in unknown_top_level_keys(raw_cfg):
+        lines.append(f"[WARN] unknown config key: {key}")
+    for key in unknown_filter_keys(raw_cfg):
+        lines.append(f"[WARN] unknown config key: {key}")
 
 
-def _cleaner_config_path(cfg: dict[str, Any], project_root: Path) -> Path | None:
-    preprocess = cfg.get("preprocess")
-    if not isinstance(preprocess, dict) or preprocess.get("kind") != "cleaner":
+def _cleaner_config_path(cfg: AppConfig, project_root: Path) -> Path | None:
+    if cfg.preprocess.kind != "cleaner":
         return None
 
-    raw_path = preprocess.get("config")
+    raw_path = cfg.preprocess.config
     if not raw_path:
         return None
 
@@ -144,27 +109,14 @@ def _count_cleaner_input_files(cleaner_config_path: Path) -> int:
     return len(expand_globs([str(input_path)]))
 
 
-def _group_files(cfg: dict[str, Any], project_root: Path, cleaned_dir: Path | None) -> dict[str, list[Path]]:
-    groups = cfg.get("groups") or {}
-    if not isinstance(groups, dict):
-        return {}
-
+def _group_files(cfg: AppConfig, project_root: Path, cleaned_dir: Path | None) -> dict[str, list[Path]]:
     results: dict[str, list[Path]] = {}
-    for group_name, group_def in groups.items():
-        if not isinstance(group_def, dict):
-            results[str(group_name)] = []
-            continue
-
-        patterns = group_def.get("files") or []
-        if not isinstance(patterns, list):
-            results[str(group_name)] = []
-            continue
-
+    for group_name, group_def in cfg.groups.items():
         resolved_patterns = [
             str(_resolve_project_path(project_root, p))
             if not Path(str(p)).is_absolute() and "{cleaned_dir}" not in str(p)
             else str(p)
-            for p in patterns
+            for p in group_def.files
         ]
         resolved_patterns = expand_cleaned_dir_placeholders(resolved_patterns, cleaned_dir)
         results[str(group_name)] = expand_globs(resolved_patterns)
@@ -221,12 +173,11 @@ def dry_run_count_vocabula(
         group_files = _group_files(cfg, project_root, None)
         lines.append(f"[OK] input files: {sum(len(files) for files in group_files.values())}")
 
-    grouping = cfg.get("grouping") or {}
-    grouping_mode = str(grouping.get("mode", "groups")).strip().lower()
+    grouping_mode = cfg.grouping.mode
     auto_mode = bool(auto_single_cleaned) or grouping_mode == "auto_single_cleaned"
 
     if auto_mode:
-        auto_group_name = str(grouping.get("auto_group_name") or "text")
+        auto_group_name = cfg.grouping.auto_group_name
         try:
             cleaned_files = _cleaned_txt_files(cleaned_dir)
             if not cleaned_files:
@@ -306,9 +257,8 @@ def dry_run_count_vocabula(
         lines.append(f"[WARN] duplicate YAML key: {key}")
     _warn_unknown_keys(raw_cfg, lines)
 
-    dictcheck = cfg.get("dictcheck") or {}
-    if isinstance(dictcheck, dict) and dictcheck.get("enabled"):
-        wordlist = dictcheck.get("wordlist")
+    if cfg.dictcheck.enabled:
+        wordlist = cfg.dictcheck.wordlist
         if wordlist:
             wordlist_path = _resolve_project_path(project_root, wordlist)
             if wordlist_path.exists():
@@ -317,9 +267,8 @@ def dry_run_count_vocabula(
                 lines.append(f"[ERROR] dictcheck wordlist missing: {_display_path(wordlist_path, project_root)}")
                 exit_code = 1
 
-    ref_tags = cfg.get("ref_tags") or {}
-    if isinstance(ref_tags, dict) and ref_tags.get("enabled"):
-        patterns = ref_tags.get("patterns") or ref_tags.get("ref_tags_file")
+    if cfg.ref_tags.enabled:
+        patterns = cfg.ref_tags.patterns
         if patterns:
             patterns_path = _resolve_project_path(project_root, patterns)
             if patterns_path.exists():
@@ -328,7 +277,7 @@ def dry_run_count_vocabula(
                 lines.append(f"[ERROR] ref_tags patterns missing: {_display_path(patterns_path, project_root)}")
                 exit_code = 1
 
-    out_dir = _resolve_project_path(project_root, cfg.get("out_dir", "output"))
+    out_dir = _resolve_project_path(project_root, cfg.out_dir)
     lines.append(f"[OK] output dir: {_display_path(out_dir, project_root)}")
 
     mode = "auto_single_cleaned" if auto_mode else ("per_file" if group_by_file else grouping_mode)

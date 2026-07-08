@@ -73,6 +73,9 @@ def _is_positive_finite_number(value: Any) -> bool:
 
 
 def parse_comparison_specs(config: Mapping[str, Any]) -> list[ComparisonSpec]:
+    if hasattr(config, "comparisons"):
+        return list(getattr(config, "comparisons"))
+
     raw_comparisons = config.get("comparisons")
     if raw_comparisons is None:
         return []

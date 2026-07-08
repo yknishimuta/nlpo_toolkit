@@ -13,6 +13,7 @@ from typing import Any, Iterable
 
 import yaml
 
+from .config import AppConfig, config_to_dict
 from .io_utils import expand_globs
 from .preprocess import expand_cleaned_dir_placeholders, resolve_cleaner_output_dir
 from .runner import _resolve_project_path
@@ -74,16 +75,23 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     return data
 
 
+def _archive_config(config: dict[str, Any] | AppConfig) -> dict[str, Any]:
+    if isinstance(config, AppConfig):
+        return config_to_dict(config)
+    return config
+
+
 def _append_existing(paths: list[Path], path: Path | None) -> None:
     if path is not None and path.exists() and path.is_file() and path not in paths:
         paths.append(path)
 
 
 def collect_referenced_config_files(
-    config: dict[str, Any],
+    config: dict[str, Any] | AppConfig,
     project_root: Path,
     config_path: Path,
 ) -> tuple[list[Path], list[dict[str, Any]]]:
+    config = _archive_config(config)
     project_root = Path(project_root).resolve()
     config_path = Path(config_path).resolve()
     paths: list[Path] = [config_path]
@@ -266,7 +274,8 @@ def _collect_output_files(out_dir: Path) -> list[Path]:
     return list(dict.fromkeys(files))
 
 
-def _trace_base_path(config: dict[str, Any], project_root: Path, out_dir: Path) -> Path | None:
+def _trace_base_path(config: dict[str, Any] | AppConfig, project_root: Path, out_dir: Path) -> Path | None:
+    config = _archive_config(config)
     trace_cfg = config.get("trace") or {}
     if not isinstance(trace_cfg, dict) or not bool(trace_cfg.get("enabled", False)):
         return None
@@ -276,7 +285,7 @@ def _trace_base_path(config: dict[str, Any], project_root: Path, out_dir: Path) 
     return out_dir / "trace.tsv"
 
 
-def _collect_trace_files(config: dict[str, Any], project_root: Path, out_dir: Path) -> list[Path]:
+def _collect_trace_files(config: dict[str, Any] | AppConfig, project_root: Path, out_dir: Path) -> list[Path]:
     base = _trace_base_path(config, project_root, out_dir)
     if base is None:
         return []
@@ -289,7 +298,8 @@ def _collect_trace_files(config: dict[str, Any], project_root: Path, out_dir: Pa
     return list(dict.fromkeys(files))
 
 
-def _cleaned_dir(config: dict[str, Any], project_root: Path) -> Path | None:
+def _cleaned_dir(config: dict[str, Any] | AppConfig, project_root: Path) -> Path | None:
+    config = _archive_config(config)
     preprocess = config.get("preprocess") or {}
     if not isinstance(preprocess, dict) or preprocess.get("kind") != "cleaner":
         return None
@@ -303,11 +313,12 @@ def _cleaned_dir(config: dict[str, Any], project_root: Path) -> Path | None:
 
 
 def _collect_group_files(
-    config: dict[str, Any],
+    config: dict[str, Any] | AppConfig,
     project_root: Path,
     cleaned_dir: Path | None,
     out_dir: Path | None = None,
 ) -> list[Path]:
+    config = _archive_config(config)
     if out_dir is not None:
         run_meta_path = out_dir / "run_meta.json"
         if run_meta_path.exists():
@@ -345,7 +356,8 @@ def _collect_group_files(
     return list(dict.fromkeys(p.resolve() for p in files if _is_archivable_file(p)))
 
 
-def _cleaner_config_path(config: dict[str, Any], project_root: Path) -> Path | None:
+def _cleaner_config_path(config: dict[str, Any] | AppConfig, project_root: Path) -> Path | None:
+    config = _archive_config(config)
     preprocess = config.get("preprocess") or {}
     if not isinstance(preprocess, dict) or preprocess.get("kind") != "cleaner":
         return None
@@ -358,7 +370,7 @@ def _cleaner_config_path(config: dict[str, Any], project_root: Path) -> Path | N
     return cleaner_path
 
 
-def _collect_cleaner_input_files(config: dict[str, Any], project_root: Path) -> list[Path]:
+def _collect_cleaner_input_files(config: dict[str, Any] | AppConfig, project_root: Path) -> list[Path]:
     cleaner_path = _cleaner_config_path(config, project_root)
     if cleaner_path is None:
         return []
@@ -381,7 +393,7 @@ def _collect_cleaner_input_files(config: dict[str, Any], project_root: Path) -> 
 
 
 def _collect_input_files(
-    config: dict[str, Any],
+    config: dict[str, Any] | AppConfig,
     project_root: Path,
     group_files: list[Path],
 ) -> list[Path]:
@@ -487,7 +499,7 @@ def create_run_archive(
     *,
     project_root: Path,
     config_path: Path,
-    config: dict[str, Any],
+    config: dict[str, Any] | AppConfig,
     run_name: str | None = None,
     runs_dir: Path | str = "runs",
     include_cleaned: bool = False,
@@ -497,6 +509,7 @@ def create_run_archive(
 ) -> Path:
     project_root = Path(project_root).resolve()
     config_path = Path(config_path).resolve()
+    config = _archive_config(config)
     created = created_at or datetime.now().astimezone()
     safe_name = sanitize_run_name(run_name or created.strftime("%Y%m%d-%H%M%S"))
 

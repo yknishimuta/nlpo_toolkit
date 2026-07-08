@@ -1,6 +1,6 @@
 from __future__ import annotations
 import unicodedata, re
-from typing import Dict, Any
+from typing import Any, Mapping
 
 
 def strip_diacritics(text: str) -> str:
@@ -8,32 +8,44 @@ def strip_diacritics(text: str) -> str:
     return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
 
 
-def normalize_text(text: str, cfg: Dict[str, Any]) -> str:
-    norm_cfg = cfg.get("normalization", {})
+def _normalization_value(cfg: object, key: str, default: Any = None) -> Any:
+    if hasattr(cfg, "normalization"):
+        norm_cfg = getattr(cfg, "normalization")
+        return getattr(norm_cfg, key, default)
+    if isinstance(cfg, Mapping):
+        norm_cfg = cfg.get("normalization", {})
+        if isinstance(norm_cfg, Mapping):
+            return norm_cfg.get(key, default)
+    return default
+
+
+def normalize_text(text: str, cfg: object) -> str:
+    if _normalization_value(cfg, "enabled", True) is False:
+        return text
 
     # Unicode normalization
-    nf = norm_cfg.get("unicode_nf", None)
+    nf = _normalization_value(cfg, "unicode_nf", None)
     if nf:
         text = unicodedata.normalize(nf, text)
 
     # casefold
-    if norm_cfg.get("casefold", False):
+    if _normalization_value(cfg, "casefold", False):
         text = text.casefold()
 
     # ligatures
-    if norm_cfg.get("normalize_ligatures", False):
+    if _normalization_value(cfg, "normalize_ligatures", False):
         text = text.replace("æ", "ae").replace("œ", "oe")
 
     # u/v
-    if norm_cfg.get("map_u_v", False):
+    if _normalization_value(cfg, "map_u_v", False):
         text = text.replace("v", "u").replace("V", "U")
 
     # i/j
-    if norm_cfg.get("map_i_j", False):
+    if _normalization_value(cfg, "map_i_j", False):
         text = text.replace("j", "i").replace("J", "I")
 
     # diacritics
-    if norm_cfg.get("strip_diacritics", False):
+    if _normalization_value(cfg, "strip_diacritics", False):
         text = strip_diacritics(text)
 
     text = re.sub(r'([()\[\]{}“”‘’\'"«»])', r' \1 ', text)

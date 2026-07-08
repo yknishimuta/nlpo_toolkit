@@ -5,9 +5,11 @@ import json
 import re
 import sys
 from collections import Counter
+from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, List, Mapping, Optional, Tuple
 
+from .config import AppConfig, GroupConfig, TraceConfig, ensure_app_config
 from .io_utils import expand_globs, read_concat
 from .normalizer import normalize_text
 from .comparison import (
@@ -65,25 +67,18 @@ def _unique_label(base: str, used: set[str]) -> str:
 
 def _resolve_group_files(
     *,
-    groups: Dict[str, Any],
+    groups: Mapping[str, GroupConfig],
     project_root: Path,
     cleaned_dir: Optional[Path],
-) -> Dict[str, List[Path]]:
-    resolved: Dict[str, List[Path]] = {}
+) -> dict[str, list[Path]]:
+    resolved: dict[str, list[Path]] = {}
 
     for gname, gdef in groups.items():
-        if not isinstance(gdef, dict):
-            raise ValueError(f"groups.{gname} must be mapping")
-
-        patterns = gdef.get("files") or []
-        if not isinstance(patterns, list):
-            raise ValueError(f"groups.{gname}.files must be list[str]")
-
         patterns = [
             str(_resolve_project_path(project_root, p))
             if not Path(str(p)).is_absolute() and "{cleaned_dir}" not in str(p)
             else str(p)
-            for p in patterns
+            for p in gdef.files
         ]
         patterns = expand_cleaned_dir_placeholders(patterns, cleaned_dir)
         resolved[gname] = expand_globs(patterns)
@@ -110,7 +105,7 @@ def _resolve_auto_single_cleaned_group(
     *,
     cleaned_dir: Optional[Path],
     group_name: str,
-) -> Dict[str, List[Path]]:
+) -> dict[str, list[Path]]:
     files = _cleaned_txt_files(cleaned_dir)
     cleaned_display = str(Path(cleaned_dir).resolve()) if cleaned_dir is not None else "cleaned/"
     if not files:
@@ -129,9 +124,9 @@ def _resolve_auto_single_cleaned_group(
 
 def _build_work_items(
     *,
-    group_files: Dict[str, List[Path]],
+    group_files: dict[str, list[Path]],
     group_by_file: bool,
-) -> List[Tuple[str, List[Path]]]:
+) -> list[tuple[str, list[Path]]]:
     if not group_by_file:
         return [(gname, files) for gname, files in group_files.items()]
 
@@ -152,14 +147,14 @@ def _build_work_items(
 
 
 def _trace_path_for_label(
-    trace_cfg: Dict[str, Any],
+    trace_cfg: TraceConfig,
     out_dir: Path,
     project_root: Path,
     label: str,
     per_file: bool,
 ) -> Path:
-    raw_path = trace_cfg.get("path")
-    if raw_path:
+    if trace_cfg.path:
+        raw_path = trace_cfg.path
         trace_path = Path(str(raw_path))
         if not trace_path.is_absolute():
             trace_path = (project_root / trace_path).resolve()
@@ -174,17 +169,14 @@ def _trace_path_for_label(
     return trace_path.with_name(f"{stem}_{label}{suffix}")
 
 
-def _resolve_analysis_unit(cfg: Dict[str, Any]) -> tuple[str, bool, tuple[str, str]]:
+def _resolve_analysis_unit(config: AppConfig) -> tuple[str, bool, tuple[str, str]]:
     """
     Returns:
       - unit: "lemma" | "surface"
       - use_lemma: bool (to pass into count_group_fn)
       - csv_header: (col1, col2)
     """
-    unit = str(cfg.get("analysis_unit", "lemma")).strip().lower()
-    if unit not in {"lemma", "surface"}:
-        raise ValueError("analysis_unit must be 'lemma' or 'surface'")
-
+    unit = config.analysis_unit
     use_lemma = (unit == "lemma")
 
     # default headers
@@ -194,39 +186,35 @@ def _resolve_analysis_unit(cfg: Dict[str, Any]) -> tuple[str, bool, tuple[str, s
         header = ("word", "frequency")
 
     # optional override: csv_header: ["...", "..."]
-    hdr = cfg.get("csv_header")
-    if hdr is not None:
-        if (
-            isinstance(hdr, list)
-            and len(hdr) == 2
-            and all(isinstance(x, str) and x.strip() for x in hdr)
-        ):
-            header = (hdr[0], hdr[1])
-        else:
-            raise ValueError("csv_header must be a list[str] of length 2")
+    if config.csv_header is not None:
+        header = config.csv_header
 
     return unit, use_lemma, header
 
-def _format_normalization_kv(norm: dict) -> str:
-    if not isinstance(norm, dict) or not norm:
+def _format_normalization_kv(norm: object) -> str:
+    if hasattr(norm, "__dataclass_fields__"):
+        norm_dict = asdict(norm)
+    elif isinstance(norm, dict):
+        norm_dict = norm
+    else:
         return "(none)"
 
     keys_first = ["enabled", "casefold", "uv", "ij", "diacritics"]
     parts: list[str] = []
 
     for k in keys_first:
-        if k in norm:
-            parts.append(f"{k}={norm[k]}")
+        if k in norm_dict:
+            parts.append(f"{k}={norm_dict[k]}")
 
-    lig = norm.get("ligatures")
+    lig = norm_dict.get("ligatures")
     if isinstance(lig, dict) and lig:
         lig_s = ",".join(f"{a}→{b}" for a, b in sorted(lig.items(), key=lambda x: x[0]))
         parts.append(f"ligatures={lig_s}")
 
-    for k in sorted(norm.keys()):
+    for k in sorted(norm_dict.keys()):
         if k in keys_first or k == "ligatures":
             continue
-        parts.append(f"{k}={norm[k]}")
+        parts.append(f"{k}={norm_dict[k]}")
 
     return " ".join(parts)
 
@@ -236,7 +224,7 @@ def run(
     script_dir: Path | None = None,
     config_path: Path,
     group_by_file: Optional[bool] = None,
-    load_config_fn: Callable[[Path], Dict[str, Any]],
+    load_config_fn: Callable[[Path], AppConfig | Mapping[str, object]],
     clean_mod: Any,
     build_pipeline_fn: Callable[[str, str, bool], Tuple[Any, str]],
     build_sentence_splitter_fn: Optional[Callable[..., Any]],
@@ -268,36 +256,33 @@ def run(
     if not config_path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
-    cfg = load_config_fn(config_path)
-    grouping_cfg = cfg.get("grouping") or {}
-    grouping_mode = str(grouping_cfg.get("mode", "groups")).strip().lower()
-    if grouping_mode not in {"groups", "per_file", "auto_single_cleaned"}:
-        raise ValueError("grouping.mode must be 'groups', 'per_file', or 'auto_single_cleaned'")
+    config = ensure_app_config(load_config_fn(config_path))
+    grouping_mode = config.grouping.mode
     auto_mode = bool(auto_single_cleaned) or grouping_mode == "auto_single_cleaned"
     per_file = (bool(group_by_file) or grouping_mode == "per_file") and not auto_mode
-    partition_specs = parse_partition_specs(cfg)
-    comparison_specs = parse_comparison_specs(cfg)
+    partition_specs = parse_partition_specs(config)
+    comparison_specs = parse_comparison_specs(config)
     if partition_specs and per_file:
         raise ValueError("validations.partitions cannot be used with --group-by-file or grouping.mode: per_file")
     if comparison_specs and per_file:
         raise ValueError("comparisons cannot be used with grouping.mode=per_file")
 
     # preprocess (optional)
-    cleaned_dir = run_preprocess_if_needed(cfg=cfg, project_root=project_root, clean_mod=clean_mod)
+    cleaned_dir = run_preprocess_if_needed(cfg=config, project_root=project_root, clean_mod=clean_mod)
 
     # output directory
-    out_dir = Path(cfg.get("out_dir", "output"))
+    out_dir = Path(config.out_dir)
     if not out_dir.is_absolute():
         out_dir = (project_root / out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # language settings
-    language = cfg.get("language", "la")
-    stanza_package = cfg.get("stanza_package") or "perseus"
-    cpu_only = bool(cfg.get("cpu_only", True))
+    language = config.nlp.language
+    stanza_package = config.nlp.stanza_package
+    cpu_only = config.nlp.cpu_only
 
     # analysis unit (lemma / surface)
-    unit, use_lemma, csv_header = _resolve_analysis_unit(cfg)
+    unit, use_lemma, csv_header = _resolve_analysis_unit(config)
 
     # build NLP
     nlp, package = build_pipeline_fn(language, stanza_package, cpu_only)
@@ -315,26 +300,22 @@ def run(
             splitter_nlp = None
 
     # ref_tags setting is global (summary/meta needs it)
-    ref_cfg = cfg.get("ref_tags") or {}
-    ref_enabled = bool(ref_cfg.get("enabled", False))
+    ref_enabled = config.ref_tags.enabled
 
-    filters_cfg = cfg.get("filter") or cfg.get("filters") or {}
-    min_token_length = int(filters_cfg.get("min_token_length", 0))
-    drop_roman_numerals = bool(filters_cfg.get("drop_roman_numerals", False))
-    roman_exceptions_file = filters_cfg.get("roman_exceptions_file")
-    if not roman_exceptions_file:
-        roman_exceptions_file = filters_cfg.get("roman_exception_files")
+    min_token_length = config.filters.min_token_length
+    drop_roman_numerals = config.filters.drop_roman_numerals
+    roman_exceptions_file = config.filters.roman_exceptions_file
     if roman_exceptions_file:
         roman_exceptions_file = _resolve_project_path(project_root, roman_exceptions_file)
 
     # groups
-    groups = cfg.get("groups") or {}
-    if not isinstance(groups, dict) or not groups:
+    groups = config.groups
+    if not groups:
         raise ValueError("config.groups must be a non-empty mapping")
 
-    group_ref_tags: Dict[str, Counter] = {}
-    groups_files: Dict[str, List[str]] = {}
-    auto_group_name = str(grouping_cfg.get("auto_group_name") or "text")
+    group_ref_tags: dict[str, Counter] = {}
+    groups_files: dict[str, list[str]] = {}
+    auto_group_name = config.grouping.auto_group_name
     if auto_mode:
         group_files = _resolve_auto_single_cleaned_group(
             cleaned_dir=cleaned_dir,
@@ -360,7 +341,7 @@ def run(
 
     work_items = _build_work_items(group_files=group_files, group_by_file=per_file)
     generated_outputs: List[Path] = []
-    group_counters: Dict[str, Counter] = {}
+    group_counters: dict[str, Counter] = {}
 
     for gname, files in work_items:
         groups_files[gname] = [str(p) for p in files]
@@ -376,12 +357,12 @@ def run(
             joined = whole
 
         # normalization (config-driven)
-        joined = normalize_text(joined, cfg)
+        joined = normalize_text(joined, config)
 
         # ref_tags stripping/counting
         ref_counter = Counter()
         if ref_enabled:
-            ref_file = ref_cfg.get("patterns") or ref_cfg.get("ref_tags_file")
+            ref_file = config.ref_tags.patterns
             if not ref_file:
                 raise ValueError(
                     "ref_tags.patterns (or ref_tags.ref_tags_file) is required when ref_tags.enabled=true"
@@ -404,19 +385,16 @@ def run(
             generated_outputs.append(out_dir / f"ref_tags_{gname}.csv")
         
         # ---- trace (optional) ----
-        trace_cfg = cfg.get("trace") or {}
-        trace_kwargs: Dict[str, Any] = {}
+        trace_kwargs: dict[str, Any] = {}
 
-        if bool(trace_cfg.get("enabled", False)):
-            trace_path = _trace_path_for_label(trace_cfg, out_dir, project_root, gname, per_file)
+        if config.trace.enabled:
+            trace_path = _trace_path_for_label(config.trace, out_dir, project_root, gname, per_file)
 
             trace_kwargs = {
                 "trace_tsv": trace_path,
-                "trace_max_rows": int(trace_cfg.get("max_rows", 0)),
-                "trace_only_keys": set(trace_cfg.get("only_keys", []) or []),
-                "trace_write_truncation_marker": bool(
-                    trace_cfg.get("write_truncation_marker", True)
-                ),
+                "trace_max_rows": int(config.trace.max_rows or 0),
+                "trace_only_keys": set(config.trace.only_keys),
+                "trace_write_truncation_marker": config.trace.write_truncation_marker,
             }
 
         c = count_group_fn(
@@ -429,8 +407,7 @@ def run(
             **trace_kwargs,
         )
         
-        dc_cfg = cfg.get("dictcheck") or {}
-        norm_map_rel_path = dc_cfg.get("lemma_normalize")
+        norm_map_rel_path = config.dictcheck.lemma_normalize
         
         if norm_map_rel_path:
             norm_map_path = Path(str(norm_map_rel_path))
@@ -456,15 +433,14 @@ def run(
         generated_outputs.append(base_csv_path)
 
         # dictcheck
-        dc = cfg.get("dictcheck") or {}
-        wordlist = dc.get("wordlist")
+        wordlist = config.dictcheck.wordlist
 
-        if bool(dc.get("enabled", False)) and not wordlist:
+        if config.dictcheck.enabled and not wordlist:
             raise ValueError(
                 f"dictcheck.wordlist is required when dictcheck.enabled=true (analysis_unit={unit})"
             )
 
-        if bool(dc.get("enabled", False)):
+        if config.dictcheck.enabled:
             wl_path = Path(str(wordlist))
             if not wl_path.is_absolute():
                 wl_path = (project_root / wl_path).resolve()
@@ -552,7 +528,7 @@ def run(
     summary_lines.append(f"analysis_unit: {unit}")
 
     # normalization policy (human-readable, stable)
-    norm = cfg.get("normalization", {}) or {}
+    norm = config.normalization
     summary_lines.append(f"normalization: {_format_normalization_kv(norm)}")
 
     summary_lines.append("")
@@ -626,8 +602,9 @@ def run(
         meta["grouping"] = {"mode": "per_file" if per_file else "groups"}
     meta["environment"] = collect_runtime_environment(project_root)
 
-    norm_canon = json.dumps(norm, ensure_ascii=False, sort_keys=True)
-    meta["normalization"] = norm
+    norm_dict = asdict(norm)
+    norm_canon = json.dumps(norm_dict, ensure_ascii=False, sort_keys=True)
+    meta["normalization"] = norm_dict
     meta["normalization_hash_sha256"] = hashlib.sha256(norm_canon.encode("utf-8")).hexdigest()
     meta["partition_validations"] = partition_meta
     meta["group_comparisons"] = comparison_meta

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Mapping, Optional
 
 import yaml
+
+from .config import AppConfig, ensure_app_config
 
 
 def _load_yaml(path: Path) -> Dict[str, Any]:
@@ -34,7 +36,7 @@ def expand_cleaned_dir_placeholders(patterns: list[str], cleaned_dir: Optional[P
 
 def run_preprocess_if_needed(
     *,
-    cfg: Dict[str, Any],
+    cfg: AppConfig | Mapping[str, object],
     project_root: Path,
     clean_mod: Any,
 ) -> Optional[Path]:
@@ -42,10 +44,11 @@ def run_preprocess_if_needed(
     If cfg.preprocess.kind == 'cleaner', run clean_mod.main([...]) and return cleaned_dir.
     Otherwise return None.
     """
+    config = ensure_app_config(cfg)
     cleaned_dir: Optional[Path] = None
-    pp = cfg.get("preprocess")
-    if pp and isinstance(pp, dict) and pp.get("kind") == "cleaner":
-        cleaner_config_raw = pp.get("config")
+    pp = config.preprocess
+    if pp.kind == "cleaner":
+        cleaner_config_raw = pp.config
         if not cleaner_config_raw:
             raise ValueError("'preprocess.config' is required when preprocess.kind=cleaner")
 

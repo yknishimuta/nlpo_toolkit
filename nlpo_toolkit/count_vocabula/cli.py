@@ -10,7 +10,7 @@ from nlpo_toolkit.compare import CompareError, run_compare
 
 from .archive import RunArchiveError, create_run_archive
 from .cache import CacheClearError, clear_cache
-from .config import load_config
+from .config import ensure_app_config, load_config
 from .concordance import ConcordanceError, write_concordance
 from .dry_run import dry_run_count_vocabula
 from .features import FeatureError, run_features
@@ -62,22 +62,19 @@ def run_count_vocabula(
             print(f"[ERROR] {exc}", file=sys.stderr)
             return 1
         raise
-    cfg = load_config(config_path)
-    archive_cfg = cfg.get("archive") or {}
-    if not isinstance(archive_cfg, dict):
-        archive_cfg = {}
+    cfg = ensure_app_config(load_config(config_path))
 
-    archive_enabled = bool(archive_cfg.get("enabled", False))
+    archive_enabled = cfg.archive.enabled
     should_archive = archive_run or bool(run_name) or archive_enabled
     if rc != 0 or not should_archive:
         return rc
 
     effective_runs_dir = runs_dir
     if effective_runs_dir is None:
-        effective_runs_dir = Path(str(archive_cfg.get("runs_dir", "runs")))
+        effective_runs_dir = Path(cfg.archive.runs_dir)
 
-    effective_include_input = include_input or bool(archive_cfg.get("include_input", False))
-    effective_include_cleaned = include_cleaned or bool(archive_cfg.get("include_cleaned", False))
+    effective_include_input = include_input or cfg.archive.include_input
+    effective_include_cleaned = include_cleaned or cfg.archive.include_cleaned
 
     try:
         run_dir = create_run_archive(

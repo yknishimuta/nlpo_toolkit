@@ -7,9 +7,9 @@ import sys
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, TextIO
+from typing import Any, Callable, Iterable, Mapping, TextIO
 
-from .config import load_config
+from .config import AppConfig, ensure_app_config, load_config
 from .io_utils import read_concat
 from .normalizer import normalize_text
 from .preprocess import run_preprocess_if_needed
@@ -294,11 +294,10 @@ def write_feature_matrix(rows: list[dict[str, Any]], out: Path | TextIO | None, 
             f.close()
 
 
-def _strip_ref_tags_if_configured(text: str, cfg: dict[str, Any], project_root: Path) -> str:
-    ref_cfg = cfg.get("ref_tags") or {}
-    if not isinstance(ref_cfg, dict) or not ref_cfg.get("enabled"):
+def _strip_ref_tags_if_configured(text: str, config: AppConfig, project_root: Path) -> str:
+    if not config.ref_tags.enabled:
         return text
-    ref_file = ref_cfg.get("patterns") or ref_cfg.get("ref_tags_file")
+    ref_file = config.ref_tags.patterns
     if not ref_file:
         return text
     ref_path = _resolve_project_path(project_root, ref_file)
@@ -323,7 +322,7 @@ def run_features(
     error_on_empty_group: bool = False,
     build_pipeline_fn: Callable[[str, str, bool], tuple[Any, str]],
     clean_mod: Any,
-    load_config_fn: Callable[[Path], dict[str, Any]] = load_config,
+    load_config_fn: Callable[[Path], AppConfig | Mapping[str, object]] = load_config,
 ) -> int:
     project_root = Path(project_root).resolve()
     config_path = Path(config_path)
@@ -332,22 +331,20 @@ def run_features(
     if not config_path.exists():
         raise FeatureError(f"Config file not found: {config_path}")
 
-    cfg = load_config_fn(config_path)
-    cleaned_dir = run_preprocess_if_needed(cfg=cfg, project_root=project_root, clean_mod=clean_mod)
-    grouping_cfg = cfg.get("grouping") or {}
-    grouping_mode = str(grouping_cfg.get("mode", "groups")).strip().lower()
+    config = ensure_app_config(load_config_fn(config_path))
+    cleaned_dir = run_preprocess_if_needed(cfg=config, project_root=project_root, clean_mod=clean_mod)
+    grouping_mode = config.grouping.mode
     auto_mode = bool(auto_single_cleaned) or grouping_mode == "auto_single_cleaned"
     per_file = (bool(group_by_file) or grouping_mode == "per_file") and not auto_mode
 
-    groups = cfg.get("groups") or {}
     if auto_mode:
         group_files = _resolve_auto_single_cleaned_group(
             cleaned_dir=cleaned_dir,
-            group_name=str(grouping_cfg.get("auto_group_name") or "text"),
+            group_name=config.grouping.auto_group_name,
         )
     else:
         group_files = _resolve_group_files(
-            groups=groups,
+            groups=config.groups,
             project_root=project_root,
             cleaned_dir=cleaned_dir,
         )
@@ -356,26 +353,25 @@ def run_features(
     if error_on_empty_group and empty_groups:
         raise FeatureError(f"No files matched for group(s): {', '.join(empty_groups)}")
 
-    filters_cfg = cfg.get("filter") or cfg.get("filters") or {}
     options = FeatureOptions(
         field=field,
         mfw=mfw,
         include_upos=include_upos,
         include_basic=include_basic,
-        min_token_length=int(filters_cfg.get("min_token_length", 0)),
-        drop_roman_numerals=bool(filters_cfg.get("drop_roman_numerals", False)),
+        min_token_length=config.filters.min_token_length,
+        drop_roman_numerals=config.filters.drop_roman_numerals,
     )
 
-    language = cfg.get("language", "la")
-    stanza_package = cfg.get("stanza_package") or "perseus"
-    cpu_only = bool(cfg.get("cpu_only", True))
+    language = config.nlp.language
+    stanza_package = config.nlp.stanza_package
+    cpu_only = config.nlp.cpu_only
     nlp, _package = build_pipeline_fn(language, stanza_package, cpu_only)
 
     groups_texts: list[tuple[str, list[Path], str]] = []
     for group, files in _build_work_items(group_files=group_files, group_by_file=per_file):
         text = read_concat(files)
-        text = _strip_ref_tags_if_configured(text, cfg, project_root)
-        text = normalize_text(text, cfg)
+        text = _strip_ref_tags_if_configured(text, config, project_root)
+        text = normalize_text(text, config)
         groups_texts.append((group, files, text))
 
     rows = build_feature_rows(groups_texts, nlp, options)

@@ -55,6 +55,9 @@ def sanitize_partition_name(name: str) -> str:
 
 
 def parse_partition_specs(config: dict) -> list[PartitionSpec]:
+    if hasattr(config, "partition_validations"):
+        return list(getattr(config, "partition_validations"))
+
     validations = config.get("validations")
     if validations is None:
         return []

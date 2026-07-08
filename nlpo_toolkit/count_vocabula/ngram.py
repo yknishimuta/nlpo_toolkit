@@ -187,15 +187,11 @@ def _rows_from_text(text: str, group: str) -> list[dict[str, str]]:
 
 def read_config_text_rows(project_root: Path, config_path: Path) -> list[dict[str, str]]:
     cfg = load_config(config_path)
-    groups = cfg.get("groups") or {}
     rows: list[dict[str, str]] = []
-    for group, group_def in groups.items():
-        patterns = group_def.get("files") if isinstance(group_def, dict) else None
-        if not isinstance(patterns, list):
-            raise NgramError(f"groups.{group}.files must be list[str].")
+    for group, group_def in cfg.groups.items():
         resolved_patterns = [
             str(_resolve_project_path(project_root, pattern))
-            for pattern in patterns
+            for pattern in group_def.files
         ]
         text = read_concat(expand_globs(resolved_patterns))
         rows.extend(_rows_from_text(text, str(group)))
