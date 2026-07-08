@@ -286,6 +286,19 @@ def _trace_base_path(config: dict[str, Any] | AppConfig, project_root: Path, out
 
 
 def _collect_trace_files(config: dict[str, Any] | AppConfig, project_root: Path, out_dir: Path) -> list[Path]:
+    run_meta_path = out_dir / "run_meta.json"
+    if run_meta_path.exists():
+        try:
+            meta = json.loads(run_meta_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            meta = {}
+        trace_meta = meta.get("trace")
+        if isinstance(trace_meta, dict):
+            files_meta = trace_meta.get("files")
+            if isinstance(files_meta, dict):
+                files = [Path(str(p)).resolve() for p in files_meta.values() if str(p).strip()]
+                return list(dict.fromkeys(p for p in files if _is_archivable_file(p)))
+
     base = _trace_base_path(config, project_root, out_dir)
     if base is None:
         return []

@@ -57,9 +57,13 @@ def resolve_project_path(project_root: Path, raw: object) -> Path:
     return (project_root / path).resolve()
 
 
-def label_from_file(path: Path) -> str:
-    label = _LABEL_SAFE_RE.sub("_", path.stem).strip("_").lower()
+def sanitize_label(value: str) -> str:
+    label = _LABEL_SAFE_RE.sub("_", str(value)).strip("_").lower()
     return label or "file"
+
+
+def label_from_file(path: Path) -> str:
+    return sanitize_label(path.stem)
 
 
 def _unique_label(base: str, used: set[str]) -> str:

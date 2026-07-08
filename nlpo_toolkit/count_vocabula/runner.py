@@ -14,6 +14,7 @@ from .corpus import (
     resolve_corpus_work_items,
     resolve_project_path,
     run_preprocess_if_needed,
+    sanitize_label,
 )
 from .comparison import (
     comparison_csv_name,
@@ -40,12 +41,10 @@ from .partition_validation import (
 )
 
 
-def _trace_path_for_label(
+def _trace_base_path(
     trace_cfg: TraceConfig,
     out_dir: Path,
     project_root: Path,
-    label: str,
-    per_file: bool,
 ) -> Path:
     if trace_cfg.path:
         raw_path = trace_cfg.path
@@ -54,13 +53,42 @@ def _trace_path_for_label(
             trace_path = (project_root / trace_path).resolve()
     else:
         trace_path = out_dir / "trace.tsv"
+    return trace_path
 
-    if not per_file:
-        return trace_path
 
-    suffix = trace_path.suffix or ".tsv"
-    stem = trace_path.stem or "trace"
-    return trace_path.with_name(f"{stem}_{label}{suffix}")
+def trace_path_for_work_item(
+    *,
+    base_path: Path,
+    label: str,
+    work_item_count: int,
+    force_label_suffix: bool = False,
+) -> Path:
+    if work_item_count <= 1 and not force_label_suffix:
+        return base_path
+    safe_label = sanitize_label(label)
+    suffix = base_path.suffix or ".tsv"
+    stem = base_path.stem or "trace"
+    return base_path.with_name(f"{stem}_{safe_label}{suffix}")
+
+
+def build_trace_paths(
+    *,
+    base_path: Path,
+    labels: list[str],
+) -> dict[str, Path]:
+    counts: dict[str, int] = {}
+    paths: dict[str, Path] = {}
+    work_item_count = len(labels)
+    for label in labels:
+        safe_label = sanitize_label(label)
+        counts[safe_label] = counts.get(safe_label, 0) + 1
+        effective_label = safe_label if counts[safe_label] == 1 else f"{safe_label}_{counts[safe_label]}"
+        paths[label] = trace_path_for_work_item(
+            base_path=base_path,
+            label=effective_label,
+            work_item_count=work_item_count,
+        )
+    return paths
 
 
 def _resolve_analysis_unit(config: AppConfig) -> tuple[str, bool, tuple[str, str]]:
@@ -232,6 +260,12 @@ def run(
         config=config,
         project_root=project_root,
     )
+    trace_paths: dict[str, Path] = {}
+    if config.trace.enabled:
+        trace_paths = build_trace_paths(
+            base_path=_trace_base_path(config.trace, out_dir, project_root),
+            labels=[corpus.label for corpus in prepared_corpora],
+        )
 
     for corpus in prepared_corpora:
         gname = corpus.label
@@ -260,7 +294,7 @@ def run(
         trace_kwargs: dict[str, Any] = {}
 
         if config.trace.enabled:
-            trace_path = _trace_path_for_label(config.trace, out_dir, project_root, gname, per_file)
+            trace_path = trace_paths[gname]
 
             trace_kwargs = {
                 "trace_tsv": trace_path,
@@ -276,6 +310,7 @@ def run(
             min_token_length=min_token_length,
             drop_roman_numerals=drop_roman_numerals,
             roman_exceptions_file=roman_exceptions_file,
+            label=gname,
             **trace_kwargs,
         )
         
@@ -480,6 +515,13 @@ def run(
     meta["normalization_hash_sha256"] = hashlib.sha256(norm_canon.encode("utf-8")).hexdigest()
     meta["partition_validations"] = partition_meta
     meta["group_comparisons"] = comparison_meta
+    meta["trace"] = {
+        "enabled": config.trace.enabled,
+        "files": {
+            label: str(path.resolve())
+            for label, path in trace_paths.items()
+        },
+    }
     meta["generated_outputs"] = [str(p.resolve()) for p in generated_outputs]
 
     write_run_meta(meta, out_dir)
