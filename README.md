@@ -79,7 +79,7 @@ Example output:
 [OK] cleaned output dir: cleaned
 [OK] group text matched files: 3
 [WARN] duplicate YAML key: trace
-[WARN] unknown config key: roman_exception_files
+[WARN] filters.roman_exception_files is deprecated; use filters.roman_exceptions_file
 [OK] dictcheck wordlist found
 [OK] ref_tags patterns found
 [OK] output dir: output
@@ -540,6 +540,7 @@ analysis_unit: lemma
 filters:
   min_token_length: 2
   drop_roman_numerals: true
+  roman_exceptions_file: config/roman_numeral_exceptions.txt
 ```
 
 With cleaner preprocessing:
@@ -615,6 +616,13 @@ trace:
   path: output/trace.tsv
   max_rows: 500000
 ```
+
+`filters.roman_exceptions_file` is a UTF-8, one-item-per-line file for tokens
+that should not be removed by Roman numeral filtering. Blank lines and lines
+starting with `#` are ignored, matching is case-insensitive, and missing files
+are reported as configuration errors. The built-in surface-mode exceptions
+`vi` and `di` remain for backward compatibility. The old
+`roman_exception_files` key is still accepted but deprecated.
 
 ## Run Archive
 

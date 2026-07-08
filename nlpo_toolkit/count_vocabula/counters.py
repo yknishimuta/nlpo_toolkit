@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Callable, Dict, Optional, Tuple
+from typing import Callable, Collection, Dict, Optional, Tuple
 from collections import Counter
 from typing import Iterable, Optional, Set, Any
 from pathlib import Path
@@ -35,6 +35,9 @@ def count_group(
     ref_tag_detector: Optional[Callable[[str], str]] = None,
     ref_tag_counter: Optional[Counter] = None,
     min_token_length: int = 0,
+    drop_roman_numerals: bool = False,
+    roman_exceptions_file: Path | None = None,
+    roman_exceptions: Collection[str] | None = None,
 ) -> Counter:
     if upos_targets is None:
         upos_targets = {"NOUN"}
@@ -51,6 +54,9 @@ def count_group(
         ref_tag_detector=ref_tag_detector,
         ref_tag_counter=ref_tag_counter,
         min_token_length=min_token_length,
+        drop_roman_numerals=drop_roman_numerals,
+        roman_exceptions_file=roman_exceptions_file,
+        roman_exceptions=roman_exceptions,
         **tk,
     )
 

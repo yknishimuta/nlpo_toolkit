@@ -191,6 +191,26 @@ def test_load_config_nested_values_and_config_to_dict(tmp_path: Path):
     assert data["upos_targets"] == ["NOUN", "PROPN"]
 
 
+def test_load_config_rejects_both_roman_exception_keys(tmp_path: Path):
+    cfg_path = tmp_path / "cfg.yml"
+    cfg_path.write_text(
+        "\n".join(
+            [
+                "groups:",
+                "  corpus_a: {files: [input/corpus_a.txt]}",
+                "filters:",
+                "  roman_exceptions_file: config/roman_a.txt",
+                "  roman_exception_files: config/roman_b.txt",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Specify only one"):
+        load_config(cfg_path)
+
+
 def test_load_config_uses_nlp_section_when_top_level_nlp_values_absent(tmp_path: Path):
     cfg_path = tmp_path / "cfg.yml"
     cfg_path.write_text(

@@ -39,6 +39,7 @@ from .partition_validation import (
     write_partition_validation_csv,
     write_partition_validation_json,
 )
+from nlpo_toolkit.nlp import load_roman_exceptions
 
 
 def _trace_base_path(
@@ -227,8 +228,10 @@ def run(
     min_token_length = config.filters.min_token_length
     drop_roman_numerals = config.filters.drop_roman_numerals
     roman_exceptions_file = config.filters.roman_exceptions_file
+    roman_exceptions = frozenset()
     if roman_exceptions_file:
         roman_exceptions_file = resolve_project_path(project_root, roman_exceptions_file)
+        roman_exceptions = load_roman_exceptions(roman_exceptions_file)
 
     if not config.groups:
         raise ValueError("config.groups must be a non-empty mapping")
@@ -309,7 +312,7 @@ def run(
             use_lemma=use_lemma,
             min_token_length=min_token_length,
             drop_roman_numerals=drop_roman_numerals,
-            roman_exceptions_file=roman_exceptions_file,
+            roman_exceptions=roman_exceptions,
             label=gname,
             **trace_kwargs,
         )

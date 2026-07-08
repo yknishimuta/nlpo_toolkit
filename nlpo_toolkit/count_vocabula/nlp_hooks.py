@@ -29,7 +29,7 @@ def count_group(text: str, nlp, **kwargs) -> Counter:
     """
     Production counter: count noun lemmas using nlpo_toolkit.
     """
-    from nlpo_toolkit.nlp import count_nouns_streaming  # type: ignore
+    from nlpo_toolkit.nlp import count_nouns_streaming, resolve_roman_exceptions  # type: ignore
 
     use_lemma = bool(kwargs.get("use_lemma", True))
 
@@ -41,6 +41,10 @@ def count_group(text: str, nlp, **kwargs) -> Counter:
     label = str(kwargs.get("label", ""))
     min_token_length = int(kwargs.get("min_token_length", 0))
     drop_roman_numerals = bool(kwargs.get("drop_roman_numerals", False))
+    roman_exceptions = resolve_roman_exceptions(
+        roman_exceptions=kwargs.get("roman_exceptions"),
+        roman_exceptions_file=kwargs.get("roman_exceptions_file"),
+    )
 
     ref_tag_detector = kwargs.get("ref_tag_detector")
     ref_tag_counter = kwargs.get("ref_tag_counter")
@@ -75,6 +79,7 @@ def count_group(text: str, nlp, **kwargs) -> Counter:
         trace_only_keys=trace_only_keys,
         min_token_length=min_token_length,
         drop_roman_numerals=drop_roman_numerals,
+        roman_exceptions=roman_exceptions,
         trace_write_truncation_marker=trace_write_truncation_marker,
     )
 

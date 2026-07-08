@@ -203,7 +203,7 @@ def test_run_passes_filter_args_to_count_group(tmp_path: Path, monkeypatch):
     (tmp_path / "a.txt").write_text("X", encoding="utf-8")
 
     exc_file = tmp_path / "rom.txt"
-    exc_file.write_text("vi\n", encoding="utf-8")
+    exc_file.write_text("xiv\n", encoding="utf-8")
 
     def load_config_fn(_p: Path):
         return {
@@ -243,7 +243,8 @@ def test_run_passes_filter_args_to_count_group(tmp_path: Path, monkeypatch):
     assert rc == 0
     assert captured_kwargs.get("min_token_length") == 3
     assert captured_kwargs.get("drop_roman_numerals") is True
-    assert captured_kwargs.get("roman_exceptions_file") == (script_dir / "rom.txt").resolve()
+    assert captured_kwargs.get("roman_exceptions") == frozenset({"xiv"})
+    assert "roman_exceptions_file" not in captured_kwargs
 
 
 def test_run_group_by_file_writes_one_csv_per_input_file(tmp_path: Path, monkeypatch):

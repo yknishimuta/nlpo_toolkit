@@ -73,6 +73,11 @@ def _warn_unknown_keys(raw_cfg: dict[str, Any], lines: list[str]) -> None:
         lines.append(f"[WARN] unknown config key: {key}")
     for key in unknown_filter_keys(raw_cfg):
         lines.append(f"[WARN] unknown config key: {key}")
+    filters = raw_cfg.get("filter") or raw_cfg.get("filters") or {}
+    if isinstance(filters, dict) and "roman_exception_files" in filters:
+        lines.append(
+            "[WARN] filters.roman_exception_files is deprecated; use filters.roman_exceptions_file"
+        )
 
 
 def _count_cleaner_input_files(cleaner_config_path: Path) -> int:

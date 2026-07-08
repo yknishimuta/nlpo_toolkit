@@ -333,7 +333,7 @@ def test_count_nouns_drop_roman_numerals():
 
 def test_count_nouns_drop_roman_with_exceptions_in_surface_mode(tmp_path):
     exc_file = tmp_path / "exceptions.txt"
-    exc_file.write_text("vi\ndi\n", encoding="utf-8")
+    exc_file.write_text("xiv\n", encoding="utf-8")
 
     nlp = DummyNLP(
         DummyDoc(
@@ -341,6 +341,7 @@ def test_count_nouns_drop_roman_with_exceptions_in_surface_mode(tmp_path):
                 DummySentence(
                     words=[
                         DummyWord(upos="NOUN", lemma="vi", text="vi"),
+                        DummyWord(upos="NOUN", lemma="xiv", text="xiv"),
                         DummyWord(upos="NOUN", lemma="iv", text="iv"),
                     ]
                 )
@@ -356,4 +357,5 @@ def test_count_nouns_drop_roman_with_exceptions_in_surface_mode(tmp_path):
         roman_exceptions_file=exc_file
     )
     assert "vi" in out
+    assert "xiv" in out
     assert "iv" not in out

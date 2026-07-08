@@ -50,6 +50,7 @@ KNOWN_FILTER_KEYS = frozenset(
     {
         "drop_roman_numerals",
         "min_token_length",
+        "roman_exception_files",
         "roman_exceptions_file",
     }
 )
@@ -390,7 +391,17 @@ def _parse_nlp_config(raw: Mapping[str, object]) -> NLPConfig:
 def _parse_filter_config(raw: Mapping[str, object]) -> FilterConfig:
     filters = raw.get("filter") or raw.get("filters") or {}
     filters_map = _optional_mapping(filters, context="filters")
-    roman = filters_map.get("roman_exceptions_file") or filters_map.get("roman_exception_files")
+    has_roman_singular = "roman_exceptions_file" in filters_map
+    has_roman_plural = "roman_exception_files" in filters_map
+    if has_roman_singular and has_roman_plural:
+        raise ValueError(
+            "Specify only one of filters.roman_exceptions_file and filters.roman_exception_files"
+        )
+    roman = (
+        filters_map.get("roman_exceptions_file")
+        if has_roman_singular
+        else filters_map.get("roman_exception_files")
+    )
     return FilterConfig(
         min_token_length=_int_value(
             filters_map.get("min_token_length"),

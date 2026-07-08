@@ -1,5 +1,5 @@
 from collections import Counter
-from typing import Set, Optional, Counter as CounterType, Dict, List, Iterable, Mapping, Union, Callable, Any
+from typing import Collection, Set, Optional, Counter as CounterType, Dict, List, Iterable, Mapping, Union, Callable, Any
 
 from .models import NLPDocument, NLPToken
 from .interfaces import NLPBackend
@@ -24,6 +24,72 @@ TOKEN_RE = re.compile(r"[A-Za-zĀāĒēĪīŌōŪūÆæŒœ]+")
 _STRIP_PUNCT = string.punctuation + "“”‘’«»…—–-­"
 _ROMAN_RE = re.compile(r"^(m{0,4}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|v?i{0,3}))$", re.I)
 _SURFACE_ROMAN_EXCEPTIONS = frozenset({"vi", "di"}) # Surface時に保護する単語
+
+
+class RomanExceptionsError(ValueError):
+    pass
+
+
+def load_roman_exceptions(path: Path) -> frozenset[str]:
+    path = Path(path)
+    if not path.exists():
+        raise RomanExceptionsError(f"filters.roman_exceptions_file was not found: {path}")
+    if not path.is_file():
+        raise RomanExceptionsError(f"filters.roman_exceptions_file must be a file: {path}")
+
+    items: set[str] = set()
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except Exception as exc:
+        raise RomanExceptionsError(
+            f"Failed to read Roman numeral exceptions file: {path}"
+        ) from exc
+
+    for line in lines:
+        item = line.strip().lower()
+        if not item or item.startswith("#"):
+            continue
+        items.add(item)
+    return frozenset(items)
+
+
+def resolve_roman_exceptions(
+    *,
+    roman_exceptions: Optional[Collection[str]] = None,
+    roman_exceptions_file: Optional[Path] = None,
+) -> frozenset[str]:
+    items = {
+        str(item).strip().lower()
+        for item in (roman_exceptions or ())
+        if str(item).strip()
+    }
+    if roman_exceptions_file is not None:
+        items.update(load_roman_exceptions(Path(roman_exceptions_file)))
+    return frozenset(items)
+
+
+def effective_roman_exceptions(
+    *,
+    use_lemma: bool,
+    configured_exceptions: Collection[str],
+) -> frozenset[str]:
+    items = frozenset(str(item).strip().lower() for item in configured_exceptions if str(item).strip())
+    if use_lemma:
+        return items
+    return items | _SURFACE_ROMAN_EXCEPTIONS
+
+
+def should_drop_roman_numeral(
+    key: str,
+    *,
+    drop_roman_numerals: bool,
+    effective_exceptions: Collection[str],
+) -> bool:
+    return (
+        drop_roman_numerals
+        and _ROMAN_RE.fullmatch(key) is not None
+        and key not in effective_exceptions
+    )
 
 def build_stanza_pipeline(
     lang: str = "la",
@@ -110,11 +176,20 @@ def count_nouns_doc(
     drop_roman_numerals: bool = False,
     drop_roman: Optional[bool] = None,
     roman_exceptions_file: Optional[Path] = None,
+    roman_exceptions: Optional[Collection[str]] = None,
 ) -> Counter:
     if drop_roman is not None:
         drop_roman_numerals = drop_roman
 
     counter = Counter()
+    configured_exceptions = resolve_roman_exceptions(
+        roman_exceptions=roman_exceptions,
+        roman_exceptions_file=roman_exceptions_file,
+    )
+    effective_exceptions = effective_roman_exceptions(
+        use_lemma=use_lemma,
+        configured_exceptions=configured_exceptions,
+    )
 
     for sent in getattr(doc, "sentences", []) or []:
         for w in _iter_sentence_words(sent):
@@ -132,11 +207,12 @@ def count_nouns_doc(
             if not key or len(key) < min_token_length:
                 continue
 
-            if drop_roman_numerals and _ROMAN_RE.fullmatch(key):
-                if not use_lemma and key in _SURFACE_ROMAN_EXCEPTIONS:
-                    pass
-                else:
-                    continue
+            if should_drop_roman_numeral(
+                key,
+                drop_roman_numerals=drop_roman_numerals,
+                effective_exceptions=effective_exceptions,
+            ):
+                continue
 
             if ref_tag_detector is not None:
                 tag = ref_tag_detector(key)
@@ -162,6 +238,7 @@ def count_nouns(
     drop_roman_numerals: bool = False,
     drop_roman: Optional[bool] = None,
     roman_exceptions_file: Optional[Path] = None,
+    roman_exceptions: Optional[Collection[str]] = None,
 ) -> Counter:
     if not text or not text.strip():
         return Counter()
@@ -176,6 +253,7 @@ def count_nouns(
         drop_roman_numerals=drop_roman_numerals,
         drop_roman=drop_roman,
         roman_exceptions_file=roman_exceptions_file,
+        roman_exceptions=roman_exceptions,
     )
 
 
@@ -293,6 +371,7 @@ def _count_nouns_streaming_trace(
     min_token_length: int = 0,
     drop_roman_numerals: bool = False,
     roman_exceptions_file: Optional[Path] = None,
+    roman_exceptions: Optional[Collection[str]] = None,
 ) -> Counter:
     """Streaming counting process with trace (TSV) output"""
     counts = Counter()
@@ -302,6 +381,14 @@ def _count_nouns_streaming_trace(
     
     if trace_only_keys is not None:
         trace_only_keys = {k.lower() for k in trace_only_keys}
+    configured_exceptions = resolve_roman_exceptions(
+        roman_exceptions=roman_exceptions,
+        roman_exceptions_file=roman_exceptions_file,
+    )
+    effective_exceptions = effective_roman_exceptions(
+        use_lemma=use_lemma,
+        configured_exceptions=configured_exceptions,
+    )
 
     with trace_tsv.open("w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f, delimiter="\t")
@@ -328,11 +415,12 @@ def _count_nouns_streaming_trace(
                         if not key or len(key) < min_token_length:
                             continue
   
-                        if drop_roman_numerals and _ROMAN_RE.fullmatch(key):
-                            if not use_lemma and key in _SURFACE_ROMAN_EXCEPTIONS:
-                                pass
-                            else:
-                                continue
+                        if should_drop_roman_numeral(
+                            key,
+                            drop_roman_numerals=drop_roman_numerals,
+                            effective_exceptions=effective_exceptions,
+                        ):
+                            continue
 
                         counts[key] += 1
                         
@@ -406,6 +494,7 @@ def _count_nouns_streaming_fast(
     min_token_length: int = 0,
     drop_roman_numerals: bool = False,
     roman_exceptions_file: Optional[Path] = None,
+    roman_exceptions: Optional[Collection[str]] = None,
 ) -> Counter:
     """
     Fast path: streaming without materializing chunk list (memory-friendly).
@@ -413,6 +502,10 @@ def _count_nouns_streaming_fast(
     total = Counter()
     if not text:
         return total
+    configured_exceptions = resolve_roman_exceptions(
+        roman_exceptions=roman_exceptions,
+        roman_exceptions_file=roman_exceptions_file,
+    )
 
     for k, chunk in enumerate(iter_char_chunks(text, chunk_chars=chunk_chars), 1):
         nouns = count_nouns(
@@ -424,7 +517,7 @@ def _count_nouns_streaming_fast(
             ref_tag_counter=ref_tag_counter,
             min_token_length=min_token_length,
             drop_roman_numerals=drop_roman_numerals,
-            roman_exceptions_file=roman_exceptions_file,
+            roman_exceptions=configured_exceptions,
         )
         total.update(nouns)
 
@@ -450,6 +543,7 @@ def count_nouns_streaming(
     min_token_length: int = 0,
     drop_roman_numerals: bool = False,
     roman_exceptions_file: Optional[Path] = None,
+    roman_exceptions: Optional[Collection[str]] = None,
 ) -> Counter:
     """
     Public API:
@@ -459,6 +553,10 @@ def count_nouns_streaming(
     ref_tag_detector: key -> ref_tag label (non-empty) or "" (not a ref_tag).
     ref_tag_counter:  mutable Counter; ref_tag hits are accumulated here.
     """
+    configured_exceptions = resolve_roman_exceptions(
+        roman_exceptions=roman_exceptions,
+        roman_exceptions_file=roman_exceptions_file,
+    )
     if trace_tsv is None:
         return _count_nouns_streaming_fast(
             text,
@@ -471,7 +569,7 @@ def count_nouns_streaming(
             ref_tag_counter=ref_tag_counter,
             min_token_length=min_token_length,
             drop_roman_numerals=drop_roman_numerals,
-            roman_exceptions_file=roman_exceptions_file,
+            roman_exceptions=configured_exceptions,
         )
 
     return _count_nouns_streaming_trace(
@@ -489,7 +587,7 @@ def count_nouns_streaming(
         ref_tag_counter=ref_tag_counter,
         min_token_length=min_token_length,
         drop_roman_numerals=drop_roman_numerals,
-        roman_exceptions_file=roman_exceptions_file,
+        roman_exceptions=configured_exceptions,
     )
 
 

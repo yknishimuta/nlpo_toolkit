@@ -79,7 +79,7 @@ def test_dry_run_reports_config_paths_matches_and_warnings(tmp_path: Path, capsy
     assert "  - cleaned/b.txt" in out
     assert "  - cleaned/c.txt" in out
     assert "[WARN] duplicate YAML key: trace" in out
-    assert "[WARN] unknown config key: roman_exception_files" in out
+    assert "[WARN] filters.roman_exception_files is deprecated; use filters.roman_exceptions_file" in out
     assert "[OK] dictcheck wordlist found" in out
     assert "[OK] ref_tags patterns found" in out
     assert "[OK] output dir: output" in out
