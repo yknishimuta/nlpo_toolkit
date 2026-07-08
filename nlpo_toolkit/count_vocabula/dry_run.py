@@ -6,6 +6,7 @@ from typing import Any
 import yaml
 
 from .config import load_config
+from .comparison import parse_comparison_specs
 from .io_utils import expand_globs
 from .partition_validation import parse_partition_specs
 from .preprocess import expand_cleaned_dir_placeholders, resolve_cleaner_output_dir
@@ -15,6 +16,7 @@ from .runner import _cleaned_txt_files
 KNOWN_TOP_LEVEL_KEYS = {
     "analysis_unit",
     "archive",
+    "comparisons",
     "cpu_only",
     "csv_header",
     "dictcheck",
@@ -281,6 +283,23 @@ def dry_run_count_vocabula(
         else:
             lines.append(
                 f"[OK] partition {spec.name}: whole={spec.whole} parts={','.join(spec.parts)}"
+            )
+
+    comparison_specs = parse_comparison_specs(cfg)
+    if comparison_specs and group_by_file:
+        lines.append("[ERROR] comparisons cannot be used with grouping.mode=per_file")
+        exit_code = 1
+    for spec in comparison_specs:
+        empty_refs = [name for name in (spec.group_a, spec.group_b) if not group_files.get(name)]
+        if empty_refs:
+            for group_name in empty_refs:
+                lines.append(f"[ERROR] comparison {spec.name} references empty group: {group_name}")
+            exit_code = 1
+        else:
+            lines.append(
+                f"[OK] comparison {spec.name}: group_a={spec.group_a} "
+                f"group_b={spec.group_b} scale={spec.scale} "
+                f"min_total_count={spec.min_total_count}"
             )
 
     for key in duplicate_keys:

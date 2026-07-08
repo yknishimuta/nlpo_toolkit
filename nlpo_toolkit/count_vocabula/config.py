@@ -28,6 +28,7 @@ class Config(TypedDict, total=False):
     analysis_unit: str
     grouping: Dict[str, Any]
     validations: Dict[str, Any]
+    comparisons: list[Dict[str, Any]]
 
 
 def normalize_groups(cfg: dict) -> dict:
@@ -115,6 +116,12 @@ def _validate_partition_validations(cfg: dict) -> None:
     if isinstance(grouping, dict) and grouping.get("mode", "groups") == "per_file":
         raise ValueError("validations.partitions cannot be used with grouping.mode: per_file")
 
+
+def _validate_comparisons(cfg: dict) -> None:
+    from .comparison import parse_comparison_specs
+
+    parse_comparison_specs(cfg)
+
 def load_config(path: Path) -> Config:
     if not path.exists():
         raise FileNotFoundError(f"Config not found: {path}")
@@ -140,5 +147,6 @@ def load_config(path: Path) -> Config:
     _validate_analysis_unit(config_data)
     _validate_grouping(config_data)
     _validate_partition_validations(config_data)
+    _validate_comparisons(config_data)
 
     return config_data  # type: ignore[return-value]

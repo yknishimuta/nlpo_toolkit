@@ -267,6 +267,70 @@ or clause boundaries.
 Partition validation cannot be combined with `grouping.mode: per_file` or
 `--group-by-file`, because configured group names no longer match output labels.
 
+### Group Comparison / Keyness Analysis
+
+Use top-level `comparisons` to compare the vocabulary distribution of any two
+configured groups. This is separate from partition validation: the two groups do
+not need to be whole/part relations, and the comparison uses the same final
+frequency `Counter` that is written to `noun_frequency_<group>.csv`.
+
+```yaml
+groups:
+  corpus_a:
+    files:
+      - input/corpus_a.txt
+
+  corpus_b:
+    files:
+      - input/corpus_b.txt
+
+comparisons:
+  - name: corpus_a_vs_corpus_b
+    group_a: corpus_a
+    group_b: corpus_b
+    scale: 10000
+    zero_correction: 0.5
+    min_total_count: 2
+```
+
+Each comparison writes `output/group_comparison_<name>.csv`, and the overview is
+written to `output/group_comparisons.json`, `summary.txt`, and `run_meta.json`.
+The feature works with both `analysis_unit: lemma` and `analysis_unit: surface`.
+CSV rows use generic columns such as `item`, `group_a_count`, and
+`group_b_count`; actual group names are stored in the `group_a` and `group_b`
+columns.
+
+Rates are normalized frequencies:
+
+```text
+group_a_rate = group_a_count / sum(group_a_counter.values()) * scale
+group_b_rate = group_b_count / sum(group_b_counter.values()) * scale
+```
+
+The denominator is the token total in the final Counter, after analysis-unit
+selection, filters, reference tag handling, normalization, exclusions, and
+dictionary normalization. It is not the raw whitespace token count or the raw
+NLP token count.
+
+`log_ratio` is a base-2 effect size. Positive values indicate that the item is
+relatively more frequent in `group_a`; negative values indicate `group_b`.
+Reversing `group_a` and `group_b` reverses `log_ratio` and `direction`.
+Zero-frequency correction is used only for `log_ratio`, not for rates or log
+likelihood.
+
+`log_likelihood` is the G-squared statistic for the 2x2 table of target item vs.
+other items. It measures the statistical strength of a frequency difference and
+does not carry direction; use the `direction` column for direction. Reversing the
+groups leaves `log_likelihood` unchanged. High-frequency items can have large
+log likelihood even when the ratio difference is small, while rare items can
+have large log ratio but small log likelihood.
+
+Initial support does not implement p-values, q-values, or multiple-comparison
+correction.
+
+Group comparison cannot be combined with `grouping.mode: per_file` or
+`--group-by-file`.
+
 ## Concordance CLI
 
 Use `nlpo concordance` to build KWIC/concordance output from a trace TSV

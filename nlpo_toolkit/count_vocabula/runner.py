@@ -10,6 +10,14 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .io_utils import expand_globs, read_concat
 from .normalizer import normalize_text
+from .comparison import (
+    comparison_csv_name,
+    comparison_result_meta,
+    parse_comparison_specs,
+    run_comparisons,
+    write_comparison_csv,
+    write_group_comparisons_json,
+)
 from .outputs import (
     build_run_meta,
     collect_runtime_environment,
@@ -268,8 +276,11 @@ def run(
     auto_mode = bool(auto_single_cleaned) or grouping_mode == "auto_single_cleaned"
     per_file = (bool(group_by_file) or grouping_mode == "per_file") and not auto_mode
     partition_specs = parse_partition_specs(cfg)
+    comparison_specs = parse_comparison_specs(cfg)
     if partition_specs and per_file:
         raise ValueError("validations.partitions cannot be used with --group-by-file or grouping.mode: per_file")
+    if comparison_specs and per_file:
+        raise ValueError("comparisons cannot be used with grouping.mode=per_file")
 
     # preprocess (optional)
     cleaned_dir = run_preprocess_if_needed(cfg=cfg, project_root=project_root, clean_mod=clean_mod)
@@ -513,6 +524,25 @@ def run(
         write_partition_validation_json(partition_json_path, partition_summaries)
         generated_outputs.append(partition_json_path)
 
+    comparison_results = run_comparisons(
+        specs=comparison_specs,
+        counters=group_counters,
+        analysis_unit=unit,
+    )
+    comparison_meta: List[dict[str, Any]] = []
+
+    for result in comparison_results:
+        csv_name = comparison_csv_name(result.spec)
+        csv_path = out_dir / csv_name
+        write_comparison_csv(csv_path, result)
+        generated_outputs.append(csv_path)
+        comparison_meta.append(comparison_result_meta(result, csv_name=csv_name))
+
+    if comparison_results:
+        comparison_json_path = out_dir / "group_comparisons.json"
+        write_group_comparisons_json(comparison_json_path, comparison_results)
+        generated_outputs.append(comparison_json_path)
+
     # ---- summary.txt ----
     summary_lines: List[str] = []
     summary_lines.append("# Summary")
@@ -559,6 +589,21 @@ def run(
                     f"mismatched_items={result.mismatched_items}"
                 )
 
+    if comparison_results:
+        summary_lines.append("")
+        summary_lines.append("# Group comparisons")
+        summary_lines.append("")
+        for result in comparison_results:
+            spec = result.spec
+            summary_lines.append(
+                f"- name={spec.name} group_a={spec.group_a} group_b={spec.group_b} "
+                f"analysis_unit={result.analysis_unit} "
+                f"group_a_tokens={result.group_a_tokens} "
+                f"group_b_tokens={result.group_b_tokens} "
+                f"items={result.rows_after_filter} scale={spec.scale} "
+                f"zero_correction={spec.zero_correction}"
+            )
+
     summary_path = out_dir / "summary.txt"
     summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
     generated_outputs.append(summary_path)
@@ -585,6 +630,7 @@ def run(
     meta["normalization"] = norm
     meta["normalization_hash_sha256"] = hashlib.sha256(norm_canon.encode("utf-8")).hexdigest()
     meta["partition_validations"] = partition_meta
+    meta["group_comparisons"] = comparison_meta
     meta["generated_outputs"] = [str(p.resolve()) for p in generated_outputs]
 
     write_run_meta(meta, out_dir)
