@@ -6,7 +6,8 @@ class NLPToken:
     text: str
     lemma: Optional[str]
     upos: str
-    start_char: Optional[int] = 0
+    start_char: Optional[int] = None
+    end_char: Optional[int] = None
 
 @dataclass
 class NLPSentence:

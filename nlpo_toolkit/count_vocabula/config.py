@@ -379,11 +379,15 @@ def _parse_nlp_config(raw: Mapping[str, object]) -> NLPConfig:
     else:
         package = package_raw
 
+    model_name = _optional_str(nlp.get("model_name"), context="nlp.model_name")
+    if backend == "transformers" and not model_name:
+        raise ValueError("nlp.model_name is required when nlp.backend=transformers")
+
     return NLPConfig(
         backend=backend,
         language=_str_value(language_raw, context="language"),
         stanza_package=package,
-        model_name=_optional_str(nlp.get("model_name"), context="nlp.model_name"),
+        model_name=model_name,
         cpu_only=_bool_value(cpu_only_raw, context="cpu_only", default=True),
     )
 

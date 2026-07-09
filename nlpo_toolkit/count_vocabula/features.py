@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, TextIO
 
+from nlpo_toolkit.backends import BuiltNLPBackend, create_nlp_backend
 from .config import AppConfig, ensure_app_config, load_config
 from .corpus import (
     prepare_corpora,
@@ -302,11 +303,14 @@ def run_features(
     group_by_file: bool = False,
     auto_single_cleaned: bool = False,
     error_on_empty_group: bool = False,
-    build_pipeline_fn: Callable[[str, str, bool], tuple[Any, str]],
-    clean_mod: Any,
+    build_pipeline_fn: Callable[[str, str, bool], tuple[Any, str]] | None = None,
+    backend_factory: Callable[[Any], BuiltNLPBackend] | None = None,
+    clean_mod: Any = None,
     load_config_fn: Callable[[Path], AppConfig | Mapping[str, object]] = load_config,
 ) -> int:
     project_root = Path(project_root).resolve()
+    if clean_mod is None:
+        raise TypeError("clean_mod is required")
     config_path = Path(config_path)
     if not config_path.is_absolute():
         config_path = (project_root / config_path).resolve()
@@ -333,10 +337,16 @@ def run_features(
         drop_roman_numerals=config.filters.drop_roman_numerals,
     )
 
-    language = config.nlp.language
-    stanza_package = config.nlp.stanza_package
-    cpu_only = config.nlp.cpu_only
-    nlp, _package = build_pipeline_fn(language, stanza_package, cpu_only)
+    if backend_factory is not None:
+        nlp = backend_factory(config.nlp).backend
+    elif build_pipeline_fn is not None:
+        nlp, _package = build_pipeline_fn(
+            config.nlp.language,
+            config.nlp.stanza_package,
+            config.nlp.cpu_only,
+        )
+    else:
+        nlp = create_nlp_backend(config.nlp).backend
 
     groups_texts: list[tuple[str, list[Path], str]] = []
     for corpus in prepare_corpora(

@@ -3,22 +3,23 @@ from __future__ import annotations
 from collections import Counter
 from typing import List
 
+from nlpo_toolkit.backends import create_nlp_backend
+from .config import NLPConfig
+
 
 def build_pipeline(language: str, stanza_package: str, cpu_only: bool):
     """
-    Production pipeline builder (Stanza via nlpo_toolkit).
-    Returns (nlp, package).
+    Deprecated compatibility wrapper. Production code uses create_nlp_backend.
     """
-    from nlpo_toolkit.nlp import build_stanza_pipeline  # type: ignore
-
-    processors = "tokenize,pos,lemma"
-    nlp = build_stanza_pipeline(
-        lang=language,
-        processors=processors,
-        package=stanza_package,
-        use_gpu=(not cpu_only),
+    built = create_nlp_backend(
+        NLPConfig(
+            backend="stanza",
+            language=language,
+            stanza_package=stanza_package,
+            cpu_only=cpu_only,
+        )
     )
-    return nlp, stanza_package
+    return built.backend, built.info.package
 
 
 def build_sentence_splitter(language: str, stanza_package: str, cpu_only: bool):

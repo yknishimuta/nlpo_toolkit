@@ -19,6 +19,8 @@ from nlpo_toolkit.count_vocabula.features import (
     write_feature_matrix,
 )
 from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
+from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
+from nlpo_toolkit.count_vocabula.config import NLPConfig
 
 
 def _doc_for_text(text: str) -> NLPDocument:
@@ -44,6 +46,13 @@ class DummyNLP:
 
 def _build_pipeline(*_args, **_kwargs):
     return DummyNLP(), "dummy"
+
+
+def _backend_factory(config: NLPConfig) -> BuiltNLPBackend:
+    return BuiltNLPBackend(
+        backend=DummyNLP(),
+        info=NLPBackendInfo(name="fake", language=config.language),
+    )
 
 
 def _write_config(project_root: Path, *, group_files: str = "input/*.txt", extra: str = "") -> Path:
@@ -148,6 +157,26 @@ def test_run_features_one_group_writes_csv(tmp_path: Path) -> None:
     assert rc == 0
     rows = list(csv.DictReader(out.open(encoding="utf-8")))
     assert len(rows) == 1
+    assert rows[0]["group"] == "text"
+    assert rows[0]["word_token_count"] == "4"
+
+
+def test_run_features_accepts_backend_factory(tmp_path: Path) -> None:
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input" / "a.txt").write_text("Rosa amat et puella.", encoding="utf-8")
+    config_path = _write_config(tmp_path)
+    out = tmp_path / "output" / "features.csv"
+
+    rc = run_features(
+        project_root=tmp_path,
+        config_path=config_path,
+        out=out,
+        backend_factory=_backend_factory,
+        clean_mod=object(),
+    )
+
+    assert rc == 0
+    rows = list(csv.DictReader(out.open(encoding="utf-8")))
     assert rows[0]["group"] == "text"
     assert rows[0]["word_token_count"] == "4"
 

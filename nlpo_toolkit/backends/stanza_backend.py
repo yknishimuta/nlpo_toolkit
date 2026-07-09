@@ -1,6 +1,8 @@
-from typing import Optional
-import stanza
 from ..models import NLPDocument, NLPSentence, NLPToken
+
+
+class StanzaBackendUnavailableError(RuntimeError):
+    pass
 
 class StanzaBackend:
     def __init__(
@@ -10,6 +12,13 @@ class StanzaBackend:
         use_gpu: bool = False,
         processors: str = "tokenize,mwt,pos,lemma"
     ):
+        try:
+            import stanza
+        except ImportError as exc:
+            raise StanzaBackendUnavailableError(
+                "The stanza backend requires the optional 'stanza' dependency"
+            ) from exc
+
         self.pipeline = stanza.Pipeline(
             lang=lang,
             processors=processors,
@@ -33,17 +42,18 @@ class StanzaBackend:
         for stanza_sent in sentences:
             sent_model = NLPSentence(text=getattr(stanza_sent, "text", None))
 
-            words = getattr(stanza_sent, "words", [])
+            words = list(getattr(stanza_sent, "words", []) or [])
             if not words and hasattr(stanza_sent, "tokens"):
                 for token in stanza_sent.tokens:
                     words.extend(getattr(token, "words", []))
 
             for word in words:
                 sent_model.tokens.append(NLPToken(
-                    text=word.text,
-                    lemma=getattr(word, "lemma", word.text.lower()),
-                    upos=getattr(word, "upos", "X"),
-                    start_char=getattr(word, "start_char", 0)
+                    text=getattr(word, "text", ""),
+                    lemma=getattr(word, "lemma", None),
+                    upos=getattr(word, "upos", None),
+                    start_char=getattr(word, "start_char", None),
+                    end_char=getattr(word, "end_char", None),
                 ))
 
             doc.sentences.append(sent_model)

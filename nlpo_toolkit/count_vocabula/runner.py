@@ -8,6 +8,12 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Callable, List, Mapping, Optional, Tuple
 
+from nlpo_toolkit.backends import (
+    BuiltNLPBackend,
+    NLPBackendInfo,
+    create_nlp_backend,
+    render_backend_info,
+)
 from .config import AppConfig, TraceConfig, ensure_app_config
 from .corpus import (
     prepare_corpora,
@@ -149,10 +155,11 @@ def run(
     group_by_file: Optional[bool] = None,
     load_config_fn: Callable[[Path], AppConfig | Mapping[str, object]],
     clean_mod: Any,
-    build_pipeline_fn: Callable[[str, str, bool], Tuple[Any, str]],
-    build_sentence_splitter_fn: Optional[Callable[..., Any]],
-    count_group_fn: Callable[..., Counter],
-    render_stanza_package_table_fn: Callable[..., List[str]],
+    build_pipeline_fn: Callable[[str, str, bool], Tuple[Any, str]] | None = None,
+    backend_factory: Callable[[Any], BuiltNLPBackend] | None = None,
+    build_sentence_splitter_fn: Optional[Callable[..., Any]] = None,
+    count_group_fn: Callable[..., Counter] | None = None,
+    render_stanza_package_table_fn: Callable[..., List[str]] | None = None,
     error_on_empty_group: bool = False,
     auto_single_cleaned: bool = False,
 ) -> int:
@@ -160,7 +167,7 @@ def run(
     Core runner. Dependencies are injectable so tests can monkeypatch:
       - load_config_fn
       - clean_mod.main
-      - build_pipeline_fn
+      - backend_factory
       - build_sentence_splitter_fn
       - count_group_fn
       - render_stanza_package_table_fn
@@ -180,6 +187,10 @@ def run(
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
     config = ensure_app_config(load_config_fn(config_path))
+    if count_group_fn is None:
+        raise TypeError("count_group_fn is required")
+    if render_stanza_package_table_fn is None:
+        render_stanza_package_table_fn = lambda *_args, **_kwargs: []
     grouping_mode = config.grouping.mode
     auto_mode = bool(auto_single_cleaned) or grouping_mode == "auto_single_cleaned"
     per_file = (bool(group_by_file) or grouping_mode == "per_file") and not auto_mode
@@ -208,7 +219,24 @@ def run(
     unit, use_lemma, csv_header = _resolve_analysis_unit(config)
 
     # build NLP
-    nlp, package = build_pipeline_fn(language, stanza_package, cpu_only)
+    if backend_factory is not None:
+        built_backend = backend_factory(config.nlp)
+        nlp = built_backend.backend
+        backend_info = built_backend.info
+        package = backend_info.package
+    elif build_pipeline_fn is not None:
+        nlp, package = build_pipeline_fn(language, stanza_package, cpu_only)
+        backend_info = NLPBackendInfo(
+            name="stanza",
+            language=language,
+            package=package,
+            use_gpu=not cpu_only,
+        )
+    else:
+        built_backend = create_nlp_backend(config.nlp)
+        nlp = built_backend.backend
+        backend_info = built_backend.info
+        package = backend_info.package
 
     # sentence splitter is optional
     splitter_nlp = None
@@ -435,6 +463,7 @@ def run(
     summary_lines.append("")
     summary_lines.append(f"language: {language}")
     summary_lines.append(f"stanza_package: {stanza_package}")
+    summary_lines.append(f"nlp_backend: {backend_info.name}")
     summary_lines.append(f"analysis_unit: {unit}")
 
     # normalization policy (human-readable, stable)
@@ -442,7 +471,10 @@ def run(
     summary_lines.append(f"normalization: {_format_normalization_kv(norm)}")
 
     summary_lines.append("")
-    summary_lines.extend(render_stanza_package_table_fn(nlp, stanza_package))
+    if backend_info.name == "stanza":
+        summary_lines.extend(render_stanza_package_table_fn(nlp, stanza_package))
+    else:
+        summary_lines.extend(render_backend_info(backend_info))
     summary_lines.append("")
 
     if ref_enabled:
@@ -503,6 +535,7 @@ def run(
     )
 
     meta["analysis_unit"] = unit
+    meta["nlp"] = backend_info.to_dict()
     if auto_mode:
         meta["grouping"] = {
             "mode": "auto_single_cleaned",

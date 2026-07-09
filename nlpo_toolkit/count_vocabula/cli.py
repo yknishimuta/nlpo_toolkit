@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from typing import Sequence
 
 from nlpo_toolkit.compare import CompareError, run_compare
+from nlpo_toolkit.backends import create_nlp_backend
 
 from .archive import RunArchiveError, create_run_archive
 from .cache import CacheClearError, clear_cache
@@ -22,6 +23,9 @@ from .nlp_hooks import (
     render_stanza_package_table,
 )
 from .runner import run
+
+_DEFAULT_BUILD_PIPELINE = build_pipeline
+_DEFAULT_BUILD_SENTENCE_SPLITTER = build_sentence_splitter
 
 try:
     from nlpo_toolkit.latin.cleaners import run_clean_corpus as clean_mod
@@ -44,14 +48,21 @@ def run_count_vocabula(
     command_line: list[str] | None = None,
 ) -> int:
     try:
+        legacy_build_pipeline = build_pipeline if build_pipeline is not _DEFAULT_BUILD_PIPELINE else None
+        legacy_sentence_splitter = (
+            build_sentence_splitter
+            if build_sentence_splitter is not _DEFAULT_BUILD_SENTENCE_SPLITTER
+            else None
+        )
         rc = run(
             project_root=project_root,
             config_path=config_path,
             group_by_file=group_by_file,
             load_config_fn=load_config,
             clean_mod=clean_mod,
-            build_pipeline_fn=build_pipeline,
-            build_sentence_splitter_fn=build_sentence_splitter,
+            build_pipeline_fn=legacy_build_pipeline,
+            backend_factory=None if legacy_build_pipeline is not None else create_nlp_backend,
+            build_sentence_splitter_fn=legacy_sentence_splitter,
             count_group_fn=count_group,
             render_stanza_package_table_fn=render_stanza_package_table,
             error_on_empty_group=error_on_empty_group,
@@ -531,6 +542,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif not config_path.is_absolute():
             config_path = (project_root / config_path).resolve()
         try:
+            legacy_build_pipeline = build_pipeline if build_pipeline is not _DEFAULT_BUILD_PIPELINE else None
             return run_features(
                 project_root=project_root,
                 config_path=config_path,
@@ -543,7 +555,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 group_by_file=bool(args.group_by_file),
                 auto_single_cleaned=bool(args.auto_single_cleaned),
                 error_on_empty_group=bool(args.error_on_empty_group),
-                build_pipeline_fn=build_pipeline,
+                build_pipeline_fn=legacy_build_pipeline,
+                backend_factory=None if legacy_build_pipeline is not None else create_nlp_backend,
                 clean_mod=clean_mod,
                 load_config_fn=load_config,
             )
