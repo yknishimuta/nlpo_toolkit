@@ -208,12 +208,22 @@ def _make_cache_key(content_hash: str, config_hash: str) -> str:
     return _sha256_text(f"{content_hash}|{config_hash}|v{CACHE_VERSION}")
 
 
+def make_cache_key(content_hash: str, config_hash: str) -> str:
+    """Build the legacy lemma-cache key for compatibility tests and tooling."""
+    return _make_cache_key(content_hash, config_hash)
+
+
 def _cache_file_path(cache_dir: Path, cache_key: str) -> Path:
     return cache_dir / "objects" / cache_key[:2] / f"{cache_key}.json"
 
 
 def _lock_file_path(cache_dir: Path, cache_key: str) -> Path:
     return cache_dir / "locks" / cache_key[:2] / f"{cache_key}.lock"
+
+
+def cache_lock_file_path(cache_dir: Path, cache_key: str) -> Path:
+    """Return the legacy lemma-cache lock path for a cache key."""
+    return _lock_file_path(cache_dir, cache_key)
 
 
 # ---------------------------------------------------------------------------
@@ -243,6 +253,11 @@ def _acquire_lock(lock_path: Path, *, timeout_sec: float = 300.0, poll_sec: floa
             time.sleep(poll_sec)
 
 
+def acquire_cache_lock(lock_path: Path, *, timeout_sec: float = 300.0, poll_sec: float = 0.1) -> None:
+    """Acquire a cache lock file with the legacy lockfile semantics."""
+    _acquire_lock(lock_path, timeout_sec=timeout_sec, poll_sec=poll_sec)
+
+
 def _release_lock(lock_path: Path) -> None:
     try:
         lock_path.unlink()
@@ -250,6 +265,11 @@ def _release_lock(lock_path: Path) -> None:
         pass
     except OSError:
         pass
+
+
+def release_cache_lock(lock_path: Path) -> None:
+    """Release a cache lock file."""
+    _release_lock(lock_path)
 
 
 # ---------------------------------------------------------------------------

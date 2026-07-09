@@ -28,7 +28,7 @@ def test_trace_writes_offset_columns_and_values(tmp_path):
 
     out = tmp_path / "trace.tsv"
 
-    cnt = nlp_mod._count_nouns_streaming_trace(
+    cnt = nlp_mod.count_nouns_streaming(
         text=sent_text,
         nlp=dummy_nlp,
         use_lemma=True,
@@ -39,8 +39,6 @@ def test_trace_writes_offset_columns_and_values(tmp_path):
         trace_max_rows=0,
         trace_only_keys=None,
         trace_write_truncation_marker=True,
-        ref_tag_detector=None,
-        ref_tag_counter=None,
     )
 
     # Verify that only NOUNs are counted
@@ -100,7 +98,7 @@ def test_trace_text_offset_increments_across_chunks(tmp_path, monkeypatch):
     monkeypatch.setattr(nlp_mod, "iter_char_chunks", lambda _t, chunk_chars=200_000: iter([chunk1, chunk2]))
 
     out = tmp_path / "trace.tsv"
-    cnt = nlp_mod._count_nouns_streaming_trace(
+    cnt = nlp_mod.count_nouns_streaming(
         text=full_text,
         nlp=dummy_nlp,
         use_lemma=True,
@@ -111,8 +109,6 @@ def test_trace_text_offset_increments_across_chunks(tmp_path, monkeypatch):
         trace_max_rows=0,
         trace_only_keys=None,
         trace_write_truncation_marker=True,
-        ref_tag_detector=None,
-        ref_tag_counter=None,
     )
 
     assert cnt == Counter({"x": 1, "y": 1})
@@ -148,7 +144,7 @@ def test_trace_writes_empty_offsets_when_start_char_is_none(tmp_path):
         return doc
 
     out = tmp_path / "trace.tsv"
-    cnt = nlp_mod._count_nouns_streaming_trace(
+    cnt = nlp_mod.count_nouns_streaming(
         text=sent_text,
         nlp=dummy_nlp,
         use_lemma=True,
@@ -159,8 +155,6 @@ def test_trace_writes_empty_offsets_when_start_char_is_none(tmp_path):
         trace_max_rows=0,
         trace_only_keys=None,
         trace_write_truncation_marker=True,
-        ref_tag_detector=None,
-        ref_tag_counter=None,
     )
 
     assert cnt == Counter({"puella": 1, "rosa": 1})
@@ -192,7 +186,7 @@ def test_trace_truncation_marker_writes_empty_offsets_when_start_char_is_none(tm
         return doc
 
     out = tmp_path / "trace.tsv"
-    cnt = nlp_mod._count_nouns_streaming_trace(
+    cnt = nlp_mod.count_nouns_streaming(
         text=sent_text,
         nlp=dummy_nlp,
         use_lemma=True,
@@ -203,8 +197,6 @@ def test_trace_truncation_marker_writes_empty_offsets_when_start_char_is_none(tm
         trace_max_rows=1,
         trace_only_keys=None,
         trace_write_truncation_marker=True,
-        ref_tag_detector=None,
-        ref_tag_counter=None,
     )
 
     assert cnt == Counter({"puella": 1, "rosa": 1})

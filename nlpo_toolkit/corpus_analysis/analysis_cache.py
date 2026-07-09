@@ -12,8 +12,8 @@ from typing import Any, Callable, Iterable, Iterator, Mapping
 from .lemma_cache import (
     CacheLockTimeout,
     PruneReport,
-    _acquire_lock,
-    _release_lock,
+    acquire_cache_lock,
+    release_cache_lock,
 )
 from .token_artifact import NLPAnalysisRecord
 
@@ -377,7 +377,7 @@ def get_or_compute_analysis_records(
             pass
 
     lock_path = cache_lock_path(cache_dir, cache_key)
-    _acquire_lock(lock_path, timeout_sec=lock_timeout_sec)
+    acquire_cache_lock(lock_path, timeout_sec=lock_timeout_sec)
     if payload_path.exists() and metadata_path.exists():
         try:
             validate_cache_object(payload_path, metadata_path)
@@ -386,7 +386,7 @@ def get_or_compute_analysis_records(
                 try:
                     yield from read_analysis_records(payload_path, metadata_path)
                 finally:
-                    _release_lock(lock_path)
+                    release_cache_lock(lock_path)
 
             return _locked_hit_iterator(), "hit", payload_path, metadata_path
         except AnalysisCacheError:
@@ -406,7 +406,7 @@ def get_or_compute_analysis_records(
                     writer.write(record)
                     yield record
         finally:
-            _release_lock(lock_path)
+            release_cache_lock(lock_path)
 
     return _miss_iterator(), "miss", payload_path, metadata_path
 

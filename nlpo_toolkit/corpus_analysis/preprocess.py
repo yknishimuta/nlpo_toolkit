@@ -44,9 +44,9 @@ def run_preprocess_if_needed(
     If cfg.preprocess.kind == 'cleaner', run clean_mod.main([...]) and return cleaned_dir.
     Otherwise return None.
     """
-    from .corpus import run_preprocess_if_needed as _run_preprocess_if_needed
+    from . import corpus
 
-    return _run_preprocess_if_needed(
+    return corpus.run_preprocess_if_needed(
         config=ensure_app_config(cfg),
         project_root=project_root,
         clean_mod=clean_mod,

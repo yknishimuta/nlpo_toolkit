@@ -15,7 +15,10 @@ from nlpo_toolkit.backends import (
     create_nlp_backend,
 )
 from nlpo_toolkit.backends.factory import render_backend_info
-from nlpo_toolkit.backends.stanza_backend import StanzaBackend
+from nlpo_toolkit.backends.stanza_backend import (
+    StanzaBackend,
+    convert_stanza_document_to_common_model,
+)
 from nlpo_toolkit.backends.transformers_backend import (
     NLPBackendUnavailableError,
     TransformersBackend,
@@ -154,7 +157,6 @@ def test_config_rejects_transformers_without_model_name(tmp_path: Path) -> None:
 
 
 def test_stanza_backend_conversion_preserves_common_model_fields() -> None:
-    backend = StanzaBackend.__new__(StanzaBackend)
     word_a = SimpleNamespace(
         text="Rosa",
         lemma="rosa",
@@ -176,7 +178,7 @@ def test_stanza_backend_conversion_preserves_common_model_fields() -> None:
         ]
     )
 
-    doc = backend._convert_to_common_model(stanza_doc, "Rosa amat")
+    doc = convert_stanza_document_to_common_model(stanza_doc, "Rosa amat")
 
     assert isinstance(doc, NLPDocument)
     assert len(doc.sentences) == 2
@@ -193,14 +195,13 @@ def test_stanza_backend_conversion_preserves_common_model_fields() -> None:
 
 
 def test_stanza_backend_conversion_flattens_mwt_without_duplication() -> None:
-    backend = StanzaBackend.__new__(StanzaBackend)
     word = SimpleNamespace(text="multi", lemma="multi", upos="NOUN")
     token = SimpleNamespace(words=[word])
     stanza_doc = SimpleNamespace(
         sentences=[SimpleNamespace(text="multi", words=[], tokens=[token])]
     )
 
-    doc = backend._convert_to_common_model(stanza_doc, "multi")
+    doc = convert_stanza_document_to_common_model(stanza_doc, "multi")
 
     assert [tok.text for tok in doc.sentences[0].tokens] == ["multi"]
 

@@ -335,16 +335,9 @@ def test_lock_timeout(tmp_path: Path) -> None:
         extra={"stanza_version": "1", "nlpo_toolkit_version": "1"},
     )
 
-    # Compute key to know lock path: we just call once to get key material,
-    # but we cannot access internal key directly. Instead:
-    # create a "miss" run that will lock; we will pre-create a stale lock by
-    # using lc._lock_file_path if present; if not present, skip this test.
-    if not hasattr(lc, "_lock_file_path") or not hasattr(lc, "_make_cache_key") or not hasattr(lc, "hash_file_content"):
-        pytest.skip("internal helpers not available; lock timeout test skipped")
-
     content_hash = lc.hash_file_content(src)
-    cache_key = lc._make_cache_key(content_hash, config_hash)  # type: ignore[attr-defined]
-    lock_path = lc._lock_file_path(cache_dir, cache_key)       # type: ignore[attr-defined]
+    cache_key = lc.make_cache_key(content_hash, config_hash)
+    lock_path = lc.cache_lock_file_path(cache_dir, cache_key)
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     _write_text(lock_path, "pid=99999\n")
 
