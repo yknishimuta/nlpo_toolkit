@@ -4,9 +4,9 @@ import hashlib
 import json
 import sys
 from collections import Counter
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Callable, List, Mapping, Optional, Tuple
+from typing import Any, Callable, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from nlpo_toolkit.backends import (
     BuiltNLPBackend,
@@ -16,6 +16,8 @@ from nlpo_toolkit.backends import (
 )
 from .config import AppConfig, TraceConfig, ensure_app_config
 from .corpus import (
+    CorpusWorkItem,
+    PreparedCorpus,
     prepare_corpora,
     resolve_corpus_work_items,
     resolve_project_path,
@@ -46,6 +48,84 @@ from .partition_validation import (
     write_partition_validation_json,
 )
 from nlpo_toolkit.nlp import load_roman_exceptions
+
+
+@dataclass(frozen=True)
+class RunnerDependencies:
+    load_config: Callable[[Path], AppConfig | Mapping[str, object]]
+    clean_module: Any
+    count_group: Callable[..., Counter]
+    render_stanza_package_table: Callable[..., List[str]]
+    build_pipeline: Callable[[str, str, bool], Tuple[Any, str]] | None = None
+    backend_factory: Callable[[Any], BuiltNLPBackend] | None = None
+    build_sentence_splitter: Callable[..., Any] | None = None
+
+
+@dataclass(frozen=True)
+class RunContext:
+    project_root: Path
+    config_path: Path
+    config: AppConfig
+    out_dir: Path
+    grouping_mode: str
+    per_file: bool
+    auto_mode: bool
+    auto_group_name: str
+    analysis_unit: str
+    use_lemma: bool
+    csv_header: tuple[str, str]
+    partition_specs: tuple[Any, ...]
+    comparison_specs: tuple[Any, ...]
+    work_items: tuple[CorpusWorkItem, ...]
+    group_files: Mapping[str, tuple[Path, ...]]
+    nlp: Any
+    backend_info: NLPBackendInfo
+    stanza_package: Any
+    splitter_nlp: Any | None
+    roman_exceptions: frozenset[str]
+    cleaned_dir: Path | None
+
+
+@dataclass(frozen=True)
+class GroupAnalysisResult:
+    label: str
+    files: tuple[Path, ...]
+    counter: Counter[str]
+    ref_tag_counts: Counter[str]
+    generated_outputs: tuple[Path, ...]
+
+
+@dataclass(frozen=True)
+class AnalysisResults:
+    groups: tuple[GroupAnalysisResult, ...]
+    counters_by_group: Mapping[str, Counter[str]]
+    files_by_group: Mapping[str, tuple[Path, ...]]
+    ref_tags_by_group: Mapping[str, Counter[str]]
+    trace_paths: Mapping[str, Path]
+    generated_outputs: tuple[Path, ...]
+
+
+@dataclass(frozen=True)
+class DictCheckOutput:
+    known: Counter[str]
+    unknown: Counter[str]
+    generated_outputs: tuple[Path, ...]
+
+
+@dataclass(frozen=True)
+class PartitionRunResult:
+    results: tuple[Any, ...]
+    summaries: tuple[Mapping[str, object], ...]
+    metadata: tuple[Mapping[str, object], ...]
+    generated_outputs: tuple[Path, ...]
+    exit_code: int
+
+
+@dataclass(frozen=True)
+class ComparisonRunResult:
+    results: tuple[Any, ...]
+    metadata: tuple[Mapping[str, object], ...]
+    generated_outputs: tuple[Path, ...]
 
 
 def _trace_base_path(
@@ -147,6 +227,633 @@ def _format_normalization_kv(norm: object) -> str:
 
     return " ".join(parts)
 
+
+def _resolve_run_paths(
+    *,
+    project_root: Path | None,
+    script_dir: Path | None,
+    config_path: Path,
+) -> tuple[Path, Path]:
+    if project_root is None:
+        if script_dir is None:
+            raise TypeError("project_root is required")
+        project_root = script_dir
+
+    resolved_root = Path(project_root).resolve()
+    resolved_config = Path(config_path)
+    if not resolved_config.is_absolute():
+        resolved_config = (resolved_root / resolved_config).resolve()
+    if not resolved_config.exists():
+        raise FileNotFoundError(f"Config file not found: {resolved_config}")
+    return resolved_root, resolved_config
+
+
+def _resolve_grouping_flags(
+    *,
+    config: AppConfig,
+    group_by_file: bool | None,
+    auto_single_cleaned: bool,
+) -> tuple[str, bool, bool]:
+    grouping_mode = config.grouping.mode
+    auto_mode = bool(auto_single_cleaned) or grouping_mode == "auto_single_cleaned"
+    per_file = (bool(group_by_file) or grouping_mode == "per_file") and not auto_mode
+    return grouping_mode, per_file, auto_mode
+
+
+def _resolve_out_dir(config: AppConfig, project_root: Path) -> Path:
+    out_dir = Path(config.out_dir)
+    if not out_dir.is_absolute():
+        out_dir = (project_root / out_dir).resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    return out_dir
+
+
+def _initialize_nlp(
+    *,
+    config: AppConfig,
+    dependencies: RunnerDependencies,
+) -> tuple[Any, NLPBackendInfo, Any]:
+    language = config.nlp.language
+    stanza_package = config.nlp.stanza_package
+    cpu_only = config.nlp.cpu_only
+
+    if dependencies.backend_factory is not None:
+        built_backend = dependencies.backend_factory(config.nlp)
+        return built_backend.backend, built_backend.info, built_backend.info.package
+
+    if dependencies.build_pipeline is not None:
+        nlp, package = dependencies.build_pipeline(language, stanza_package, cpu_only)
+        return (
+            nlp,
+            NLPBackendInfo(
+                name="stanza",
+                language=language,
+                package=package,
+                use_gpu=not cpu_only,
+            ),
+            package,
+        )
+
+    built_backend = create_nlp_backend(config.nlp)
+    return built_backend.backend, built_backend.info, built_backend.info.package
+
+
+def _initialize_sentence_splitter(
+    *,
+    config: AppConfig,
+    package: Any,
+    dependencies: RunnerDependencies,
+) -> Any | None:
+    if dependencies.build_sentence_splitter is None:
+        return None
+    try:
+        return dependencies.build_sentence_splitter(
+            config.nlp.language,
+            stanza_package=package,
+            cpu_only=config.nlp.cpu_only,
+        )
+    except Exception:
+        return None
+
+
+def _load_roman_exceptions(config: AppConfig, project_root: Path) -> frozenset[str]:
+    roman_exceptions_file = config.filters.roman_exceptions_file
+    if not roman_exceptions_file:
+        return frozenset()
+    path = resolve_project_path(project_root, roman_exceptions_file)
+    return load_roman_exceptions(path)
+
+
+def _validate_specs_against_grouping(
+    *,
+    partition_specs: Sequence[Any],
+    comparison_specs: Sequence[Any],
+    per_file: bool,
+) -> None:
+    if partition_specs and per_file:
+        raise ValueError("validations.partitions cannot be used with --group-by-file or grouping.mode: per_file")
+    if comparison_specs and per_file:
+        raise ValueError("comparisons cannot be used with grouping.mode=per_file")
+
+
+def _validate_partition_group_references(
+    *,
+    partition_specs: Sequence[Any],
+    group_files: Mapping[str, Sequence[Path]],
+) -> None:
+    for spec in partition_specs:
+        for name in (spec.whole, *spec.parts):
+            if not group_files.get(name):
+                raise ValueError(f"Partition {spec.name} references empty group: {name}")
+
+
+def _parse_and_validate_specs(
+    *,
+    config: AppConfig,
+    per_file: bool,
+) -> tuple[tuple[Any, ...], tuple[Any, ...]]:
+    partition_specs = tuple(parse_partition_specs(config))
+    comparison_specs = tuple(parse_comparison_specs(config))
+    _validate_specs_against_grouping(
+        partition_specs=partition_specs,
+        comparison_specs=comparison_specs,
+        per_file=per_file,
+    )
+    return partition_specs, comparison_specs
+
+
+def _resolve_and_validate_work_items(
+    *,
+    config: AppConfig,
+    project_root: Path,
+    cleaned_dir: Path | None,
+    group_by_file: bool | None,
+    auto_single_cleaned: bool,
+    error_on_empty_group: bool,
+    partition_specs: Sequence[Any],
+) -> tuple[tuple[CorpusWorkItem, ...], Mapping[str, tuple[Path, ...]]]:
+    resolved = resolve_corpus_work_items(
+        config=config,
+        project_root=project_root,
+        cleaned_dir=cleaned_dir,
+        group_by_file=bool(group_by_file),
+        auto_single_cleaned=auto_single_cleaned,
+        error_on_empty_group=error_on_empty_group,
+    )
+    _validate_partition_group_references(
+        partition_specs=partition_specs,
+        group_files=resolved.group_files,
+    )
+    return tuple(resolved.work_items), resolved.group_files
+
+
+def prepare_run_context(
+    *,
+    project_root: Path | None,
+    script_dir: Path | None,
+    config_path: Path,
+    group_by_file: bool | None,
+    auto_single_cleaned: bool,
+    error_on_empty_group: bool,
+    dependencies: RunnerDependencies,
+) -> RunContext:
+    resolved_root, resolved_config = _resolve_run_paths(
+        project_root=project_root,
+        script_dir=script_dir,
+        config_path=config_path,
+    )
+    config = ensure_app_config(dependencies.load_config(resolved_config))
+    if not config.groups:
+        raise ValueError("config.groups must be a non-empty mapping")
+
+    grouping_mode, per_file, auto_mode = _resolve_grouping_flags(
+        config=config,
+        group_by_file=group_by_file,
+        auto_single_cleaned=auto_single_cleaned,
+    )
+    partition_specs, comparison_specs = _parse_and_validate_specs(
+        config=config,
+        per_file=per_file,
+    )
+
+    cleaned_dir = run_preprocess_if_needed(
+        config=config,
+        project_root=resolved_root,
+        clean_mod=dependencies.clean_module,
+    )
+    out_dir = _resolve_out_dir(config, resolved_root)
+    analysis_unit, use_lemma, csv_header = _resolve_analysis_unit(config)
+    nlp, backend_info, package = _initialize_nlp(
+        config=config,
+        dependencies=dependencies,
+    )
+    splitter_nlp = _initialize_sentence_splitter(
+        config=config,
+        package=package,
+        dependencies=dependencies,
+    )
+    roman_exceptions = _load_roman_exceptions(config, resolved_root)
+    work_items, group_files = _resolve_and_validate_work_items(
+        config=config,
+        project_root=resolved_root,
+        cleaned_dir=cleaned_dir,
+        group_by_file=bool(group_by_file),
+        auto_single_cleaned=auto_single_cleaned,
+        error_on_empty_group=error_on_empty_group,
+        partition_specs=partition_specs,
+    )
+
+    return RunContext(
+        project_root=resolved_root,
+        config_path=resolved_config,
+        config=config,
+        out_dir=out_dir,
+        grouping_mode=grouping_mode,
+        per_file=per_file,
+        auto_mode=auto_mode,
+        auto_group_name=config.grouping.auto_group_name,
+        analysis_unit=analysis_unit,
+        use_lemma=use_lemma,
+        csv_header=csv_header,
+        partition_specs=partition_specs,
+        comparison_specs=comparison_specs,
+        work_items=work_items,
+        group_files=group_files,
+        nlp=nlp,
+        backend_info=backend_info,
+        stanza_package=config.nlp.stanza_package,
+        splitter_nlp=splitter_nlp,
+        roman_exceptions=roman_exceptions,
+        cleaned_dir=cleaned_dir,
+    )
+
+
+def apply_lemma_normalization(
+    counter: Counter[str],
+    normalization_map: Mapping[str, str],
+) -> Counter[str]:
+    normalized: Counter[str] = Counter()
+    for lemma, count in counter.items():
+        normalized[normalization_map.get(lemma, lemma)] += count
+    return normalized
+
+
+def split_known_unknown(
+    counter: Counter[str],
+    known: Iterable[str],
+) -> tuple[Counter[str], Counter[str]]:
+    known_set = set(known)
+    known_counter = Counter({w: n for (w, n) in counter.items() if w in known_set})
+    unknown_counter = Counter({w: n for (w, n) in counter.items() if w not in known_set})
+    return known_counter, unknown_counter
+
+
+def _load_lemma_normalization_map(context: RunContext) -> Mapping[str, str] | None:
+    norm_map_rel_path = context.config.dictcheck.lemma_normalize
+    if not norm_map_rel_path:
+        return None
+    norm_map_path = Path(str(norm_map_rel_path))
+    if not norm_map_path.is_absolute():
+        norm_map_path = (context.project_root / norm_map_path).resolve()
+    if not norm_map_path.exists():
+        return None
+    from .dictcheck import load_lemma_normalize_map
+
+    return load_lemma_normalize_map(norm_map_path)
+
+
+def _text_for_counting(context: RunContext, corpus: PreparedCorpus) -> str:
+    if context.splitter_nlp is None:
+        return corpus.prepared_text
+    doc = context.splitter_nlp(corpus.prepared_text)
+    joined = "\n".join([s.text for s in getattr(doc, "sentences", [])])
+    if not joined.strip():
+        return corpus.prepared_text
+    return joined
+
+
+def _trace_kwargs_for_label(context: RunContext, trace_paths: Mapping[str, Path], label: str) -> dict[str, Any]:
+    if not context.config.trace.enabled:
+        return {}
+    return {
+        "trace_tsv": trace_paths[label],
+        "trace_max_rows": int(context.config.trace.max_rows or 0),
+        "trace_only_keys": set(context.config.trace.only_keys),
+        "trace_write_truncation_marker": context.config.trace.write_truncation_marker,
+    }
+
+
+def write_dictcheck_outputs(
+    *,
+    context: RunContext,
+    label: str,
+    counter: Counter[str],
+) -> DictCheckOutput | None:
+    wordlist = context.config.dictcheck.wordlist
+    if context.config.dictcheck.enabled and not wordlist:
+        raise ValueError(
+            f"dictcheck.wordlist is required when dictcheck.enabled=true (analysis_unit={context.analysis_unit})"
+        )
+    if not context.config.dictcheck.enabled:
+        return None
+
+    wl_path = Path(str(wordlist))
+    if not wl_path.is_absolute():
+        wl_path = (context.project_root / wl_path).resolve()
+    known_words = (
+        x.strip()
+        for x in wl_path.read_text(encoding="utf-8").splitlines()
+        if x.strip()
+    )
+    known_counter, unknown_counter = split_known_unknown(counter, known_words)
+
+    known_path = context.out_dir / f"noun_frequency_{label}.known.csv"
+    write_frequency_csv(known_path, known_counter, header=context.csv_header)
+    unknown_path = context.out_dir / f"noun_frequency_{label}.unknown.csv"
+    write_frequency_csv(unknown_path, unknown_counter, header=context.csv_header)
+    return DictCheckOutput(
+        known=known_counter,
+        unknown=unknown_counter,
+        generated_outputs=(known_path, unknown_path),
+    )
+
+
+def analyze_one_corpus(
+    *,
+    context: RunContext,
+    dependencies: RunnerDependencies,
+    corpus: PreparedCorpus,
+    trace_paths: Mapping[str, Path],
+    lemma_normalization_map: Mapping[str, str] | None,
+) -> GroupAnalysisResult:
+    label = corpus.label
+    generated_outputs: list[Path] = []
+    if context.config.ref_tags.enabled:
+        ref_tags_path = context.out_dir / f"ref_tags_{label}.csv"
+        write_frequency_csv(ref_tags_path, corpus.ref_tag_counts, header=("tag", "count"))
+        generated_outputs.append(ref_tags_path)
+
+    text = _text_for_counting(context, corpus)
+    counter = dependencies.count_group(
+        text,
+        context.nlp,
+        use_lemma=context.use_lemma,
+        min_token_length=context.config.filters.min_token_length,
+        drop_roman_numerals=context.config.filters.drop_roman_numerals,
+        roman_exceptions=context.roman_exceptions,
+        label=label,
+        **_trace_kwargs_for_label(context, trace_paths, label),
+    )
+    if lemma_normalization_map is not None:
+        counter = apply_lemma_normalization(counter, lemma_normalization_map)
+
+    base_csv_path = context.out_dir / f"noun_frequency_{label}.csv"
+    write_frequency_csv(base_csv_path, counter, header=context.csv_header)
+    generated_outputs.append(base_csv_path)
+
+    dictcheck_output = write_dictcheck_outputs(
+        context=context,
+        label=label,
+        counter=counter,
+    )
+    if dictcheck_output is not None:
+        generated_outputs.extend(dictcheck_output.generated_outputs)
+
+    return GroupAnalysisResult(
+        label=label,
+        files=tuple(corpus.files),
+        counter=counter.copy(),
+        ref_tag_counts=corpus.ref_tag_counts,
+        generated_outputs=tuple(generated_outputs),
+    )
+
+
+def analyze_corpora(
+    context: RunContext,
+    dependencies: RunnerDependencies,
+) -> AnalysisResults:
+    prepared_corpora = prepare_corpora(
+        work_items=context.work_items,
+        config=context.config,
+        project_root=context.project_root,
+    )
+    trace_paths: dict[str, Path] = {}
+    if context.config.trace.enabled:
+        trace_paths = build_trace_paths(
+            base_path=_trace_base_path(context.config.trace, context.out_dir, context.project_root),
+            labels=[corpus.label for corpus in prepared_corpora],
+        )
+    lemma_normalization_map = _load_lemma_normalization_map(context)
+
+    groups: list[GroupAnalysisResult] = []
+    generated_outputs: list[Path] = []
+    for corpus in prepared_corpora:
+        result = analyze_one_corpus(
+            context=context,
+            dependencies=dependencies,
+            corpus=corpus,
+            trace_paths=trace_paths,
+            lemma_normalization_map=lemma_normalization_map,
+        )
+        groups.append(result)
+        generated_outputs.extend(result.generated_outputs)
+
+    return AnalysisResults(
+        groups=tuple(groups),
+        counters_by_group={result.label: result.counter.copy() for result in groups},
+        files_by_group={result.label: result.files for result in groups},
+        ref_tags_by_group={result.label: result.ref_tag_counts for result in groups},
+        trace_paths=trace_paths,
+        generated_outputs=tuple(generated_outputs),
+    )
+
+
+def execute_partition_validations(
+    *,
+    context: RunContext,
+    analysis: AnalysisResults,
+) -> PartitionRunResult:
+    partition_results = validate_partitions(context.partition_specs, analysis.counters_by_group)
+    summaries: list[Mapping[str, object]] = []
+    metadata: list[Mapping[str, object]] = []
+    generated_outputs: list[Path] = []
+    exit_code = 0
+
+    for spec, result in zip(context.partition_specs, partition_results):
+        csv_name = f"partition_validation_{sanitize_partition_name(spec.name)}.csv"
+        csv_path = context.out_dir / csv_name
+        write_partition_validation_csv(csv_path, result)
+        generated_outputs.append(csv_path)
+        summaries.append(partition_result_summary(spec, result, csv_name=csv_name))
+        metadata.append(partition_result_meta(spec, result))
+
+        if not result.exact_match:
+            level = "ERROR" if spec.on_mismatch == "error" else "WARN"
+            print(
+                f"[{level}] partition {spec.name} mismatch: "
+                f"token_delta={result.token_delta} mismatched_items={result.mismatched_items}",
+                file=sys.stderr,
+            )
+            if spec.on_mismatch == "error":
+                exit_code = 1
+
+    if context.partition_specs:
+        partition_json_path = context.out_dir / "partition_validation.json"
+        write_partition_validation_json(partition_json_path, summaries)
+        generated_outputs.append(partition_json_path)
+
+    return PartitionRunResult(
+        results=tuple(partition_results),
+        summaries=tuple(summaries),
+        metadata=tuple(metadata),
+        generated_outputs=tuple(generated_outputs),
+        exit_code=exit_code,
+    )
+
+
+def execute_group_comparisons(
+    *,
+    context: RunContext,
+    analysis: AnalysisResults,
+) -> ComparisonRunResult:
+    comparison_results = run_comparisons(
+        specs=context.comparison_specs,
+        counters=analysis.counters_by_group,
+        analysis_unit=context.analysis_unit,
+    )
+    generated_outputs: list[Path] = []
+    metadata: list[Mapping[str, object]] = []
+    for result in comparison_results:
+        csv_name = comparison_csv_name(result.spec)
+        csv_path = context.out_dir / csv_name
+        write_comparison_csv(csv_path, result)
+        generated_outputs.append(csv_path)
+        metadata.append(comparison_result_meta(result, csv_name=csv_name))
+
+    if comparison_results:
+        comparison_json_path = context.out_dir / "group_comparisons.json"
+        write_group_comparisons_json(comparison_json_path, comparison_results)
+        generated_outputs.append(comparison_json_path)
+
+    return ComparisonRunResult(
+        results=tuple(comparison_results),
+        metadata=tuple(metadata),
+        generated_outputs=tuple(generated_outputs),
+    )
+
+
+def build_summary_lines(
+    *,
+    context: RunContext,
+    analysis: AnalysisResults,
+    partitions: PartitionRunResult,
+    comparisons: ComparisonRunResult,
+    dependencies: RunnerDependencies,
+) -> list[str]:
+    lines: list[str] = [
+        "# Summary",
+        "",
+        f"language: {context.config.nlp.language}",
+        f"stanza_package: {context.config.nlp.stanza_package}",
+        f"nlp_backend: {context.backend_info.name}",
+        f"analysis_unit: {context.analysis_unit}",
+        f"normalization: {_format_normalization_kv(context.config.normalization)}",
+        "",
+    ]
+    if context.backend_info.name == "stanza":
+        lines.extend(
+            dependencies.render_stanza_package_table(
+                context.nlp,
+                context.config.nlp.stanza_package,
+            )
+        )
+    else:
+        lines.extend(render_backend_info(context.backend_info))
+    lines.append("")
+
+    if context.config.ref_tags.enabled:
+        for label, counts in analysis.ref_tags_by_group.items():
+            lines.append(
+                f"- group={label} ref_tag_types={len(counts)} ref_tag_tokens={sum(counts.values())}"
+            )
+
+    if partitions.results:
+        lines.extend(["", "# Partition validation", ""])
+        for spec, result in zip(context.partition_specs, partitions.results):
+            if result.exact_match:
+                lines.append(
+                    f"- name={result.name} status=OK whole={result.whole} "
+                    f"parts={','.join(result.parts)} "
+                    f"target_tokens={result.whole_target_tokens} "
+                    f"parts_target_tokens={result.parts_target_tokens} "
+                    f"mismatched_items={result.mismatched_items}"
+                )
+            else:
+                status = "ERROR" if spec.on_mismatch == "error" else "WARN"
+                lines.append(
+                    f"- name={result.name} status={status} whole={result.whole} "
+                    f"parts={','.join(result.parts)} "
+                    f"target_tokens={result.whole_target_tokens} "
+                    f"parts_target_tokens={result.parts_target_tokens} "
+                    f"token_delta={result.token_delta} "
+                    f"mismatched_items={result.mismatched_items}"
+                )
+
+    if comparisons.results:
+        lines.extend(["", "# Group comparisons", ""])
+        for result in comparisons.results:
+            spec = result.spec
+            lines.append(
+                f"- name={spec.name} group_a={spec.group_a} group_b={spec.group_b} "
+                f"analysis_unit={result.analysis_unit} "
+                f"group_a_tokens={result.group_a_tokens} "
+                f"group_b_tokens={result.group_b_tokens} "
+                f"items={result.rows_after_filter} scale={spec.scale} "
+                f"zero_correction={spec.zero_correction}"
+            )
+    return lines
+
+
+def write_summary(path: Path, lines: Sequence[str]) -> Path:
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def merge_generated_outputs(*groups: Iterable[Path]) -> tuple[Path, ...]:
+    seen: set[Path] = set()
+    merged: list[Path] = []
+    for group in groups:
+        for path in group:
+            resolved = Path(path)
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            merged.append(resolved)
+    return tuple(merged)
+
+
+def build_final_run_metadata(
+    *,
+    context: RunContext,
+    analysis: AnalysisResults,
+    partitions: PartitionRunResult,
+    comparisons: ComparisonRunResult,
+    generated_outputs: Sequence[Path],
+) -> dict[str, object]:
+    meta = build_run_meta(
+        groups_files={
+            label: [str(path) for path in files]
+            for label, files in analysis.files_by_group.items()
+        },
+        hash_inputs=False,
+    )
+    meta["analysis_unit"] = context.analysis_unit
+    meta["nlp"] = context.backend_info.to_dict()
+    if context.auto_mode:
+        meta["grouping"] = {
+            "mode": "auto_single_cleaned",
+            "auto_group_name": context.auto_group_name,
+        }
+    else:
+        meta["grouping"] = {"mode": "per_file" if context.per_file else "groups"}
+    meta["environment"] = collect_runtime_environment(context.project_root)
+
+    norm_dict = asdict(context.config.normalization)
+    norm_canon = json.dumps(norm_dict, ensure_ascii=False, sort_keys=True)
+    meta["normalization"] = norm_dict
+    meta["normalization_hash_sha256"] = hashlib.sha256(norm_canon.encode("utf-8")).hexdigest()
+    meta["partition_validations"] = list(partitions.metadata)
+    meta["group_comparisons"] = list(comparisons.metadata)
+    meta["trace"] = {
+        "enabled": context.config.trace.enabled,
+        "files": {
+            label: str(path.resolve())
+            for label, path in analysis.trace_paths.items()
+        },
+    }
+    meta["generated_outputs"] = [str(path.resolve()) for path in generated_outputs]
+    return meta
+
 def run(
     *,
     project_root: Path | None = None,
@@ -163,403 +870,65 @@ def run(
     error_on_empty_group: bool = False,
     auto_single_cleaned: bool = False,
 ) -> int:
-    """
-    Core runner. Dependencies are injectable so tests can monkeypatch:
-      - load_config_fn
-      - clean_mod.main
-      - backend_factory
-      - build_sentence_splitter_fn
-      - count_group_fn
-      - render_stanza_package_table_fn
-    """
-
-    if project_root is None:
-        if script_dir is None:
-            raise TypeError("project_root is required")
-        project_root = script_dir
-
-    project_root = Path(project_root).resolve()
-    config_path = Path(config_path)
-    if not config_path.is_absolute():
-        config_path = (project_root / config_path).resolve()
-
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config file not found: {config_path}")
-
-    config = ensure_app_config(load_config_fn(config_path))
+    """Core runner. Dependencies are injectable for CLI and tests."""
     if count_group_fn is None:
         raise TypeError("count_group_fn is required")
-    if render_stanza_package_table_fn is None:
-        render_stanza_package_table_fn = lambda *_args, **_kwargs: []
-    grouping_mode = config.grouping.mode
-    auto_mode = bool(auto_single_cleaned) or grouping_mode == "auto_single_cleaned"
-    per_file = (bool(group_by_file) or grouping_mode == "per_file") and not auto_mode
-    partition_specs = parse_partition_specs(config)
-    comparison_specs = parse_comparison_specs(config)
-    if partition_specs and per_file:
-        raise ValueError("validations.partitions cannot be used with --group-by-file or grouping.mode: per_file")
-    if comparison_specs and per_file:
-        raise ValueError("comparisons cannot be used with grouping.mode=per_file")
 
-    # preprocess (optional)
-    cleaned_dir = run_preprocess_if_needed(config=config, project_root=project_root, clean_mod=clean_mod)
+    dependencies = RunnerDependencies(
+        load_config=load_config_fn,
+        clean_module=clean_mod,
+        build_pipeline=build_pipeline_fn,
+        backend_factory=backend_factory,
+        build_sentence_splitter=build_sentence_splitter_fn,
+        count_group=count_group_fn,
+        render_stanza_package_table=render_stanza_package_table_fn
+        or (lambda *_args, **_kwargs: []),
+    )
 
-    # output directory
-    out_dir = Path(config.out_dir)
-    if not out_dir.is_absolute():
-        out_dir = (project_root / out_dir).resolve()
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    # language settings
-    language = config.nlp.language
-    stanza_package = config.nlp.stanza_package
-    cpu_only = config.nlp.cpu_only
-
-    # analysis unit (lemma / surface)
-    unit, use_lemma, csv_header = _resolve_analysis_unit(config)
-
-    # build NLP
-    if backend_factory is not None:
-        built_backend = backend_factory(config.nlp)
-        nlp = built_backend.backend
-        backend_info = built_backend.info
-        package = backend_info.package
-    elif build_pipeline_fn is not None:
-        nlp, package = build_pipeline_fn(language, stanza_package, cpu_only)
-        backend_info = NLPBackendInfo(
-            name="stanza",
-            language=language,
-            package=package,
-            use_gpu=not cpu_only,
-        )
-    else:
-        built_backend = create_nlp_backend(config.nlp)
-        nlp = built_backend.backend
-        backend_info = built_backend.info
-        package = backend_info.package
-
-    # sentence splitter is optional
-    splitter_nlp = None
-    if build_sentence_splitter_fn is not None:
-        try:
-            splitter_nlp = build_sentence_splitter_fn(
-                language,
-                stanza_package=package,
-                cpu_only=cpu_only,
-            )
-        except Exception:
-            splitter_nlp = None
-
-    # ref_tags setting is global (summary/meta needs it)
-    ref_enabled = config.ref_tags.enabled
-
-    min_token_length = config.filters.min_token_length
-    drop_roman_numerals = config.filters.drop_roman_numerals
-    roman_exceptions_file = config.filters.roman_exceptions_file
-    roman_exceptions = frozenset()
-    if roman_exceptions_file:
-        roman_exceptions_file = resolve_project_path(project_root, roman_exceptions_file)
-        roman_exceptions = load_roman_exceptions(roman_exceptions_file)
-
-    if not config.groups:
-        raise ValueError("config.groups must be a non-empty mapping")
-
-    group_ref_tags: dict[str, Counter] = {}
-    groups_files: dict[str, list[str]] = {}
-    auto_group_name = config.grouping.auto_group_name
-    resolved = resolve_corpus_work_items(
-        config=config,
+    context = prepare_run_context(
         project_root=project_root,
-        cleaned_dir=cleaned_dir,
-        group_by_file=bool(group_by_file),
+        script_dir=script_dir,
+        config_path=config_path,
+        group_by_file=group_by_file,
         auto_single_cleaned=auto_single_cleaned,
         error_on_empty_group=error_on_empty_group,
+        dependencies=dependencies,
     )
-    group_files = resolved.group_files
-    if partition_specs:
-        for spec in partition_specs:
-            for name in (spec.whole, *spec.parts):
-                if not group_files.get(name):
-                    raise ValueError(
-                        f"Partition {spec.name} references empty group: {name}"
-                    )
-
-    generated_outputs: List[Path] = []
-    group_counters: dict[str, Counter] = {}
-    prepared_corpora = prepare_corpora(
-        work_items=resolved.work_items,
-        config=config,
-        project_root=project_root,
+    analysis = analyze_corpora(context, dependencies)
+    partitions = execute_partition_validations(
+        context=context,
+        analysis=analysis,
     )
-    trace_paths: dict[str, Path] = {}
-    if config.trace.enabled:
-        trace_paths = build_trace_paths(
-            base_path=_trace_base_path(config.trace, out_dir, project_root),
-            labels=[corpus.label for corpus in prepared_corpora],
-        )
-
-    for corpus in prepared_corpora:
-        gname = corpus.label
-        groups_files[gname] = [str(p) for p in corpus.files]
-
-        if splitter_nlp is not None:
-            doc = splitter_nlp(corpus.prepared_text)
-            joined = "\n".join([s.text for s in getattr(doc, "sentences", [])])
-            if not joined.strip():
-                joined = corpus.prepared_text
-        else:
-            joined = corpus.prepared_text
-
-        if ref_enabled:
-            group_ref_tags[gname] = corpus.ref_tag_counts
-
-            # ref_tags csv (per group)
-            write_frequency_csv(
-                out_dir / f"ref_tags_{gname}.csv",
-                corpus.ref_tag_counts,
-                header=("tag", "count"),
-            )
-            generated_outputs.append(out_dir / f"ref_tags_{gname}.csv")
-        
-        # ---- trace (optional) ----
-        trace_kwargs: dict[str, Any] = {}
-
-        if config.trace.enabled:
-            trace_path = trace_paths[gname]
-
-            trace_kwargs = {
-                "trace_tsv": trace_path,
-                "trace_max_rows": int(config.trace.max_rows or 0),
-                "trace_only_keys": set(config.trace.only_keys),
-                "trace_write_truncation_marker": config.trace.write_truncation_marker,
-            }
-
-        c = count_group_fn(
-            joined,
-            nlp,
-            use_lemma=use_lemma,
-            min_token_length=min_token_length,
-            drop_roman_numerals=drop_roman_numerals,
-            roman_exceptions=roman_exceptions,
-            label=gname,
-            **trace_kwargs,
-        )
-        
-        norm_map_rel_path = config.dictcheck.lemma_normalize
-        
-        if norm_map_rel_path:
-            norm_map_path = Path(str(norm_map_rel_path))
-            if not norm_map_path.is_absolute():
-                norm_map_path = (project_root / norm_map_path).resolve()
-            
-            if norm_map_path.exists():
-                from .dictcheck import load_lemma_normalize_map
-                lemma_map = load_lemma_normalize_map(norm_map_path)
-                
-                new_c = Counter()
-                for lemma, count in c.items():
-                    target_lemma = lemma_map.get(lemma, lemma)
-                    new_c[target_lemma] += count
-                c = new_c
-
-        group_counters[gname] = c.copy()
-
-        # base csv
-        base = f"noun_frequency_{gname}"
-        base_csv_path = out_dir / f"{base}.csv"
-        write_frequency_csv(base_csv_path, c, header=csv_header)
-        generated_outputs.append(base_csv_path)
-
-        # dictcheck
-        wordlist = config.dictcheck.wordlist
-
-        if config.dictcheck.enabled and not wordlist:
-            raise ValueError(
-                f"dictcheck.wordlist is required when dictcheck.enabled=true (analysis_unit={unit})"
-            )
-
-        if config.dictcheck.enabled:
-            wl_path = Path(str(wordlist))
-            if not wl_path.is_absolute():
-                wl_path = (project_root / wl_path).resolve()
-
-            known = set(
-                x.strip()
-                for x in wl_path.read_text(encoding="utf-8").splitlines()
-                if x.strip()
-            )
-
-            known_c = Counter({w: n for (w, n) in c.items() if w in known})
-            unknown_c = Counter({w: n for (w, n) in c.items() if w not in known})
-
-            known_path = out_dir / f"noun_frequency_{gname}.known.csv"
-            write_frequency_csv(
-                known_path,
-                known_c,
-                header=csv_header,
-            )
-            generated_outputs.append(known_path)
-            unknown_path = out_dir / f"noun_frequency_{gname}.unknown.csv"
-            write_frequency_csv(
-                unknown_path,
-                unknown_c,
-                header=csv_header,
-            )
-            generated_outputs.append(unknown_path)
-
-    partition_results = validate_partitions(partition_specs, group_counters)
-    partition_summaries: List[dict[str, Any]] = []
-    partition_meta: List[dict[str, Any]] = []
-    partition_exit_code = 0
-
-    for spec, result in zip(partition_specs, partition_results):
-        csv_name = f"partition_validation_{sanitize_partition_name(spec.name)}.csv"
-        csv_path = out_dir / csv_name
-        write_partition_validation_csv(csv_path, result)
-        generated_outputs.append(csv_path)
-
-        partition_summaries.append(
-            partition_result_summary(spec, result, csv_name=csv_name)
-        )
-        partition_meta.append(partition_result_meta(spec, result))
-
-        if not result.exact_match:
-            level = "ERROR" if spec.on_mismatch == "error" else "WARN"
-            print(
-                f"[{level}] partition {spec.name} mismatch: "
-                f"token_delta={result.token_delta} mismatched_items={result.mismatched_items}",
-                file=sys.stderr,
-            )
-            if spec.on_mismatch == "error":
-                partition_exit_code = 1
-
-    if partition_specs:
-        partition_json_path = out_dir / "partition_validation.json"
-        write_partition_validation_json(partition_json_path, partition_summaries)
-        generated_outputs.append(partition_json_path)
-
-    comparison_results = run_comparisons(
-        specs=comparison_specs,
-        counters=group_counters,
-        analysis_unit=unit,
-    )
-    comparison_meta: List[dict[str, Any]] = []
-
-    for result in comparison_results:
-        csv_name = comparison_csv_name(result.spec)
-        csv_path = out_dir / csv_name
-        write_comparison_csv(csv_path, result)
-        generated_outputs.append(csv_path)
-        comparison_meta.append(comparison_result_meta(result, csv_name=csv_name))
-
-    if comparison_results:
-        comparison_json_path = out_dir / "group_comparisons.json"
-        write_group_comparisons_json(comparison_json_path, comparison_results)
-        generated_outputs.append(comparison_json_path)
-
-    # ---- summary.txt ----
-    summary_lines: List[str] = []
-    summary_lines.append("# Summary")
-    summary_lines.append("")
-    summary_lines.append(f"language: {language}")
-    summary_lines.append(f"stanza_package: {stanza_package}")
-    summary_lines.append(f"nlp_backend: {backend_info.name}")
-    summary_lines.append(f"analysis_unit: {unit}")
-
-    # normalization policy (human-readable, stable)
-    norm = config.normalization
-    summary_lines.append(f"normalization: {_format_normalization_kv(norm)}")
-
-    summary_lines.append("")
-    if backend_info.name == "stanza":
-        summary_lines.extend(render_stanza_package_table_fn(nlp, stanza_package))
-    else:
-        summary_lines.extend(render_backend_info(backend_info))
-    summary_lines.append("")
-
-    if ref_enabled:
-        for gn, rc in group_ref_tags.items():
-            summary_lines.append(
-                f"- group={gn} ref_tag_types={len(rc)} ref_tag_tokens={sum(rc.values())}"
-            )
-
-    if partition_results:
-        summary_lines.append("")
-        summary_lines.append("# Partition validation")
-        summary_lines.append("")
-        for spec, result in zip(partition_specs, partition_results):
-            if result.exact_match:
-                summary_lines.append(
-                    f"- name={result.name} status=OK whole={result.whole} "
-                    f"parts={','.join(result.parts)} "
-                    f"target_tokens={result.whole_target_tokens} "
-                    f"parts_target_tokens={result.parts_target_tokens} "
-                    f"mismatched_items={result.mismatched_items}"
-                )
-            else:
-                status = "ERROR" if spec.on_mismatch == "error" else "WARN"
-                summary_lines.append(
-                    f"- name={result.name} status={status} whole={result.whole} "
-                    f"parts={','.join(result.parts)} "
-                    f"target_tokens={result.whole_target_tokens} "
-                    f"parts_target_tokens={result.parts_target_tokens} "
-                    f"token_delta={result.token_delta} "
-                    f"mismatched_items={result.mismatched_items}"
-                )
-
-    if comparison_results:
-        summary_lines.append("")
-        summary_lines.append("# Group comparisons")
-        summary_lines.append("")
-        for result in comparison_results:
-            spec = result.spec
-            summary_lines.append(
-                f"- name={spec.name} group_a={spec.group_a} group_b={spec.group_b} "
-                f"analysis_unit={result.analysis_unit} "
-                f"group_a_tokens={result.group_a_tokens} "
-                f"group_b_tokens={result.group_b_tokens} "
-                f"items={result.rows_after_filter} scale={spec.scale} "
-                f"zero_correction={spec.zero_correction}"
-            )
-
-    summary_path = out_dir / "summary.txt"
-    summary_path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
-    generated_outputs.append(summary_path)
-
-    # ---- run_meta.json ----
-    run_meta_path = out_dir / "run_meta.json"
-    generated_outputs.append(run_meta_path)
-    meta = build_run_meta(
-        groups_files=groups_files,
-        hash_inputs=False,
+    comparisons = execute_group_comparisons(
+        context=context,
+        analysis=analysis,
     )
 
-    meta["analysis_unit"] = unit
-    meta["nlp"] = backend_info.to_dict()
-    if auto_mode:
-        meta["grouping"] = {
-            "mode": "auto_single_cleaned",
-            "auto_group_name": auto_group_name,
-        }
-    else:
-        meta["grouping"] = {"mode": "per_file" if per_file else "groups"}
-    meta["environment"] = collect_runtime_environment(project_root)
-
-    norm_dict = asdict(norm)
-    norm_canon = json.dumps(norm_dict, ensure_ascii=False, sort_keys=True)
-    meta["normalization"] = norm_dict
-    meta["normalization_hash_sha256"] = hashlib.sha256(norm_canon.encode("utf-8")).hexdigest()
-    meta["partition_validations"] = partition_meta
-    meta["group_comparisons"] = comparison_meta
-    meta["trace"] = {
-        "enabled": config.trace.enabled,
-        "files": {
-            label: str(path.resolve())
-            for label, path in trace_paths.items()
-        },
-    }
-    meta["generated_outputs"] = [str(p.resolve()) for p in generated_outputs]
-
-    write_run_meta(meta, out_dir)
-
-    return partition_exit_code
+    summary_path = write_summary(
+        context.out_dir / "summary.txt",
+        build_summary_lines(
+            context=context,
+            analysis=analysis,
+            partitions=partitions,
+            comparisons=comparisons,
+            dependencies=dependencies,
+        ),
+    )
+    run_meta_path = context.out_dir / "run_meta.json"
+    generated_outputs = merge_generated_outputs(
+        analysis.generated_outputs,
+        partitions.generated_outputs,
+        comparisons.generated_outputs,
+        (summary_path, run_meta_path),
+    )
+    write_run_meta(
+        build_final_run_metadata(
+            context=context,
+            analysis=analysis,
+            partitions=partitions,
+            comparisons=comparisons,
+            generated_outputs=generated_outputs,
+        ),
+        context.out_dir,
+    )
+    return partitions.exit_code
