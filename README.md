@@ -3,8 +3,12 @@
 `nlpo_toolkit` is the canonical Python package for Latin corpus cleaning,
 NLP-backed vocabulary counting, and reproducible frequency-table workflows.
 
-Vocabulary-counting functionality lives in `nlpo_toolkit.count_vocabula` and is
+Corpus analysis functionality lives in `nlpo_toolkit.corpus_analysis` and is
 exposed through the `nlpo` command.
+
+The former Python package `nlpo_toolkit.count_vocabula` is deprecated. Use
+`nlpo_toolkit.corpus_analysis` for new Python code. The CLI command remains
+`nlpo count-vocabula`.
 
 ## What Is Included
 

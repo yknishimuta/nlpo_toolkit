@@ -1,7 +1,3 @@
-from __future__ import annotations
+"""Deprecated; use nlpo_toolkit.corpus_analysis.nlp_adapters."""
 
-from nlpo_toolkit.backends.transformers_backend import TransformersBackend
-
-
-# Deprecated compatibility alias. The adapter now returns NLPDocument.
-TransformersLatinAdapter = TransformersBackend
+from nlpo_toolkit.corpus_analysis.nlp_adapters import *

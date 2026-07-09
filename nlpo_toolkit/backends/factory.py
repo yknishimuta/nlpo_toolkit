@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from nlpo_toolkit.count_vocabula.config import NLPConfig
+from nlpo_toolkit.corpus_analysis.config import NLPConfig
 from nlpo_toolkit.interfaces import NLPBackend
 
 

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from nlpo_toolkit.count_vocabula import cli
-from nlpo_toolkit.count_vocabula.features import (
+from nlpo_toolkit.corpus_analysis import cli
+from nlpo_toolkit.corpus_analysis.features import (
     FeatureError,
     FeatureOptions,
     TokenRecord,
@@ -20,7 +20,7 @@ from nlpo_toolkit.count_vocabula.features import (
 )
 from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
-from nlpo_toolkit.count_vocabula.config import NLPConfig
+from nlpo_toolkit.corpus_analysis.config import NLPConfig
 
 
 def _doc_for_text(text: str) -> NLPDocument:

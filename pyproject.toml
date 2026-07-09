@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-nlpo = "nlpo_toolkit.count_vocabula.cli:main"
+nlpo = "nlpo_toolkit.corpus_analysis.cli:main"
 
 [tool.setuptools]
 include-package-data = true

@@ -1,0 +1,88 @@
+from __future__ import annotations
+
+from collections import Counter
+from typing import List
+
+from nlpo_toolkit.backends import create_nlp_backend
+from .config import NLPConfig
+
+
+def build_pipeline(language: str, stanza_package: str, cpu_only: bool):
+    """
+    Deprecated compatibility wrapper. Production code uses create_nlp_backend.
+    """
+    built = create_nlp_backend(
+        NLPConfig(
+            backend="stanza",
+            language=language,
+            stanza_package=stanza_package,
+            cpu_only=cpu_only,
+        )
+    )
+    return built.backend, built.info.package
+
+
+def build_sentence_splitter(language: str, stanza_package: str, cpu_only: bool):
+    # Optional; runner accepts any callable. Default is "not provided".
+    raise RuntimeError("build_sentence_splitter is optional and should not be required in tests")
+
+def count_group(text: str, nlp, **kwargs) -> Counter:
+    """
+    Production counter: count noun lemmas using nlpo_toolkit.
+    """
+    from nlpo_toolkit.nlp import count_nouns_streaming, resolve_roman_exceptions  # type: ignore
+
+    use_lemma = bool(kwargs.get("use_lemma", True))
+
+    upos_targets = kwargs.get("upos_targets", {"NOUN"})
+    if isinstance(upos_targets, set):
+        upos_targets = frozenset(upos_targets)
+
+    chunk_chars = int(kwargs.get("chunk_chars", 200_000))
+    label = str(kwargs.get("label", ""))
+    min_token_length = int(kwargs.get("min_token_length", 0))
+    drop_roman_numerals = bool(kwargs.get("drop_roman_numerals", False))
+    roman_exceptions = resolve_roman_exceptions(
+        roman_exceptions=kwargs.get("roman_exceptions"),
+        roman_exceptions_file=kwargs.get("roman_exceptions_file"),
+    )
+
+    ref_tag_detector = kwargs.get("ref_tag_detector")
+    ref_tag_counter = kwargs.get("ref_tag_counter")
+
+    # ---- trace-related options ----
+    trace_tsv = kwargs.get("trace_tsv")
+    trace_max_rows = int(kwargs.get("trace_max_rows", 0))
+    trace_only_keys = kwargs.get("trace_only_keys")
+    trace_write_truncation_marker = bool(
+        kwargs.get("trace_write_truncation_marker", True)
+    )
+
+    # normalize trace_only_keys (key is lowercased in counter)
+    if trace_only_keys is not None:
+        trace_only_keys = {
+            str(x).strip().lower()
+            for x in trace_only_keys
+            if str(x).strip()
+        }
+
+    return count_nouns_streaming(
+        text,
+        nlp,
+        use_lemma=use_lemma,
+        upos_targets=upos_targets,
+        chunk_chars=chunk_chars,
+        ref_tag_detector=ref_tag_detector,
+        ref_tag_counter=ref_tag_counter,
+        label=label,
+        trace_tsv=trace_tsv,
+        trace_max_rows=trace_max_rows,
+        trace_only_keys=trace_only_keys,
+        min_token_length=min_token_length,
+        drop_roman_numerals=drop_roman_numerals,
+        roman_exceptions=roman_exceptions,
+        trace_write_truncation_marker=trace_write_truncation_marker,
+    )
+
+def render_stanza_package_table(nlp, pkg: str) -> List[str]:
+    return [f"package={pkg}"]
