@@ -19,6 +19,7 @@ KNOWN_TOP_LEVEL_KEYS = frozenset(
     {
         "analysis_unit",
         "archive",
+        "analysis_cache",
         "artifacts",
         "cleaner_config",
         "comparisons",
@@ -159,6 +160,15 @@ class LemmaCacheConfig:
 
 
 @dataclass(frozen=True)
+class AnalysisCacheConfig:
+    enabled: bool = False
+    directory: str = ".analysis_cache"
+    use_manifest: bool = True
+    manifest_key_mode: str = "relative"
+    lock_timeout_sec: float = 300.0
+
+
+@dataclass(frozen=True)
 class PruneConfig:
     keep_days: int | None = None
     keep_files: int | None = None
@@ -178,6 +188,7 @@ class AppConfig:
     trace: TraceConfig = TraceConfig()
     artifacts: ArtifactsConfig = field(default_factory=ArtifactsConfig)
     archive: ArchiveConfig = ArchiveConfig()
+    analysis_cache: AnalysisCacheConfig = AnalysisCacheConfig()
     lemma_cache: LemmaCacheConfig = LemmaCacheConfig()
     prune: PruneConfig = PruneConfig()
     analysis_unit: AnalysisUnit = "lemma"
@@ -586,6 +597,40 @@ def _parse_lemma_cache_config(value: object) -> LemmaCacheConfig:
     )
 
 
+def _parse_analysis_cache_config(
+    analysis_value: object,
+    lemma_value: object,
+) -> AnalysisCacheConfig:
+    if analysis_value is not None and lemma_value is not None:
+        raise ValueError("Specify only one of analysis_cache and deprecated lemma_cache")
+    raw = analysis_value if analysis_value is not None else lemma_value
+    context = "analysis_cache" if analysis_value is not None else "lemma_cache"
+    default_dir = ".analysis_cache" if analysis_value is not None else ".lemma_cache"
+    cache = _optional_mapping(raw, context=context)
+    return AnalysisCacheConfig(
+        enabled=_bool_value(cache.get("enabled"), context=f"{context}.enabled", default=False),
+        directory=_str_value(
+            cache.get("dir", default_dir),
+            context=f"{context}.dir",
+        ),
+        use_manifest=_bool_value(
+            cache.get("use_manifest"),
+            context=f"{context}.use_manifest",
+            default=True,
+        ),
+        manifest_key_mode=_str_value(
+            cache.get("manifest_key_mode", "relative"),
+            context=f"{context}.manifest_key_mode",
+        ),
+        lock_timeout_sec=_float_value(
+            cache.get("lock_timeout_sec"),
+            context=f"{context}.lock_timeout_sec",
+            default=300.0,
+            minimum_exclusive=0.0,
+        ),
+    )
+
+
 def _parse_prune_config(value: object) -> PruneConfig:
     prune = _optional_mapping(value, context="prune")
     return PruneConfig(
@@ -655,6 +700,10 @@ def _build_app_config(raw: Mapping[str, object]) -> AppConfig:
         trace=_parse_trace_config(normalized.get("trace")),
         artifacts=_parse_artifacts_config(normalized.get("artifacts")),
         archive=_parse_archive_config(normalized.get("archive")),
+        analysis_cache=_parse_analysis_cache_config(
+            normalized.get("analysis_cache"),
+            normalized.get("lemma_cache"),
+        ),
         lemma_cache=_parse_lemma_cache_config(normalized.get("lemma_cache")),
         prune=_parse_prune_config(normalized.get("prune")),
         analysis_unit=_parse_analysis_unit(normalized.get("analysis_unit")),
@@ -718,6 +767,13 @@ def config_to_dict(config: AppConfig) -> dict[str, object]:
             "tokens": asdict(config.artifacts.tokens),
         },
         "archive": asdict(config.archive),
+        "analysis_cache": {
+            "enabled": config.analysis_cache.enabled,
+            "dir": config.analysis_cache.directory,
+            "use_manifest": config.analysis_cache.use_manifest,
+            "manifest_key_mode": config.analysis_cache.manifest_key_mode,
+            "lock_timeout_sec": config.analysis_cache.lock_timeout_sec,
+        },
         "lemma_cache": {
             "enabled": config.lemma_cache.enabled,
             "dir": config.lemma_cache.directory,

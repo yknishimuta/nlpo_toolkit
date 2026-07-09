@@ -112,17 +112,40 @@ still read old CSV files when their columns are valid.
 
 ## Cache Management
 
-Use `nlpo cache clear` to remove the lemma cache for a project instead of
-running `rm -rf .lemma_cache` manually.
+Use `analysis_cache` to cache NLP token analysis records. The cache stores
+ordered, filter-before NLP records, not final frequency Counters. This lets runs
+reuse NLP output when changing `analysis_unit`, UPOS targets, minimum length,
+Roman numeral filtering, diagnostic trace, token artifact output, dictcheck, or
+archive settings. The cache is invalidated when the prepared text, backend,
+language, model/package, chunking strategy, schema version, or analysis behavior
+version changes.
+
+```yaml
+analysis_cache:
+  enabled: true
+  dir: .analysis_cache
+  use_manifest: true
+  manifest_key_mode: relative
+  lock_timeout_sec: 300.0
+```
+
+The cache is an internal optimization and is not copied into run archives or
+listed in `generated_outputs`. Use token artifacts for stable research outputs.
+The old `lemma_cache` setting is deprecated and old Counter cache objects are
+not converted to the new analysis cache format.
+
+Use `nlpo cache clear` to remove the configured analysis cache for a project
+instead of running `rm -rf .analysis_cache` manually.
 
 ```bash
 nlpo cache clear
 ```
 
 By default, the current directory is treated as the project root. If
-`config/groups.config.yml` exists, the command reads `lemma_cache.dir` from that
-config and clears that directory. If the config or `lemma_cache.dir` is missing,
-it clears `.lemma_cache` under the project root.
+`config/groups.config.yml` exists, the command reads `analysis_cache.dir` from
+that config and clears that directory. If a project still uses deprecated
+`lemma_cache.dir`, that directory is cleared for compatibility. If neither
+setting is present, it clears `.analysis_cache` under the project root.
 
 Use an explicit project root:
 

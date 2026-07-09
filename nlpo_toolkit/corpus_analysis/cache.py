@@ -22,6 +22,18 @@ def _load_yaml_mapping(path: Path) -> dict[str, Any]:
 
 def _cache_dir_from_config(path: Path) -> str | None:
     data = _load_yaml_mapping(path)
+    has_analysis = "analysis_cache" in data
+    has_lemma = "lemma_cache" in data
+    if has_analysis and has_lemma:
+        raise CacheClearError("Specify only one of analysis_cache and deprecated lemma_cache")
+    analysis_cache = data.get("analysis_cache")
+    if isinstance(analysis_cache, dict):
+        cache_dir = analysis_cache.get("dir")
+        if cache_dir is None:
+            return None
+        if not isinstance(cache_dir, str) or not cache_dir.strip():
+            raise CacheClearError("analysis_cache.dir must be a non-empty string path.")
+        return cache_dir
     lemma_cache = data.get("lemma_cache")
     if not isinstance(lemma_cache, dict):
         return None
@@ -42,7 +54,7 @@ def _display_path(project_root: Path, path: Path) -> str:
 
 def resolve_cache_dir(project_root: Path, config_path: Path | None = None) -> Path:
     project_root = project_root.resolve()
-    default_cache_dir = ".lemma_cache"
+    default_cache_dir = ".analysis_cache"
     raw_cache_dir = default_cache_dir
 
     if config_path is None:

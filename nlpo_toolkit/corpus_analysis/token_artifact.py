@@ -62,6 +62,22 @@ class TokenArtifactError(ValueError):
 
 
 @dataclass(frozen=True)
+class NLPAnalysisRecord:
+    chunk_index: int
+    sentence_index: int
+    token_index: int
+    global_token_index: int
+    char_start_in_chunk: int | None
+    char_end_in_chunk: int | None
+    char_start_in_text: int | None
+    char_end_in_text: int | None
+    sentence: str
+    token: str
+    lemma: str | None
+    upos: str | None
+
+
+@dataclass(frozen=True)
 class TokenRecord:
     group: str
     source_file: str | None
@@ -82,6 +98,19 @@ class TokenRecord:
     exclusion_reason: str | None
     ref_tag: str | None
     section: str | None = None
+
+
+@dataclass(frozen=True)
+class AnalysisOptions:
+    group: str
+    source_files: tuple[Path, ...]
+    use_lemma: bool
+    upos_targets: frozenset[str]
+    min_token_length: int = 0
+    drop_roman_numerals: bool = False
+    roman_exceptions: frozenset[str] = frozenset()
+    ref_tag_detector: Callable[[str], str] | None = None
+    ref_tag_counter: Counter[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -415,14 +444,127 @@ def _sentence_text(sent: Any) -> str:
     return " ".join(str(getattr(token, "text", "")) for token in getattr(sent, "tokens", []) or [])
 
 
-def _token_key(token: Any, *, use_lemma: bool) -> str | None:
-    lemma = getattr(token, "lemma", None)
-    text = getattr(token, "text", None)
-    selected = lemma if (use_lemma and lemma) else text
+def _token_key_from_values(token: str, lemma: str | None, *, use_lemma: bool) -> str | None:
+    selected = lemma if (use_lemma and lemma) else token
     if selected is None:
         return None
     key = str(selected).strip().lower()
     return key or None
+
+
+def iter_nlp_analysis_records(
+    *,
+    document: Any,
+    chunk_index: int,
+    chunk_start_in_text: int,
+    global_token_start: int,
+) -> Iterator[NLPAnalysisRecord]:
+    global_index = global_token_start
+    for sentence_index, sent in enumerate(getattr(document, "sentences", []) or []):
+        sent_text = _sentence_text(sent)
+        for token_index, token in enumerate(getattr(sent, "tokens", []) or []):
+            token_text = str(getattr(token, "text", "") or "")
+            lemma = getattr(token, "lemma", None)
+            upos = getattr(token, "upos", None)
+            start = getattr(token, "start_char", None)
+            end = getattr(token, "end_char", None)
+            yield NLPAnalysisRecord(
+                chunk_index=chunk_index,
+                sentence_index=sentence_index,
+                token_index=token_index,
+                global_token_index=global_index,
+                char_start_in_chunk=start,
+                char_end_in_chunk=end,
+                char_start_in_text=chunk_start_in_text + start if start is not None else None,
+                char_end_in_text=chunk_start_in_text + end if end is not None else None,
+                sentence=sent_text,
+                token=token_text,
+                lemma=str(lemma) if lemma is not None else None,
+                upos=str(upos) if upos is not None else None,
+            )
+            global_index += 1
+
+
+def iter_nlp_analysis_records_from_text(
+    *,
+    text: str,
+    nlp: Callable[[str], Any],
+    chunk_chars: int = 200_000,
+) -> Iterator[NLPAnalysisRecord]:
+    if not text:
+        return
+
+    global_index = 0
+    chunk_base_offset = 0
+
+    for chunk_index, chunk in enumerate(iter_char_chunks(text, chunk_chars=chunk_chars)):
+        doc = nlp(chunk)
+        emitted = 0
+        for record in iter_nlp_analysis_records(
+            document=doc,
+            chunk_index=chunk_index,
+            chunk_start_in_text=chunk_base_offset,
+            global_token_start=global_index,
+        ):
+            emitted += 1
+            yield record
+        global_index += emitted
+        chunk_base_offset += len(chunk)
+
+
+def evaluate_analysis_record(
+    record: NLPAnalysisRecord,
+    *,
+    options: AnalysisOptions,
+) -> TokenRecord:
+    source_file = str(options.source_files[0]) if len(options.source_files) == 1 else None
+    key = _token_key_from_values(record.token, record.lemma, use_lemma=options.use_lemma)
+    effective_exceptions = effective_roman_exceptions(
+        use_lemma=options.use_lemma,
+        configured_exceptions=options.roman_exceptions,
+    )
+    ref_tag = ""
+    exclusion_reason: str | None = None
+    if key is None:
+        exclusion_reason = "missing_key"
+    elif record.upos not in options.upos_targets:
+        exclusion_reason = "upos_not_targeted"
+    elif len(key) < options.min_token_length:
+        exclusion_reason = "too_short"
+    elif should_drop_roman_numeral(
+        key,
+        drop_roman_numerals=options.drop_roman_numerals,
+        effective_exceptions=effective_exceptions,
+    ):
+        exclusion_reason = "roman_numeral"
+    elif options.ref_tag_detector is not None:
+        ref_tag = options.ref_tag_detector(key)
+        if ref_tag:
+            if options.ref_tag_counter is not None:
+                options.ref_tag_counter[ref_tag] += 1
+            exclusion_reason = "reference_tag"
+
+    return TokenRecord(
+        group=options.group,
+        source_file=source_file,
+        section=None,
+        chunk_index=record.chunk_index,
+        sentence_index=record.sentence_index,
+        token_index=record.token_index,
+        global_token_index=record.global_token_index,
+        char_start_in_chunk=record.char_start_in_chunk,
+        char_end_in_chunk=record.char_end_in_chunk,
+        char_start_in_text=record.char_start_in_text,
+        char_end_in_text=record.char_end_in_text,
+        sentence=record.sentence,
+        token=record.token,
+        lemma=record.lemma,
+        upos=record.upos,
+        analysis_key=key,
+        included=exclusion_reason is None,
+        exclusion_reason=exclusion_reason,
+        ref_tag=ref_tag or None,
+    )
 
 
 def iter_token_records(
@@ -440,75 +582,23 @@ def iter_token_records(
     ref_tag_counter: Counter[str] | None = None,
     chunk_chars: int = 200_000,
 ) -> Iterator[TokenRecord]:
-    if not text:
-        return
-
-    source_file = str(source_files[0]) if len(source_files) == 1 else None
-    effective_exceptions = effective_roman_exceptions(
+    options = AnalysisOptions(
+        group=group,
+        source_files=tuple(source_files),
         use_lemma=use_lemma,
-        configured_exceptions=resolve_roman_exceptions(roman_exceptions=roman_exceptions),
+        upos_targets=frozenset(upos_targets),
+        min_token_length=min_token_length,
+        drop_roman_numerals=drop_roman_numerals,
+        roman_exceptions=resolve_roman_exceptions(roman_exceptions=roman_exceptions),
+        ref_tag_detector=ref_tag_detector,
+        ref_tag_counter=ref_tag_counter,
     )
-    targets = set(upos_targets)
-    global_index = 0
-    chunk_base_offset = 0
-
-    for chunk_index, chunk in enumerate(iter_char_chunks(text, chunk_chars=chunk_chars)):
-        doc = nlp(chunk)
-        for sentence_index, sent in enumerate(getattr(doc, "sentences", []) or []):
-            sent_text = _sentence_text(sent)
-            for token_index, token in enumerate(getattr(sent, "tokens", []) or []):
-                token_text = str(getattr(token, "text", "") or "")
-                lemma = getattr(token, "lemma", None)
-                upos = getattr(token, "upos", None)
-                start = getattr(token, "start_char", None)
-                end = getattr(token, "end_char", None)
-                key = _token_key(token, use_lemma=use_lemma)
-                ref_tag = ""
-                exclusion_reason: str | None = None
-
-                if key is None:
-                    exclusion_reason = "missing_key"
-                elif upos not in targets:
-                    exclusion_reason = "upos_not_targeted"
-                elif len(key) < min_token_length:
-                    exclusion_reason = "too_short"
-                elif should_drop_roman_numeral(
-                    key,
-                    drop_roman_numerals=drop_roman_numerals,
-                    effective_exceptions=effective_exceptions,
-                ):
-                    exclusion_reason = "roman_numeral"
-                elif ref_tag_detector is not None:
-                    ref_tag = ref_tag_detector(key)
-                    if ref_tag:
-                        if ref_tag_counter is not None:
-                            ref_tag_counter[ref_tag] += 1
-                        exclusion_reason = "reference_tag"
-
-                included = exclusion_reason is None
-                yield TokenRecord(
-                    group=group,
-                    source_file=source_file,
-                    section=None,
-                    chunk_index=chunk_index,
-                    sentence_index=sentence_index,
-                    token_index=token_index,
-                    global_token_index=global_index,
-                    char_start_in_chunk=start,
-                    char_end_in_chunk=end,
-                    char_start_in_text=chunk_base_offset + start if start is not None else None,
-                    char_end_in_text=chunk_base_offset + end if end is not None else None,
-                    sentence=sent_text,
-                    token=token_text,
-                    lemma=str(lemma) if lemma is not None else None,
-                    upos=str(upos) if upos is not None else None,
-                    analysis_key=key,
-                    included=included,
-                    exclusion_reason=exclusion_reason,
-                    ref_tag=ref_tag or None,
-                )
-                global_index += 1
-        chunk_base_offset += len(chunk)
+    for record in iter_nlp_analysis_records_from_text(
+        text=text,
+        nlp=nlp,
+        chunk_chars=chunk_chars,
+    ):
+        yield evaluate_analysis_record(record, options=options)
 
 
 def counter_from_token_records(records: Iterable[TokenRecord]) -> Counter[str]:

@@ -50,12 +50,21 @@ from .partition_validation import (
     write_partition_validation_csv,
     write_partition_validation_json,
 )
+from .analysis_cache import (
+    AnalysisCacheGroupResult,
+    AnalysisCacheRunStats,
+    AnalysisFingerprint,
+    build_analysis_cache_key,
+    get_or_compute_analysis_records,
+    prepared_text_sha256,
+)
 from .token_artifact import (
+    AnalysisOptions,
     DiagnosticTraceWriter,
     TokenArtifactMetadata,
     TokenArtifactWriter,
-    counter_from_token_records,
-    iter_token_records,
+    evaluate_analysis_record,
+    iter_nlp_analysis_records_from_text,
     token_artifact_metadata_path,
 )
 from nlpo_toolkit.nlp import load_roman_exceptions
@@ -116,6 +125,7 @@ class AnalysisResults:
     trace_paths: Mapping[str, Path]
     generated_outputs: tuple[Path, ...]
     token_artifacts: tuple[Mapping[str, object], ...] = ()
+    analysis_cache: Mapping[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -590,6 +600,28 @@ def _token_artifact_metadata(
     )
 
 
+def _analysis_cache_dir(context: RunContext) -> Path:
+    cache_dir = Path(context.config.analysis_cache.directory)
+    if not cache_dir.is_absolute():
+        cache_dir = context.project_root / cache_dir
+    return cache_dir.resolve()
+
+
+def _analysis_fingerprint(context: RunContext) -> AnalysisFingerprint:
+    package = context.backend_info.package
+    package_value: object | None = package
+    return AnalysisFingerprint(
+        backend=context.backend_info.name,
+        language=context.backend_info.language,
+        model=context.backend_info.model,
+        package=package_value,
+        processors=("tokenize", "mwt", "pos", "lemma"),
+        chunk_size=200_000,
+        chunk_strategy="char_whitespace",
+        device=context.backend_info.device,
+    )
+
+
 def _count_with_token_records(
     *,
     context: RunContext,
@@ -597,6 +629,7 @@ def _count_with_token_records(
     text: str,
     token_artifact_path: Path | None,
     trace_path: Path | None,
+    analysis_cache_stats: AnalysisCacheRunStats | None = None,
 ) -> tuple[Counter[str], Mapping[str, object] | None, tuple[Path, ...]]:
     counter: Counter[str] = Counter()
     artifact_meta: Mapping[str, object] | None = None
@@ -627,23 +660,71 @@ def _count_with_token_records(
                 )
             )
 
-        for record in iter_token_records(
-            text=text,
-            nlp=context.nlp,
+        fingerprint = _analysis_fingerprint(context)
+        text_hash = prepared_text_sha256(text)
+        cache_key = build_analysis_cache_key(
+            prepared_text_sha256=text_hash,
+            fingerprint=fingerprint,
+        )
+
+        if context.config.analysis_cache.enabled:
+            raw_records, cache_status, _payload_path, _metadata_path = get_or_compute_analysis_records(
+                cache_dir=_analysis_cache_dir(context),
+                cache_key=cache_key,
+                prepared_text_sha256=text_hash,
+                prepared_text_length=len(text),
+                fingerprint=fingerprint,
+                compute_records=lambda: iter_nlp_analysis_records_from_text(
+                    text=text,
+                    nlp=context.nlp,
+                    chunk_chars=200_000,
+                ),
+                lock_timeout_sec=context.config.analysis_cache.lock_timeout_sec,
+            )
+        else:
+            cache_status = "disabled"
+            raw_records = iter_nlp_analysis_records_from_text(
+                text=text,
+                nlp=context.nlp,
+                chunk_chars=200_000,
+            )
+
+        options = AnalysisOptions(
             group=corpus.label,
-            source_files=corpus.files,
+            source_files=tuple(corpus.files),
             use_lemma=context.use_lemma,
-            upos_targets=context.config.filters.upos_targets,
+            upos_targets=frozenset(context.config.filters.upos_targets),
             min_token_length=context.config.filters.min_token_length,
             drop_roman_numerals=context.config.filters.drop_roman_numerals,
             roman_exceptions=context.roman_exceptions,
-        ):
+        )
+        record_count = 0
+        for raw_record in raw_records:
+            record_count += 1
+            record = evaluate_analysis_record(raw_record, options=options)
             if artifact_writer is not None:
                 artifact_writer.write(record)
             if trace_writer is not None:
                 trace_writer.consider(record)
             if record.included and record.analysis_key:
                 counter[record.analysis_key] += 1
+
+        if analysis_cache_stats is not None:
+            if cache_status == "hit":
+                analysis_cache_stats.hits += 1
+                analysis_cache_stats.records_read += record_count
+            elif cache_status == "miss":
+                analysis_cache_stats.misses += 1
+                analysis_cache_stats.objects_written += 1
+                analysis_cache_stats.records_written += record_count
+            analysis_cache_stats.groups.append(
+                AnalysisCacheGroupResult(
+                    group=corpus.label,
+                    status=cache_status,
+                    cache_key=cache_key,
+                    record_count=record_count,
+                )
+            )
 
     if token_artifact_path is not None:
         metadata_path = token_artifact_metadata_path(token_artifact_path)
@@ -708,6 +789,7 @@ def analyze_one_corpus(
     trace_paths: Mapping[str, Path],
     lemma_normalization_map: Mapping[str, str] | None,
     token_artifact_paths: Mapping[str, Path] | None = None,
+    analysis_cache_stats: AnalysisCacheRunStats | None = None,
 ) -> GroupAnalysisResult:
     label = corpus.label
     generated_outputs: list[Path] = []
@@ -719,13 +801,14 @@ def analyze_one_corpus(
         generated_outputs.append(ref_tags_path)
 
     text = _text_for_counting(context, corpus)
-    if context.config.artifacts.tokens.enabled:
+    if context.config.artifacts.tokens.enabled or context.config.analysis_cache.enabled:
         counter, token_artifact_meta, token_generated_outputs = _count_with_token_records(
             context=context,
             corpus=corpus,
             text=text,
             token_artifact_path=(token_artifact_paths or {}).get(label),
             trace_path=trace_paths.get(label) if context.config.trace.enabled else None,
+            analysis_cache_stats=analysis_cache_stats,
         )
     else:
         counter = dependencies.count_group(
@@ -796,6 +879,10 @@ def analyze_corpora(
             token_artifact_paths=token_artifact_paths,
         )
     lemma_normalization_map = _load_lemma_normalization_map(context)
+    analysis_cache_stats = AnalysisCacheRunStats(
+        enabled=context.config.analysis_cache.enabled,
+        directory=str(_analysis_cache_dir(context)),
+    )
 
     groups: list[GroupAnalysisResult] = []
     generated_outputs: list[Path] = []
@@ -808,6 +895,7 @@ def analyze_corpora(
             trace_paths=trace_paths,
             token_artifact_paths=token_artifact_paths,
             lemma_normalization_map=lemma_normalization_map,
+            analysis_cache_stats=analysis_cache_stats,
         )
         groups.append(result)
         generated_outputs.extend(result.generated_outputs)
@@ -822,6 +910,7 @@ def analyze_corpora(
         trace_paths=trace_paths,
         generated_outputs=tuple(generated_outputs),
         token_artifacts=tuple(token_artifacts),
+        analysis_cache=analysis_cache_stats.to_dict(),
     )
 
 
@@ -945,6 +1034,18 @@ def build_summary_lines(
                 f"schema={artifact.get('schema_version', '')}"
             )
 
+    if analysis.analysis_cache:
+        cache_meta = analysis.analysis_cache
+        lines.extend(["", "# Analysis cache", ""])
+        lines.append(
+            "analysis_cache "
+            f"enabled={cache_meta.get('enabled', False)} "
+            f"hits={cache_meta.get('hits', 0)} "
+            f"misses={cache_meta.get('misses', 0)} "
+            f"records_read={cache_meta.get('records_read', 0)} "
+            f"records_written={cache_meta.get('records_written', 0)}"
+        )
+
     if partitions.results:
         lines.extend(["", "# Partition validation", ""])
         for spec, result in zip(context.partition_specs, partitions.results):
@@ -1040,6 +1141,7 @@ def build_final_run_metadata(
         },
     }
     meta["token_artifacts"] = list(analysis.token_artifacts)
+    meta["analysis_cache"] = dict(analysis.analysis_cache or {})
     meta["generated_outputs"] = [str(path.resolve()) for path in generated_outputs]
     return meta
 

@@ -187,8 +187,45 @@ def test_load_config_nested_values_and_config_to_dict(tmp_path: Path):
     assert cfg.filters.roman_exceptions_file == "config/roman.txt"
     assert cfg.trace.max_rows == 10
     assert cfg.lemma_cache.directory == "cache/lemmas"
+    assert cfg.analysis_cache.directory == "cache/lemmas"
     assert data["groups"] == {"corpus_a": {"files": ["input/corpus_a.txt"]}}
     assert data["upos_targets"] == ["NOUN", "PROPN"]
+
+
+def test_load_config_parses_analysis_cache_and_rejects_legacy_conflict(tmp_path: Path):
+    cfg_path = tmp_path / "cfg.yml"
+    cfg_path.write_text(
+        "\n".join(
+            [
+                "groups:",
+                "  corpus_a: {files: [input/corpus_a.txt]}",
+                "analysis_cache:",
+                "  enabled: true",
+                "  dir: .analysis_cache",
+                "  manifest_key_mode: relative",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    cfg = load_config(cfg_path)
+    assert cfg.analysis_cache.enabled is True
+    assert cfg.analysis_cache.directory == ".analysis_cache"
+
+    cfg_path.write_text(
+        "\n".join(
+            [
+                "groups:",
+                "  corpus_a: {files: [input/corpus_a.txt]}",
+                "analysis_cache: {enabled: true}",
+                "lemma_cache: {enabled: true}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="Specify only one of analysis_cache"):
+        load_config(cfg_path)
 
 
 def test_load_config_rejects_both_roman_exception_keys(tmp_path: Path):

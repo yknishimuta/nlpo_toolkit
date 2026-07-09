@@ -5,7 +5,7 @@ from nlpo_toolkit.corpus_analysis.cache import CacheClearError, resolve_cache_di
 
 
 def test_cache_clear_uses_default_cache_dir_without_config(tmp_path, capsys):
-    cache_dir = tmp_path / ".lemma_cache"
+    cache_dir = tmp_path / ".analysis_cache"
     cache_dir.mkdir()
     (cache_dir / "entry.json").write_text("{}", encoding="utf-8")
 
@@ -13,10 +13,28 @@ def test_cache_clear_uses_default_cache_dir_without_config(tmp_path, capsys):
 
     assert rc == 0
     assert not cache_dir.exists()
-    assert "[OK] cache cleared: .lemma_cache" in capsys.readouterr().out
+    assert "[OK] cache cleared: .analysis_cache" in capsys.readouterr().out
 
 
 def test_cache_clear_reads_default_config_when_present(tmp_path, capsys):
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "groups.config.yml").write_text(
+        "analysis_cache:\n  dir: cache/analysis\n",
+        encoding="utf-8",
+    )
+    cache_dir = tmp_path / "cache" / "analysis"
+    cache_dir.mkdir(parents=True)
+    (cache_dir / "entry.json").write_text("{}", encoding="utf-8")
+
+    rc = cli.main(["cache", "clear", "--project-root", str(tmp_path)])
+
+    assert rc == 0
+    assert not cache_dir.exists()
+    assert "[OK] cache cleared: cache/analysis" in capsys.readouterr().out
+
+
+def test_cache_clear_reads_deprecated_lemma_cache_config(tmp_path, capsys):
     config_dir = tmp_path / "config"
     config_dir.mkdir()
     (config_dir / "groups.config.yml").write_text(
@@ -62,7 +80,7 @@ def test_cache_clear_missing_cache_is_ok(tmp_path, capsys):
     rc = cli.main(["cache", "clear", "--project-root", str(tmp_path)])
 
     assert rc == 0
-    assert "[OK] cache already clean: .lemma_cache" in capsys.readouterr().out
+    assert "[OK] cache already clean: .analysis_cache" in capsys.readouterr().out
 
 
 def test_cache_clear_rejects_cache_dir_outside_project_root(tmp_path, capsys):
@@ -96,7 +114,7 @@ def test_resolve_cache_dir_rejects_project_root(tmp_path):
 
 
 def test_cache_clear_unlinks_cache_file(tmp_path):
-    cache_path = tmp_path / ".lemma_cache"
+    cache_path = tmp_path / ".analysis_cache"
     cache_path.write_text("cache", encoding="utf-8")
 
     rc = cli.main(["cache", "clear", "--project-root", str(tmp_path)])
