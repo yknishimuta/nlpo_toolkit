@@ -5,9 +5,26 @@ import json
 import subprocess
 import sys
 from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping, Sequence
+
+
+@dataclass(frozen=True)
+class FrequencyOutputPaths:
+    base: Path
+    known: Path
+    unknown: Path
+
+
+def build_frequency_output_paths(out_dir: Path, label: str) -> FrequencyOutputPaths:
+    base = Path(out_dir) / f"frequency_{label}.csv"
+    return FrequencyOutputPaths(
+        base=base,
+        known=base.with_name(f"{base.stem}.known{base.suffix}"),
+        unknown=base.with_name(f"{base.stem}.unknown{base.suffix}"),
+    )
 
 
 def write_frequency_csv(

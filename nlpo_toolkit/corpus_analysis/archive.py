@@ -265,7 +265,7 @@ def _collect_output_files(out_dir: Path) -> list[Path]:
     if not out_dir.exists():
         return []
     files: list[Path] = []
-    for pattern in ("noun_frequency*.csv", "ref_tags_*.csv"):
+    for pattern in ("frequency_*.csv", "noun_frequency*.csv", "ref_tags_*.csv"):
         files.extend(sorted(p for p in out_dir.glob(pattern) if _is_archivable_file(p)))
     for name in ("summary.txt", "run_meta.json"):
         p = out_dir / name

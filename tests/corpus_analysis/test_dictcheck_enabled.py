@@ -79,9 +79,9 @@ def test_dictcheck_enabled_creates_known_unknown(tmp_path, monkeypatch):
     assert rc == 0
 
     # --- Assert ---
-    base_csv = out_dir / "noun_frequency_text.csv"
-    known_csv = out_dir / "noun_frequency_text.known.csv"
-    unknown_csv = out_dir / "noun_frequency_text.unknown.csv"
+    base_csv = out_dir / "frequency_text.csv"
+    known_csv = out_dir / "frequency_text.known.csv"
+    unknown_csv = out_dir / "frequency_text.unknown.csv"
 
     assert base_csv.exists()
     assert known_csv.exists()

@@ -168,9 +168,9 @@ def test_analyze_one_corpus_writes_expected_outputs_and_passes_filter_args(tmp_p
     generated_names = [path.name for path in result.generated_outputs]
     assert generated_names == [
         "ref_tags_group_a.csv",
-        "noun_frequency_group_a.csv",
-        "noun_frequency_group_a.known.csv",
-        "noun_frequency_group_a.unknown.csv",
+        "frequency_group_a.csv",
+        "frequency_group_a.known.csv",
+        "frequency_group_a.unknown.csv",
     ]
 
 

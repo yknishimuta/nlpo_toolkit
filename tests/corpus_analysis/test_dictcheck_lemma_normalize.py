@@ -11,7 +11,7 @@ def test_dictcheck_applies_lemma_normalize_map(tmp_path: Path):
     wordlist.write_text("materia\n", encoding="utf-8")
 
     # freq csv contains unnormalized lemma
-    freq = tmp_path / "noun_frequency.csv"
+    freq = tmp_path / "frequency.csv"
     freq.write_text("word,frequency\nmaterium,10\n", encoding="utf-8")
 
     # normalize tsv maps materium -> materia

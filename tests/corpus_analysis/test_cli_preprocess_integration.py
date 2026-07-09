@@ -101,7 +101,7 @@ def test_preprocess_cleaner_integration_fixed(tmp_path, monkeypatch):
     assert cleaner_called["ok"] is True
 
     # --- Assert outputs
-    csv_path = out_dir / "noun_frequency_text.csv"
+    csv_path = out_dir / "frequency_text.csv"
     summary_path = out_dir / "summary.txt"
     assert csv_path.exists()
     assert summary_path.exists()

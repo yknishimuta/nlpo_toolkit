@@ -73,8 +73,8 @@ def test_run_minimal_success(tmp_path: Path, monkeypatch):
 
     # csv
     assert len(calls) == 2
-    assert calls[0][0].name == "noun_frequency_g1.csv"
-    assert calls[1][0].name == "noun_frequency_g2.csv"
+    assert calls[0][0].name == "frequency_g1.csv"
+    assert calls[1][0].name == "frequency_g2.csv"
 
     # meta
     assert len(meta_calls) == 1
@@ -191,9 +191,9 @@ def test_run_dictcheck_writes_known_unknown(tmp_path: Path, monkeypatch):
     assert rc == 0
 
     assert calls == [
-        "noun_frequency_g.csv",
-        "noun_frequency_g.known.csv",
-        "noun_frequency_g.unknown.csv",
+        "frequency_g.csv",
+        "frequency_g.known.csv",
+        "frequency_g.unknown.csv",
     ]
 
 def test_run_passes_filter_args_to_count_group(tmp_path: Path, monkeypatch):
@@ -294,8 +294,8 @@ def test_run_group_by_file_writes_one_csv_per_input_file(tmp_path: Path, monkeyp
 
     assert rc == 0
     assert [name for name, _counter in csv_calls] == [
-        "noun_frequency_file2.csv",
-        "noun_frequency_virgil_aeneis.csv",
+        "frequency_file2.csv",
+        "frequency_virgil_aeneis.csv",
     ]
     assert meta_calls[0]["grouping"] == {"mode": "per_file"}
     assert sorted(meta_calls[0]["groups_files"]) == ["file2", "virgil_aeneis"]
@@ -341,7 +341,7 @@ def test_run_group_by_file_cli_override(tmp_path: Path, monkeypatch):
     )
 
     assert rc == 0
-    assert csv_names == ["noun_frequency_file3.csv"]
+    assert csv_names == ["frequency_file3.csv"]
 
 
 def test_run_meta_records_generated_outputs_and_actual_group_files(tmp_path: Path, monkeypatch):
@@ -378,7 +378,7 @@ def test_run_meta_records_generated_outputs_and_actual_group_files(tmp_path: Pat
     meta = json.loads((project_root / "output" / "run_meta.json").read_text(encoding="utf-8"))
     assert meta["groups_files"] == {"text": [str(used.resolve())]}
     generated_names = {Path(p).name for p in meta["generated_outputs"]}
-    assert generated_names == {"noun_frequency_text.csv", "summary.txt", "run_meta.json"}
+    assert generated_names == {"frequency_text.csv", "summary.txt", "run_meta.json"}
 
 
 def test_run_error_on_empty_group(tmp_path: Path, monkeypatch):

@@ -29,11 +29,11 @@ def _write_project(tmp_path: Path) -> tuple[Path, Path, dict]:
     (project_root / "cleaned" / "a.cleaned.txt").write_text("cleaned text\n", encoding="utf-8")
     (project_root / "cleaned" / ".DS_Store").write_text("metadata\n", encoding="utf-8")
     (project_root / "cleaned" / ".gitkeep").write_text("", encoding="utf-8")
-    (project_root / "output" / "noun_frequency_text.csv").write_text(
+    (project_root / "output" / "frequency_text.csv").write_text(
         "lemma,count\nrosa,1\n",
         encoding="utf-8",
     )
-    (project_root / "output" / "noun_frequency_text.known.csv").write_text(
+    (project_root / "output" / "frequency_text.known.csv").write_text(
         "lemma,count\nrosa,1\n",
         encoding="utf-8",
     )
@@ -150,8 +150,8 @@ def test_create_run_archive_with_run_name_creates_expected_files(tmp_path: Path)
     )
 
     assert run_dir == project_root / "runs" / "virgil_noun_test_01"
-    assert (run_dir / "outputs" / "noun_frequency_text.csv").exists()
-    assert (run_dir / "outputs" / "noun_frequency_text.known.csv").exists()
+    assert (run_dir / "outputs" / "frequency_text.csv").exists()
+    assert (run_dir / "outputs" / "frequency_text.known.csv").exists()
     assert (run_dir / "outputs" / "summary.txt").exists()
     assert (run_dir / "outputs" / "run_meta.json").exists()
     assert (run_dir / "trace" / "trace.tsv").exists()
@@ -275,9 +275,9 @@ def test_create_run_archive_uses_config_archive_include_defaults(tmp_path: Path)
 
 def test_create_run_archive_copies_only_generated_outputs_from_run_meta(tmp_path: Path) -> None:
     project_root, config_path, config = _write_project(tmp_path)
-    stale = project_root / "output" / "noun_frequency_old.csv"
+    stale = project_root / "output" / "noun_frequency_text.csv"
     stale.write_text("lemma,count\nold,99\n", encoding="utf-8")
-    generated = project_root / "output" / "noun_frequency_text.csv"
+    generated = project_root / "output" / "frequency_text.csv"
     summary = project_root / "output" / "summary.txt"
     run_meta = project_root / "output" / "run_meta.json"
     run_meta.write_text(
@@ -302,16 +302,37 @@ def test_create_run_archive_copies_only_generated_outputs_from_run_meta(tmp_path
         run_name="generated-only",
     )
 
-    assert (run_dir / "outputs" / "noun_frequency_text.csv").exists()
+    assert (run_dir / "outputs" / "frequency_text.csv").exists()
     assert (run_dir / "outputs" / "summary.txt").exists()
     assert (run_dir / "outputs" / "run_meta.json").exists()
-    assert not (run_dir / "outputs" / "noun_frequency_old.csv").exists()
+    assert not (run_dir / "outputs" / "noun_frequency_text.csv").exists()
 
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
     copied_names = {Path(item["archive_path"]).name for item in manifest["copied_outputs"]}
-    assert copied_names == {"noun_frequency_text.csv", "summary.txt", "run_meta.json"}
+    assert copied_names == {"frequency_text.csv", "summary.txt", "run_meta.json"}
     generated_names = {Path(item["path"]).name for item in manifest["generated_outputs"]}
-    assert generated_names == {"noun_frequency_text.csv", "summary.txt", "run_meta.json"}
+    assert generated_names == {"frequency_text.csv", "summary.txt", "run_meta.json"}
+
+
+def test_create_run_archive_fallback_collects_legacy_noun_frequency_outputs(tmp_path: Path) -> None:
+    project_root, config_path, config = _write_project(tmp_path)
+    run_meta = project_root / "output" / "run_meta.json"
+    run_meta.unlink()
+    (project_root / "output" / "frequency_text.csv").unlink()
+    (project_root / "output" / "frequency_text.known.csv").unlink()
+    (project_root / "output" / "noun_frequency_text.csv").write_text(
+        "lemma,count\nrosa,1\n",
+        encoding="utf-8",
+    )
+
+    run_dir = create_run_archive(
+        project_root=project_root,
+        config_path=config_path,
+        config=config,
+        run_name="legacy-fallback",
+    )
+
+    assert (run_dir / "outputs" / "noun_frequency_text.csv").exists()
 
 
 def test_create_run_archive_prefers_run_meta_groups_files(tmp_path: Path) -> None:
@@ -324,7 +345,7 @@ def test_create_run_archive_prefers_run_meta_groups_files(tmp_path: Path) -> Non
         json.dumps(
             {
                 "groups_files": {"text": [str(selected.resolve())]},
-                "generated_outputs": [str((project_root / "output" / "noun_frequency_text.csv").resolve())],
+                "generated_outputs": [str((project_root / "output" / "frequency_text.csv").resolve())],
             }
         )
         + "\n",

@@ -103,6 +103,19 @@ def test_run_compare_top_and_output_file(tmp_path: Path) -> None:
     assert rows[0]["term"] == "x"
 
 
+def test_run_compare_accepts_new_and_legacy_frequency_names(tmp_path: Path) -> None:
+    new_name = _write_csv(tmp_path / "frequency_text.csv", "lemma,count", ["x,2"])
+    legacy_name = _write_csv(tmp_path / "noun_frequency_text.csv", "lemma,count", ["x,1"])
+    out = tmp_path / "compare.csv"
+
+    rc = run_compare(inputs=[new_name, legacy_name], labels=["new", "legacy"], out=out)
+
+    assert rc == 0
+    rows = list(csv.DictReader(out.open(encoding="utf-8")))
+    assert rows[0]["new_count"] == "2"
+    assert rows[0]["legacy_count"] == "1"
+
+
 def test_three_input_compare_has_range_columns() -> None:
     rows = compare_frequency_tables(
         [{"rosa": 10.0, "arma": 1.0}, {"rosa": 1.0, "arma": 10.0}, {"rosa": 5.0, "arma": 5.0}],

@@ -274,7 +274,7 @@ def test_runner_uses_backend_factory_and_records_metadata(tmp_path: Path, monkey
     )
 
     assert rc == 0
-    csv_text = (tmp_path / "output" / "noun_frequency_group_a.csv").read_text(
+    csv_text = (tmp_path / "output" / "frequency_group_a.csv").read_text(
         encoding="utf-8"
     )
     assert "xiv,1" in csv_text

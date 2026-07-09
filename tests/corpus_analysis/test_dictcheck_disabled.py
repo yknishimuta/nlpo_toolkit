@@ -64,9 +64,9 @@ def test_dictcheck_disabled_does_not_create_known_unknown(tmp_path, monkeypatch)
 
     # --- Assert ---
     # Base CSV should exist
-    assert (out_dir / "noun_frequency_text.csv").exists()
+    assert (out_dir / "frequency_text.csv").exists()
     assert (out_dir / "summary.txt").exists()
 
     # But dictcheck outputs must NOT exist when enabled=False
-    assert not (out_dir / "noun_frequency_text.known.csv").exists()
-    assert not (out_dir / "noun_frequency_text.unknown.csv").exists()
+    assert not (out_dir / "frequency_text.known.csv").exists()
+    assert not (out_dir / "frequency_text.unknown.csv").exists()

@@ -33,6 +33,8 @@ from .comparison import (
     write_group_comparisons_json,
 )
 from .outputs import (
+    FrequencyOutputPaths,
+    build_frequency_output_paths,
     build_run_meta,
     collect_runtime_environment,
     write_frequency_csv,
@@ -528,6 +530,7 @@ def write_dictcheck_outputs(
     context: RunContext,
     label: str,
     counter: Counter[str],
+    frequency_paths: FrequencyOutputPaths | None = None,
 ) -> DictCheckOutput | None:
     wordlist = context.config.dictcheck.wordlist
     if context.config.dictcheck.enabled and not wordlist:
@@ -547,9 +550,10 @@ def write_dictcheck_outputs(
     )
     known_counter, unknown_counter = split_known_unknown(counter, known_words)
 
-    known_path = context.out_dir / f"noun_frequency_{label}.known.csv"
+    paths = frequency_paths or build_frequency_output_paths(context.out_dir, label)
+    known_path = paths.known
     write_frequency_csv(known_path, known_counter, header=context.csv_header)
-    unknown_path = context.out_dir / f"noun_frequency_{label}.unknown.csv"
+    unknown_path = paths.unknown
     write_frequency_csv(unknown_path, unknown_counter, header=context.csv_header)
     return DictCheckOutput(
         known=known_counter,
@@ -587,7 +591,8 @@ def analyze_one_corpus(
     if lemma_normalization_map is not None:
         counter = apply_lemma_normalization(counter, lemma_normalization_map)
 
-    base_csv_path = context.out_dir / f"noun_frequency_{label}.csv"
+    frequency_paths = build_frequency_output_paths(context.out_dir, label)
+    base_csv_path = frequency_paths.base
     write_frequency_csv(base_csv_path, counter, header=context.csv_header)
     generated_outputs.append(base_csv_path)
 
@@ -595,6 +600,7 @@ def analyze_one_corpus(
         context=context,
         label=label,
         counter=counter,
+        frequency_paths=frequency_paths,
     )
     if dictcheck_output is not None:
         generated_outputs.extend(dictcheck_output.generated_outputs)

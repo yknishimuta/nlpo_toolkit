@@ -228,7 +228,7 @@ def test_runner_integration_uses_roman_exception_file_in_final_csv(tmp_path: Pat
     assert rc == 0
     rows = list(
         csv.DictReader(
-            (tmp_path / "output" / "noun_frequency_group_a.csv").open(
+            (tmp_path / "output" / "frequency_group_a.csv").open(
                 encoding="utf-8"
             )
         )

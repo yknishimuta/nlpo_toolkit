@@ -46,7 +46,7 @@ def split_frequency_csv(
     normalize_map_path: Path | None = None
 ) -> Tuple[int, int]:
     """
-    Split noun_frequency CSV into known/unknown by checking membership in a wordlist.
+    Split a frequency CSV into known/unknown by checking membership in a wordlist.
 
     Returns: (known_rows, unknown_rows)
     """

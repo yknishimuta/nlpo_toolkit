@@ -101,6 +101,15 @@ If `--config` is omitted, the CLI uses:
 Relative paths in the YAML config are resolved from `--project-root`, not from
 the location of Python source files.
 
+### Frequency Output Naming
+
+Frequency output naming changed from `noun_frequency_<label>.csv` to
+`frequency_<label>.csv`, with dictcheck outputs named
+`frequency_<label>.known.csv` and `frequency_<label>.unknown.csv`. The generic
+name reflects that analyses may target surface forms or UPOS categories other
+than nouns. Old output files are not deleted automatically. `nlpo compare` can
+still read old CSV files when their columns are valid.
+
 ## Cache Management
 
 Use `nlpo cache clear` to remove the lemma cache for a project instead of
@@ -166,7 +175,7 @@ nlpo count-vocabula --project-root . --config config/groups.config.yml
 
 ```text
 output/
-  noun_frequency_text.csv
+  frequency_text.csv
   summary.txt
   run_meta.json
 ```
@@ -212,9 +221,9 @@ input/
   file3.txt
 
 output/
-  noun_frequency_virgil_aeneis.csv
-  noun_frequency_file2.csv
-  noun_frequency_file3.csv
+  frequency_virgil_aeneis.csv
+  frequency_file2.csv
+  frequency_file3.csv
   summary.txt
   run_meta.json
 ```
@@ -227,7 +236,7 @@ numeric suffix is added to keep output names unique.
 
 Use `validations.partitions` to verify additive consistency between one
 configured whole group and two or more configured part groups. The check compares
-the final frequency `Counter` used for the base `noun_frequency_<group>.csv`
+the final frequency `Counter` used for the base `frequency_<group>.csv`
 files, after analysis unit selection, POS/token filters, Roman numeral filtering,
 text normalization, reference tag removal, and `dictcheck.lemma_normalize`.
 
@@ -279,7 +288,7 @@ Partition validation cannot be combined with `grouping.mode: per_file` or
 Use top-level `comparisons` to compare the vocabulary distribution of any two
 configured groups. This is separate from partition validation: the two groups do
 not need to be whole/part relations, and the comparison uses the same final
-frequency `Counter` that is written to `noun_frequency_<group>.csv`.
+frequency `Counter` that is written to `frequency_<group>.csv`.
 
 ```yaml
 groups:
@@ -397,8 +406,8 @@ Two-input comparison:
 ```bash
 nlpo compare \
   --inputs \
-    output/noun_frequency_virgil_aeneis.csv \
-    output/noun_frequency_virgil_georgica.csv \
+    output/frequency_virgil_aeneis.csv \
+    output/frequency_virgil_georgica.csv \
   --labels aeneis georgica \
   --metric log-ratio \
   --min-total-count 3 \
@@ -411,8 +420,8 @@ Run archive comparison:
 ```bash
 nlpo compare \
   --inputs \
-    runs/aeneis/outputs/noun_frequency_text.csv \
-    runs/cena/outputs/noun_frequency_text.csv \
+    runs/aeneis/outputs/frequency_text.csv \
+    runs/cena/outputs/frequency_text.csv \
   --labels aeneis cena \
   --metric log-ratio \
   --min-total-count 3 \

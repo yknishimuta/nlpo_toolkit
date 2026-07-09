@@ -61,7 +61,7 @@ def test_analysis_unit_surface_writes_word_frequency_and_passes_use_lemma_false(
     assert rc == 0
 
     # --- Assert: header changes for surface ---
-    csv_path = out_dir / "noun_frequency_text.csv"
+    csv_path = out_dir / "frequency_text.csv"
     assert csv_path.exists()
 
     rows = list(csv.reader(csv_path.open(encoding="utf-8")))
