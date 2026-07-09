@@ -2,7 +2,8 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from nlpo_toolkit.corpus_analysis import cli as mod
+from nlpo_toolkit.corpus_analysis import cli
+from nlpo_toolkit.corpus_analysis.cli import count as mod
 
 
 def test_normalization_policy_is_written_to_summary_and_run_meta(tmp_path, monkeypatch):
@@ -57,7 +58,7 @@ def test_normalization_policy_is_written_to_summary_and_run_meta(tmp_path, monke
     monkeypatch.setattr(mod, "count_group", lambda *a, **k: Counter({"x": 1}))
 
     # Act
-    rc = mod.main(["count-vocabula", "--project-root", str(script_dir)])
+    rc = cli.main(["count-vocabula", "--project-root", str(script_dir)])
     assert rc == 0
 
     # Assert: summary.txt contains policy line

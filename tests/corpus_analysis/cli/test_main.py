@@ -1,0 +1,77 @@
+from __future__ import annotations
+
+import argparse
+import ast
+from pathlib import Path
+
+from nlpo_toolkit.corpus_analysis.cli import build_parser, main
+from nlpo_toolkit.corpus_analysis.cli import count as count_cli
+
+
+def test_root_parser_registers_all_commands() -> None:
+    parser = build_parser()
+    subparsers = [
+        action
+        for action in parser._actions
+        if isinstance(action, argparse._SubParsersAction)
+    ]
+
+    assert len(subparsers) == 1
+    assert set(subparsers[0].choices) == {
+        "cache",
+        "compare",
+        "concordance",
+        "count",
+        "count-vocabula",
+        "features",
+        "ngram",
+    }
+
+
+def test_count_alias_and_count_vocabula_use_same_handler() -> None:
+    parser = build_parser()
+    full = parser.parse_args(["count-vocabula", "--project-root", "."])
+    alias = parser.parse_args(["count", "--project-root", "."])
+
+    assert full.handler is count_cli.execute
+    assert alias.handler is count_cli.execute
+
+
+def test_main_dispatches_through_registered_handler(monkeypatch, tmp_path) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run_count_vocabula(**kwargs: object) -> int:
+        calls.append(kwargs)
+        return 7
+
+    monkeypatch.setattr(count_cli, "run_count_vocabula", fake_run_count_vocabula)
+
+    rc = main(["count", "--project-root", str(tmp_path)])
+
+    assert rc == 7
+    assert calls[0]["project_root"] == tmp_path.resolve()
+    assert calls[0]["command_line"] == ["nlpo", "count", "--project-root", str(tmp_path)]
+
+
+def test_parser_build_does_not_initialize_count_backend(monkeypatch) -> None:
+    def fail_backend_init(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("backend should not be initialized while building parser")
+
+    monkeypatch.setattr(count_cli, "create_nlp_backend", fail_backend_init)
+
+    build_parser()
+
+
+def test_root_main_has_no_command_name_if_dispatch() -> None:
+    source = Path("nlpo_toolkit/corpus_analysis/cli/main.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    main_func = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "main")
+
+    command_comparisons = [
+        node
+        for node in ast.walk(main_func)
+        if isinstance(node, ast.Compare)
+        and any(isinstance(left, ast.Attribute) and left.attr == "command" for left in [node.left])
+    ]
+
+    assert command_comparisons == []

@@ -4,7 +4,8 @@ from pathlib import Path
 from collections import Counter
 import csv
 
-from nlpo_toolkit.corpus_analysis import cli as mod
+from nlpo_toolkit.corpus_analysis import cli
+from nlpo_toolkit.corpus_analysis.cli import count as mod
 
 
 def test_dictcheck_enabled_creates_known_unknown(tmp_path, monkeypatch):
@@ -74,7 +75,7 @@ def test_dictcheck_enabled_creates_known_unknown(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "render_stanza_package_table", lambda nlp, pkg: ["[stanza stub]"])
 
     # --- Act ---
-    rc = mod.main(["count-vocabula", "--project-root", str(script_dir)])
+    rc = cli.main(["count-vocabula", "--project-root", str(script_dir)])
     assert rc == 0
 
     # --- Assert ---
@@ -141,4 +142,4 @@ def test_dictcheck_enabled_requires_wordlist(tmp_path, monkeypatch):
 
     import pytest
     with pytest.raises(ValueError, match=r"dictcheck\.wordlist"):
-        mod.main(["count-vocabula", "--project-root", str(script_dir)])
+        cli.main(["count-vocabula", "--project-root", str(script_dir)])

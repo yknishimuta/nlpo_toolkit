@@ -6,7 +6,8 @@ import csv
 
 import pytest
 
-from nlpo_toolkit.corpus_analysis import cli as mod
+from nlpo_toolkit.corpus_analysis import cli
+from nlpo_toolkit.corpus_analysis.cli import count as mod
 
 # Dummy stanza-like objects
 class DummySentence:
@@ -95,7 +96,7 @@ def test_preprocess_cleaner_integration_fixed(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "render_stanza_package_table", lambda *a, **k: ["[stanza stub]"])
 
     # --- Act
-    rc = mod.main(["count-vocabula", "--project-root", str(script_dir)])
+    rc = cli.main(["count-vocabula", "--project-root", str(script_dir)])
     assert rc == 0
     assert cleaner_called["ok"] is True
 

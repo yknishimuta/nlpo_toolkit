@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from nlpo_toolkit.corpus_analysis import cli
+from nlpo_toolkit.corpus_analysis.cli import count as count_cli
 
 
 def test_count_vocabula_cli_uses_project_root_default_config(tmp_path, monkeypatch):
@@ -12,7 +13,7 @@ def test_count_vocabula_cli_uses_project_root_default_config(tmp_path, monkeypat
         calls.append(kwargs)
         return 0
 
-    monkeypatch.setattr(cli, "run_count_vocabula", fake_run_count_vocabula)
+    monkeypatch.setattr(count_cli, "run_count_vocabula", fake_run_count_vocabula)
 
     rc = cli.main(["count-vocabula", "--project-root", str(tmp_path)])
 
@@ -31,7 +32,7 @@ def test_count_alias_accepts_config_relative_to_project_root(tmp_path, monkeypat
         calls.append(kwargs)
         return 0
 
-    monkeypatch.setattr(cli, "run_count_vocabula", fake_run_count_vocabula)
+    monkeypatch.setattr(count_cli, "run_count_vocabula", fake_run_count_vocabula)
 
     rc = cli.main(["count", "--project-root", str(tmp_path), "--config", "custom.yml"])
 
@@ -48,7 +49,7 @@ def test_count_vocabula_cli_accepts_group_by_file(tmp_path, monkeypatch):
         calls.append(kwargs)
         return 0
 
-    monkeypatch.setattr(cli, "run_count_vocabula", fake_run_count_vocabula)
+    monkeypatch.setattr(count_cli, "run_count_vocabula", fake_run_count_vocabula)
 
     rc = cli.main(["count-vocabula", "--project-root", str(tmp_path), "--group-by-file"])
 
@@ -65,7 +66,7 @@ def test_count_vocabula_cli_accepts_run_archive_options(tmp_path, monkeypatch):
         calls.append(kwargs)
         return 0
 
-    monkeypatch.setattr(cli, "run_count_vocabula", fake_run_count_vocabula)
+    monkeypatch.setattr(count_cli, "run_count_vocabula", fake_run_count_vocabula)
 
     rc = cli.main(
         [
@@ -97,7 +98,7 @@ def test_count_vocabula_cli_accepts_auto_single_cleaned(tmp_path, monkeypatch):
         calls.append(kwargs)
         return 0
 
-    monkeypatch.setattr(cli, "run_count_vocabula", fake_run_count_vocabula)
+    monkeypatch.setattr(count_cli, "run_count_vocabula", fake_run_count_vocabula)
 
     rc = cli.main(["count-vocabula", "--project-root", str(tmp_path), "--auto-single-cleaned"])
 
@@ -112,7 +113,7 @@ def test_count_vocabula_cli_accepts_dry_run(tmp_path, monkeypatch):
         calls.append(kwargs)
         return 0
 
-    monkeypatch.setattr(cli, "dry_run_count_vocabula", fake_dry_run_count_vocabula)
+    monkeypatch.setattr(count_cli, "dry_run_count_vocabula", fake_dry_run_count_vocabula)
 
     rc = cli.main(["count-vocabula", "--dry-run", "--project-root", str(tmp_path), "--group-by-file"])
 

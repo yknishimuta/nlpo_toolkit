@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from nlpo_toolkit.corpus_analysis import cli
+from nlpo_toolkit.corpus_analysis.cli import count as cli
 from nlpo_toolkit.corpus_analysis.archive import (
     RunArchiveError,
     create_run_archive,

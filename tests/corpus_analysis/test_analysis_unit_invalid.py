@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from nlpo_toolkit.corpus_analysis import cli as mod
+from nlpo_toolkit.corpus_analysis import cli
+from nlpo_toolkit.corpus_analysis.cli import count as mod
 
 
 def test_analysis_unit_invalid_raises_value_error(tmp_path, monkeypatch):
@@ -48,4 +49,4 @@ def test_analysis_unit_invalid_raises_value_error(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "render_stanza_package_table", lambda *a, **k: ["[stanza stub]"])
 
     with pytest.raises(ValueError, match=r"analysis_unit"):
-        mod.main(["count-vocabula", "--project-root", str(script_dir)])
+        cli.main(["count-vocabula", "--project-root", str(script_dir)])

@@ -3,7 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from collections import Counter
 
-from nlpo_toolkit.corpus_analysis import cli as mod
+from nlpo_toolkit.corpus_analysis import cli
+from nlpo_toolkit.corpus_analysis.cli import count as mod
 
 
 def test_dictcheck_disabled_does_not_create_known_unknown(tmp_path, monkeypatch):
@@ -58,7 +59,7 @@ def test_dictcheck_disabled_does_not_create_known_unknown(tmp_path, monkeypatch)
     monkeypatch.setattr(mod, "render_stanza_package_table", lambda nlp, pkg: ["[stanza stub]"])
 
     # --- Act ---
-    rc = mod.main(["count-vocabula", "--project-root", str(script_dir)])
+    rc = cli.main(["count-vocabula", "--project-root", str(script_dir)])
     assert rc == 0
 
     # --- Assert ---
@@ -69,4 +70,3 @@ def test_dictcheck_disabled_does_not_create_known_unknown(tmp_path, monkeypatch)
     # But dictcheck outputs must NOT exist when enabled=False
     assert not (out_dir / "noun_frequency_text.known.csv").exists()
     assert not (out_dir / "noun_frequency_text.unknown.csv").exists()
-

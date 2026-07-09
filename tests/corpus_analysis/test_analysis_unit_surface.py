@@ -2,7 +2,8 @@ import csv
 from collections import Counter
 from pathlib import Path
 
-from nlpo_toolkit.corpus_analysis import cli as mod
+from nlpo_toolkit.corpus_analysis import cli
+from nlpo_toolkit.corpus_analysis.cli import count as mod
 
 
 def test_analysis_unit_surface_writes_word_frequency_and_passes_use_lemma_false(tmp_path, monkeypatch):
@@ -56,7 +57,7 @@ def test_analysis_unit_surface_writes_word_frequency_and_passes_use_lemma_false(
     monkeypatch.setattr(mod, "count_group", fake_count_group)
 
     # --- Act ---
-    rc = mod.main(["count-vocabula", "--project-root", str(script_dir)])
+    rc = cli.main(["count-vocabula", "--project-root", str(script_dir)])
     assert rc == 0
 
     # --- Assert: header changes for surface ---
