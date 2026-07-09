@@ -314,6 +314,51 @@ def test_create_run_archive_copies_only_generated_outputs_from_run_meta(tmp_path
     assert generated_names == {"frequency_text.csv", "summary.txt", "run_meta.json"}
 
 
+def test_create_run_archive_copies_token_artifacts_from_generated_outputs(tmp_path: Path) -> None:
+    project_root, config_path, config = _write_project(tmp_path)
+    token_path = project_root / "output" / "tokens.tsv"
+    token_meta_path = project_root / "output" / "tokens.meta.json"
+    token_path.write_text("group\ttoken\ntext\trosa\n", encoding="utf-8")
+    token_meta_path.write_text('{"schema": "nlpo-token-artifact"}\n', encoding="utf-8")
+    run_meta = project_root / "output" / "run_meta.json"
+    run_meta.write_text(
+        json.dumps(
+            {
+                "generated_outputs": [
+                    str((project_root / "output" / "frequency_text.csv").resolve()),
+                    str(token_path.resolve()),
+                    str(token_meta_path.resolve()),
+                    str((project_root / "output" / "summary.txt").resolve()),
+                    str(run_meta.resolve()),
+                ],
+                "token_artifacts": [
+                    {
+                        "group": "text",
+                        "path": str(token_path.resolve()),
+                        "metadata_path": str(token_meta_path.resolve()),
+                        "schema_version": 1,
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    run_dir = create_run_archive(
+        project_root=project_root,
+        config_path=config_path,
+        config=config,
+        run_name="token-artifacts",
+    )
+
+    assert (run_dir / "outputs" / "tokens.tsv").exists()
+    assert (run_dir / "outputs" / "tokens.meta.json").exists()
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    copied_names = {Path(item["archive_path"]).name for item in manifest["copied_outputs"]}
+    assert {"tokens.tsv", "tokens.meta.json"} <= copied_names
+
+
 def test_create_run_archive_fallback_collects_legacy_noun_frequency_outputs(tmp_path: Path) -> None:
     project_root, config_path, config = _write_project(tmp_path)
     run_meta = project_root / "output" / "run_meta.json"

@@ -4,6 +4,11 @@ import csv
 
 from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.concordance import build_concordance_rows
+from nlpo_toolkit.corpus_analysis.token_artifact import (
+    TokenArtifactMetadata,
+    TokenArtifactWriter,
+    TokenRecord,
+)
 
 
 def _write_trace(path):
@@ -134,6 +139,30 @@ def test_concordance_is_case_insensitive(tmp_path):
     assert "sentence" in columns
     assert len(rows) == 1
     assert rows[0]["lemma"] == "vir"
+
+
+def test_concordance_reads_token_artifact_sequence_for_kwic(tmp_path):
+    artifact = tmp_path / "tokens.tsv"
+    records = [
+        TokenRecord("g", "input/a.txt", 0, 0, 0, 0, 0, 4, 0, 4, "arma , virumque", "arma", "arma", "NOUN", "arma", True, None, None),
+        TokenRecord("g", "input/a.txt", 0, 0, 1, 1, 5, 6, 5, 6, "arma , virumque", ",", ",", "PUNCT", ",", False, "upos_not_targeted", None),
+        TokenRecord("g", "input/a.txt", 0, 0, 2, 2, 7, 15, 7, 15, "arma , virumque", "virumque", "vir", "NOUN", "vir", True, None, None),
+    ]
+    with TokenArtifactWriter(artifact, metadata=TokenArtifactMetadata(group="g")) as writer:
+        for record in records:
+            writer.write(record)
+
+    columns, rows = build_concordance_rows(
+        trace_path=artifact,
+        keys=["vir"],
+        field="lemma",
+        window=2,
+    )
+
+    assert columns[:3] == ["file", "group", "sentence"]
+    assert rows[0]["left"] == "arma"
+    assert rows[0]["node"] == "virumque"
+    assert rows[0]["right"] == ""
 
 
 def test_concordance_rejects_missing_trace(tmp_path, capsys):

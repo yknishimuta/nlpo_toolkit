@@ -4,6 +4,7 @@ import hashlib
 import json
 import sys
 from collections import Counter
+from contextlib import ExitStack
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable, List, Mapping, Optional, Sequence, Tuple
@@ -48,6 +49,14 @@ from .partition_validation import (
     validate_partitions,
     write_partition_validation_csv,
     write_partition_validation_json,
+)
+from .token_artifact import (
+    DiagnosticTraceWriter,
+    TokenArtifactMetadata,
+    TokenArtifactWriter,
+    counter_from_token_records,
+    iter_token_records,
+    token_artifact_metadata_path,
 )
 from nlpo_toolkit.nlp import load_roman_exceptions
 
@@ -95,6 +104,7 @@ class GroupAnalysisResult:
     counter: Counter[str]
     ref_tag_counts: Counter[str]
     generated_outputs: tuple[Path, ...]
+    token_artifact: Mapping[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -105,6 +115,7 @@ class AnalysisResults:
     ref_tags_by_group: Mapping[str, Counter[str]]
     trace_paths: Mapping[str, Path]
     generated_outputs: tuple[Path, ...]
+    token_artifacts: tuple[Mapping[str, object], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -178,6 +189,40 @@ def build_trace_paths(
             work_item_count=work_item_count,
         )
     return paths
+
+
+def _token_artifact_base_path(
+    path_value: str,
+    project_root: Path,
+) -> Path:
+    path = Path(str(path_value))
+    if not path.is_absolute():
+        path = (project_root / path).resolve()
+    if not path.suffix:
+        path = path.with_suffix(".tsv")
+    return path
+
+
+def build_token_artifact_paths(
+    *,
+    base_path: Path,
+    labels: list[str],
+) -> dict[str, Path]:
+    return build_trace_paths(base_path=base_path, labels=labels)
+
+
+def _validate_trace_artifact_paths(
+    *,
+    trace_paths: Mapping[str, Path],
+    token_artifact_paths: Mapping[str, Path],
+) -> None:
+    trace_resolved = {Path(path).resolve() for path in trace_paths.values()}
+    for path in token_artifact_paths.values():
+        resolved = Path(path).resolve()
+        if resolved in trace_resolved:
+            raise ValueError(
+                f"Token artifact path and diagnostic trace path must be different: {resolved}"
+            )
 
 
 def _resolve_analysis_unit(config: AppConfig) -> tuple[str, bool, tuple[str, str]]:
@@ -525,6 +570,99 @@ def _trace_kwargs_for_label(context: RunContext, trace_paths: Mapping[str, Path]
     }
 
 
+def _token_artifact_metadata(
+    *,
+    context: RunContext,
+    corpus: PreparedCorpus,
+    path: Path,
+) -> TokenArtifactMetadata:
+    return TokenArtifactMetadata(
+        group=corpus.label,
+        source_files=tuple(str(file) for file in corpus.files),
+        analysis_unit=context.analysis_unit,
+        upos_targets=tuple(sorted(context.config.filters.upos_targets)),
+        nlp=context.backend_info.to_dict(),
+        filters={
+            "min_token_length": context.config.filters.min_token_length,
+            "drop_roman_numerals": context.config.filters.drop_roman_numerals,
+        },
+        artifact_path=str(path.resolve()),
+    )
+
+
+def _count_with_token_records(
+    *,
+    context: RunContext,
+    corpus: PreparedCorpus,
+    text: str,
+    token_artifact_path: Path | None,
+    trace_path: Path | None,
+) -> tuple[Counter[str], Mapping[str, object] | None, tuple[Path, ...]]:
+    counter: Counter[str] = Counter()
+    artifact_meta: Mapping[str, object] | None = None
+    generated: list[Path] = []
+
+    with ExitStack() as stack:
+        artifact_writer: TokenArtifactWriter | None = None
+        if token_artifact_path is not None:
+            artifact_writer = stack.enter_context(
+                TokenArtifactWriter(
+                    token_artifact_path,
+                    metadata=_token_artifact_metadata(
+                        context=context,
+                        corpus=corpus,
+                        path=token_artifact_path,
+                    ),
+                )
+            )
+
+        trace_writer: DiagnosticTraceWriter | None = None
+        if trace_path is not None:
+            trace_writer = stack.enter_context(
+                DiagnosticTraceWriter(
+                    trace_path,
+                    max_rows=int(context.config.trace.max_rows or 0),
+                    only_keys=context.config.trace.only_keys,
+                    write_truncation_marker=context.config.trace.write_truncation_marker,
+                )
+            )
+
+        for record in iter_token_records(
+            text=text,
+            nlp=context.nlp,
+            group=corpus.label,
+            source_files=corpus.files,
+            use_lemma=context.use_lemma,
+            upos_targets=context.config.filters.upos_targets,
+            min_token_length=context.config.filters.min_token_length,
+            drop_roman_numerals=context.config.filters.drop_roman_numerals,
+            roman_exceptions=context.roman_exceptions,
+        ):
+            if artifact_writer is not None:
+                artifact_writer.write(record)
+            if trace_writer is not None:
+                trace_writer.consider(record)
+            if record.included and record.analysis_key:
+                counter[record.analysis_key] += 1
+
+    if token_artifact_path is not None:
+        metadata_path = token_artifact_metadata_path(token_artifact_path)
+        generated.extend((token_artifact_path, metadata_path))
+        artifact_writer_meta = artifact_writer.final_metadata if artifact_writer is not None else None
+        if artifact_writer_meta is not None:
+            artifact_meta = {
+                "group": corpus.label,
+                "path": str(token_artifact_path.resolve()),
+                "metadata_path": str(metadata_path.resolve()),
+                "schema_version": artifact_writer_meta.schema_version,
+                "row_count": artifact_writer_meta.row_count,
+                "included_row_count": artifact_writer_meta.included_row_count,
+                "complete": artifact_writer_meta.complete,
+                "sha256": artifact_writer_meta.sha256,
+            }
+    return counter, artifact_meta, tuple(generated)
+
+
 def write_dictcheck_outputs(
     *,
     context: RunContext,
@@ -569,25 +707,38 @@ def analyze_one_corpus(
     corpus: PreparedCorpus,
     trace_paths: Mapping[str, Path],
     lemma_normalization_map: Mapping[str, str] | None,
+    token_artifact_paths: Mapping[str, Path] | None = None,
 ) -> GroupAnalysisResult:
     label = corpus.label
     generated_outputs: list[Path] = []
+    token_generated_outputs: tuple[Path, ...] = ()
+    token_artifact_meta: Mapping[str, object] | None = None
     if context.config.ref_tags.enabled:
         ref_tags_path = context.out_dir / f"ref_tags_{label}.csv"
         write_frequency_csv(ref_tags_path, corpus.ref_tag_counts, header=("tag", "count"))
         generated_outputs.append(ref_tags_path)
 
     text = _text_for_counting(context, corpus)
-    counter = dependencies.count_group(
-        text,
-        context.nlp,
-        use_lemma=context.use_lemma,
-        min_token_length=context.config.filters.min_token_length,
-        drop_roman_numerals=context.config.filters.drop_roman_numerals,
-        roman_exceptions=context.roman_exceptions,
-        label=label,
-        **_trace_kwargs_for_label(context, trace_paths, label),
-    )
+    if context.config.artifacts.tokens.enabled:
+        counter, token_artifact_meta, token_generated_outputs = _count_with_token_records(
+            context=context,
+            corpus=corpus,
+            text=text,
+            token_artifact_path=(token_artifact_paths or {}).get(label),
+            trace_path=trace_paths.get(label) if context.config.trace.enabled else None,
+        )
+    else:
+        counter = dependencies.count_group(
+            text,
+            context.nlp,
+            use_lemma=context.use_lemma,
+            upos_targets=context.config.filters.upos_targets,
+            min_token_length=context.config.filters.min_token_length,
+            drop_roman_numerals=context.config.filters.drop_roman_numerals,
+            roman_exceptions=context.roman_exceptions,
+            label=label,
+            **_trace_kwargs_for_label(context, trace_paths, label),
+        )
     if lemma_normalization_map is not None:
         counter = apply_lemma_normalization(counter, lemma_normalization_map)
 
@@ -604,6 +755,7 @@ def analyze_one_corpus(
     )
     if dictcheck_output is not None:
         generated_outputs.extend(dictcheck_output.generated_outputs)
+    generated_outputs.extend(token_generated_outputs)
 
     return GroupAnalysisResult(
         label=label,
@@ -611,6 +763,7 @@ def analyze_one_corpus(
         counter=counter.copy(),
         ref_tag_counts=corpus.ref_tag_counts,
         generated_outputs=tuple(generated_outputs),
+        token_artifact=token_artifact_meta,
     )
 
 
@@ -629,20 +782,37 @@ def analyze_corpora(
             base_path=_trace_base_path(context.config.trace, context.out_dir, context.project_root),
             labels=[corpus.label for corpus in prepared_corpora],
         )
+    token_artifact_paths: dict[str, Path] = {}
+    if context.config.artifacts.tokens.enabled:
+        token_artifact_paths = build_token_artifact_paths(
+            base_path=_token_artifact_base_path(
+                context.config.artifacts.tokens.path,
+                context.project_root,
+            ),
+            labels=[corpus.label for corpus in prepared_corpora],
+        )
+        _validate_trace_artifact_paths(
+            trace_paths=trace_paths,
+            token_artifact_paths=token_artifact_paths,
+        )
     lemma_normalization_map = _load_lemma_normalization_map(context)
 
     groups: list[GroupAnalysisResult] = []
     generated_outputs: list[Path] = []
+    token_artifacts: list[Mapping[str, object]] = []
     for corpus in prepared_corpora:
         result = analyze_one_corpus(
             context=context,
             dependencies=dependencies,
             corpus=corpus,
             trace_paths=trace_paths,
+            token_artifact_paths=token_artifact_paths,
             lemma_normalization_map=lemma_normalization_map,
         )
         groups.append(result)
         generated_outputs.extend(result.generated_outputs)
+        if result.token_artifact is not None:
+            token_artifacts.append(result.token_artifact)
 
     return AnalysisResults(
         groups=tuple(groups),
@@ -651,6 +821,7 @@ def analyze_corpora(
         ref_tags_by_group={result.label: result.ref_tag_counts for result in groups},
         trace_paths=trace_paths,
         generated_outputs=tuple(generated_outputs),
+        token_artifacts=tuple(token_artifacts),
     )
 
 
@@ -763,6 +934,17 @@ def build_summary_lines(
                 f"- group={label} ref_tag_types={len(counts)} ref_tag_tokens={sum(counts.values())}"
             )
 
+    if analysis.token_artifacts:
+        lines.extend(["", "# Token artifacts", ""])
+        for artifact in analysis.token_artifacts:
+            lines.append(
+                f"- token_artifact={artifact.get('group', '')} "
+                f"path={artifact.get('path', '')} "
+                f"rows={artifact.get('row_count', 0)} "
+                f"included={artifact.get('included_row_count', 0)} "
+                f"schema={artifact.get('schema_version', '')}"
+            )
+
     if partitions.results:
         lines.extend(["", "# Partition validation", ""])
         for spec, result in zip(context.partition_specs, partitions.results):
@@ -857,6 +1039,7 @@ def build_final_run_metadata(
             for label, path in analysis.trace_paths.items()
         },
     }
+    meta["token_artifacts"] = list(analysis.token_artifacts)
     meta["generated_outputs"] = [str(path.resolve()) for path in generated_outputs]
     return meta
 

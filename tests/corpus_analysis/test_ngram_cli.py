@@ -4,6 +4,11 @@ import csv
 
 from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.ngram import build_ngrams_from_rows
+from nlpo_toolkit.corpus_analysis.token_artifact import (
+    TokenArtifactMetadata,
+    TokenArtifactWriter,
+    TokenRecord,
+)
 
 
 def _write_trace(path):
@@ -169,6 +174,30 @@ def test_ngram_cli_writes_csv_by_group(tmp_path):
         "group": "g1",
     }
     assert {row["group"] for row in rows} == {"g1", "g2"}
+
+
+def test_ngram_cli_reads_token_artifact_and_respects_boundaries(tmp_path, capsys):
+    artifact = tmp_path / "tokens.tsv"
+    records = [
+        TokenRecord("g1", "input/a.txt", 0, 0, 0, 0, None, None, None, None, "a b", "a", "a", "NOUN", "a", True, None, None),
+        TokenRecord("g1", "input/a.txt", 0, 0, 1, 1, None, None, None, None, "a b", "b", "b", "NOUN", "b", True, None, None),
+        TokenRecord("g1", "input/a.txt", 0, 1, 0, 2, None, None, None, None, "c d", "c", "c", "NOUN", "c", True, None, None),
+        TokenRecord("g1", "input/b.txt", 0, 1, 1, 3, None, None, None, None, "c d", "d", "d", "NOUN", "d", True, None, None),
+        TokenRecord("g2", "input/b.txt", 0, 0, 0, 4, None, None, None, None, "e f", "e", "e", "NOUN", "e", True, None, None),
+        TokenRecord("g2", "input/b.txt", 0, 0, 1, 5, None, None, None, None, "e f", "f", "f", "NOUN", "f", True, None, None),
+    ]
+    with TokenArtifactWriter(artifact, metadata=TokenArtifactMetadata(group="mixed")) as writer:
+        for record in records:
+            writer.write(record)
+
+    rc = cli.main(["ngram", "--trace", str(artifact), "--n", "2", "--field", "lemma"])
+
+    assert rc == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "ngram\tcount\tn\tfield",
+        "a b\t1\t2\tlemma",
+        "e f\t1\t2\tlemma",
+    ]
 
 
 def test_ngram_cli_rejects_missing_trace_field(tmp_path, capsys):

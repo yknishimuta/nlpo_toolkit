@@ -10,6 +10,7 @@ from typing import Iterable, TextIO
 
 from .config import load_config
 from .corpus import prepare_corpora, resolve_corpus_work_items, run_preprocess_if_needed
+from .token_artifact import TokenArtifactError, TokenRecord, read_token_rows, token_artifact_metadata_path
 
 
 class NgramError(ValueError):
@@ -48,6 +49,26 @@ def _sequence_key(row: dict[str, str], by_group: bool) -> tuple[str, ...]:
     elif "sent_idx" in row:
         parts.append(row.get("sent_idx", ""))
     return tuple(parts)
+
+
+def _legacy_fieldnames(path: Path) -> list[str]:
+    if token_artifact_metadata_path(path).exists():
+        return []
+    with path.open("r", encoding="utf-8", newline="") as f:
+        reader = csv.reader(f, delimiter="\t")
+        return next(reader, [])
+
+
+def _row_from_record(record: TokenRecord) -> dict[str, str]:
+    return {
+        "group": record.group,
+        "file": record.source_file or "",
+        "chunk": str(record.chunk_index),
+        "sent_idx": str(record.sentence_index),
+        "sentence": record.sentence,
+        "token": record.token,
+        "lemma": record.lemma or "",
+    }
 
 
 def _append_sequence_counts(
@@ -168,14 +189,19 @@ def build_ngrams_from_rows(
 def read_trace_rows(trace_path: Path, field: str, *, by_group: bool = False) -> list[dict[str, str]]:
     if not trace_path.exists():
         raise NgramError(f"Trace not found: {trace_path}")
-    with trace_path.open("r", encoding="utf-8", newline="") as f:
-        reader = csv.DictReader(f, delimiter="\t")
-        fieldnames = list(reader.fieldnames or [])
-        if field not in fieldnames:
-            raise NgramError(f"Trace must contain '{field}' column.")
-        if by_group and "group" not in fieldnames:
-            raise NgramError("Trace must contain 'group' column when --by-group is used.")
-        return list(reader)
+    fieldnames = _legacy_fieldnames(trace_path)
+    if fieldnames and field not in fieldnames:
+        raise NgramError(f"Trace must contain '{field}' column.")
+    if fieldnames and by_group and "group" not in fieldnames:
+        raise NgramError("Trace must contain 'group' column when --by-group is used.")
+    try:
+        return [
+            _row_from_record(record)
+            for record in read_token_rows(trace_path)
+            if record.included
+        ]
+    except TokenArtifactError as exc:
+        raise NgramError(str(exc)) from exc
 
 
 def _rows_from_text(text: str, group: str) -> list[dict[str, str]]:

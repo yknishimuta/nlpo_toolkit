@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Literal, Mapping
 
@@ -19,6 +19,7 @@ KNOWN_TOP_LEVEL_KEYS = frozenset(
     {
         "analysis_unit",
         "archive",
+        "artifacts",
         "cleaner_config",
         "comparisons",
         "cpu_only",
@@ -129,6 +130,17 @@ class TraceConfig:
 
 
 @dataclass(frozen=True)
+class TokenArtifactConfig:
+    enabled: bool = False
+    path: str = "output/tokens.tsv"
+
+
+@dataclass(frozen=True)
+class ArtifactsConfig:
+    tokens: TokenArtifactConfig = field(default_factory=TokenArtifactConfig)
+
+
+@dataclass(frozen=True)
 class ArchiveConfig:
     enabled: bool = False
     runs_dir: str = "runs"
@@ -164,6 +176,7 @@ class AppConfig:
     dictcheck: DictCheckConfig = DictCheckConfig()
     ref_tags: RefTagsConfig = RefTagsConfig()
     trace: TraceConfig = TraceConfig()
+    artifacts: ArtifactsConfig = field(default_factory=ArtifactsConfig)
     archive: ArchiveConfig = ArchiveConfig()
     lemma_cache: LemmaCacheConfig = LemmaCacheConfig()
     prune: PruneConfig = PruneConfig()
@@ -509,6 +522,24 @@ def _parse_trace_config(value: object) -> TraceConfig:
     )
 
 
+def _parse_artifacts_config(value: object) -> ArtifactsConfig:
+    artifacts = _optional_mapping(value, context="artifacts")
+    tokens = _optional_mapping(artifacts.get("tokens"), context="artifacts.tokens")
+    return ArtifactsConfig(
+        tokens=TokenArtifactConfig(
+            enabled=_bool_value(
+                tokens.get("enabled"),
+                context="artifacts.tokens.enabled",
+                default=False,
+            ),
+            path=_str_value(
+                tokens.get("path", "output/tokens.tsv"),
+                context="artifacts.tokens.path",
+            ),
+        )
+    )
+
+
 def _parse_archive_config(value: object) -> ArchiveConfig:
     archive = _optional_mapping(value, context="archive")
     return ArchiveConfig(
@@ -622,6 +653,7 @@ def _build_app_config(raw: Mapping[str, object]) -> AppConfig:
         dictcheck=_parse_dictcheck_config(normalized.get("dictcheck")),
         ref_tags=_parse_ref_tags_config(normalized.get("ref_tags")),
         trace=_parse_trace_config(normalized.get("trace")),
+        artifacts=_parse_artifacts_config(normalized.get("artifacts")),
         archive=_parse_archive_config(normalized.get("archive")),
         lemma_cache=_parse_lemma_cache_config(normalized.get("lemma_cache")),
         prune=_parse_prune_config(normalized.get("prune")),
@@ -681,6 +713,9 @@ def config_to_dict(config: AppConfig) -> dict[str, object]:
             "max_rows": config.trace.max_rows,
             "only_keys": sorted(config.trace.only_keys),
             "write_truncation_marker": config.trace.write_truncation_marker,
+        },
+        "artifacts": {
+            "tokens": asdict(config.artifacts.tokens),
         },
         "archive": asdict(config.archive),
         "lemma_cache": {

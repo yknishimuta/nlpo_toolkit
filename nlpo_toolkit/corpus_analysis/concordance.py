@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import csv
 import sys
+from collections import defaultdict
 from pathlib import Path
 from typing import TextIO
+
+from .token_artifact import TokenArtifactError, TokenRecord, read_token_rows, token_artifact_metadata_path
 
 
 class ConcordanceError(ValueError):
@@ -17,33 +20,54 @@ def _open_output(path: Path | None) -> tuple[TextIO, bool]:
     return path.open("w", encoding="utf-8", newline=""), True
 
 
-def _split_sentence(sentence: str) -> list[str]:
-    return sentence.split()
+def _legacy_fieldnames(path: Path) -> list[str]:
+    if token_artifact_metadata_path(path).exists():
+        return []
+    with path.open("r", encoding="utf-8", newline="") as f:
+        reader = csv.reader(f, delimiter="\t")
+        return next(reader, [])
 
 
-def _kwic(row: dict[str, str], field: str, window: int) -> tuple[str, str, str]:
-    node = row.get("token") or row.get(field, "")
-    sentence = row.get("sentence", "")
-    if not sentence:
-        return "", node, ""
+def _field_value(record: TokenRecord, field: str) -> str:
+    if field == "token":
+        return record.token
+    return record.lemma or ""
 
-    tokens = _split_sentence(sentence)
+
+def _sequence_key(record: TokenRecord) -> tuple[str, str, int, int]:
+    return (
+        record.group,
+        record.source_file or "",
+        record.chunk_index,
+        record.sentence_index,
+    )
+
+
+def _kwic_from_sequence(
+    sequence: list[TokenRecord],
+    record: TokenRecord,
+    *,
+    window: int,
+) -> tuple[str, str, str]:
+    ordered = sorted(sequence, key=lambda item: item.token_index)
     try:
-        idx = int(row.get("token_idx", ""))
+        idx = ordered.index(record)
     except ValueError:
-        idx = -1
-
-    if idx < 0 or idx >= len(tokens):
-        needle = row.get("token", row.get(field, ""))
-        lowered = needle.lower()
-        idx = next((i for i, token in enumerate(tokens) if token.lower() == lowered), -1)
-
+        idx = next(
+            (i for i, item in enumerate(ordered) if item.global_token_index == record.global_token_index),
+            -1,
+        )
     if idx < 0:
-        return "", node, ""
-
-    left = " ".join(tokens[max(0, idx - window):idx])
-    right = " ".join(tokens[idx + 1:idx + 1 + window])
-    return left, tokens[idx], right
+        return "", record.token, ""
+    if len(ordered) == 1 and record.sentence:
+        tokens = record.sentence.split()
+        if 0 <= record.token_index < len(tokens):
+            left = " ".join(tokens[max(0, record.token_index - window):record.token_index])
+            right = " ".join(tokens[record.token_index + 1:record.token_index + 1 + window])
+            return left, tokens[record.token_index], right
+    left = " ".join(item.token for item in ordered[max(0, idx - window):idx])
+    right = " ".join(item.token for item in ordered[idx + 1:idx + 1 + window])
+    return left, ordered[idx].token, right
 
 
 def build_concordance_rows(
@@ -66,37 +90,59 @@ def build_concordance_rows(
     if not key_set:
         raise ConcordanceError("--keys must contain at least one search key.")
 
-    with trace_path.open("r", encoding="utf-8", newline="") as f:
-        reader = csv.DictReader(f, delimiter="\t")
-        fieldnames = list(reader.fieldnames or [])
-        if field not in fieldnames:
-            raise ConcordanceError(f"Trace must contain '{field}' column.")
+    fieldnames = _legacy_fieldnames(trace_path)
+    if fieldnames and field not in fieldnames:
+        raise ConcordanceError(f"Trace must contain '{field}' column.")
 
-        metadata_columns = [
-            column for column in ("file", "group", "sentence") if column in fieldnames
-        ]
-        output_columns = metadata_columns + ["key", "field", "token", "lemma", "left", "node", "right"]
-        rows: list[dict[str, str]] = []
+    try:
+        records = [record for record in read_token_rows(trace_path) if record.included]
+    except TokenArtifactError as exc:
+        raise ConcordanceError(str(exc)) from exc
 
-        for row in reader:
-            value = (row.get(field) or "").strip()
-            if value.lower() not in key_set:
-                continue
+    metadata_columns = [
+        column
+        for column, predicate in (
+            ("file", any(record.source_file for record in records)),
+            ("group", any(record.group for record in records)),
+            ("sentence", any(record.sentence for record in records)),
+        )
+        if predicate
+    ]
+    output_columns = metadata_columns + ["key", "field", "token", "lemma", "left", "node", "right"]
+    rows: list[dict[str, str]] = []
+    sequences: dict[tuple[str, str, int, int], list[TokenRecord]] = defaultdict(list)
+    for record in records:
+        sequences[_sequence_key(record)].append(record)
 
-            left, node, right = _kwic(row, field, window)
-            out_row = {column: row.get(column, "") for column in metadata_columns}
-            out_row.update(
-                {
-                    "key": value,
-                    "field": field,
-                    "token": row.get("token", ""),
-                    "lemma": row.get("lemma", ""),
-                    "left": left,
-                    "node": node,
-                    "right": right,
-                }
-            )
-            rows.append(out_row)
+    for record in records:
+        value = _field_value(record, field).strip()
+        if value.lower() not in key_set:
+            continue
+
+        left, node, right = _kwic_from_sequence(
+            sequences[_sequence_key(record)],
+            record,
+            window=window,
+        )
+        out_row: dict[str, str] = {}
+        if "file" in metadata_columns:
+            out_row["file"] = record.source_file or ""
+        if "group" in metadata_columns:
+            out_row["group"] = record.group
+        if "sentence" in metadata_columns:
+            out_row["sentence"] = record.sentence
+        out_row.update(
+            {
+                "key": value,
+                "field": field,
+                "token": record.token,
+                "lemma": record.lemma or "",
+                "left": left,
+                "node": node,
+                "right": right,
+            }
+        )
+        rows.append(out_row)
 
     return output_columns, rows
 
