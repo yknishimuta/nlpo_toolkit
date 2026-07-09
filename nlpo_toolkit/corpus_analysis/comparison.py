@@ -10,6 +10,17 @@ from functools import cmp_to_key
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from nlpo_toolkit.comparison import (
+    ComparisonEngineError,
+    FrequencyTable,
+    PairwiseComparisonOptions,
+    ZeroHandling,
+    ZeroHandlingMode,
+    calculate_log_likelihood as engine_log_likelihood,
+    calculate_log_ratio as engine_log_ratio,
+    compare_pair,
+)
+
 
 REPORT_VALUES = {"all", "filtered"}
 SORT_BY_VALUES = {"log_likelihood", "abs_log_ratio", "total_count", "item"}
@@ -178,18 +189,16 @@ def calculate_log_ratio(
     tokens_b: int,
     zero_correction: float,
 ) -> float:
-    if count_a < 0 or count_b < 0:
-        raise ValueError("counts must be >= 0")
-    if tokens_a <= 0 or tokens_b <= 0:
-        raise ValueError("tokens must be > 0")
-    if not math.isfinite(float(zero_correction)) or zero_correction <= 0:
-        raise ValueError("zero_correction must be a positive finite number")
-
-    adjusted_a = count_a if count_a > 0 else float(zero_correction)
-    adjusted_b = count_b if count_b > 0 else float(zero_correction)
-    relative_a = adjusted_a / tokens_a
-    relative_b = adjusted_b / tokens_b
-    return math.log2(relative_a / relative_b)
+    try:
+        return engine_log_ratio(
+            count_a=float(count_a),
+            count_b=float(count_b),
+            total_a=float(tokens_a),
+            total_b=float(tokens_b),
+            zero_handling=ZeroHandling(ZeroHandlingMode.ZERO_ONLY, zero_correction),
+        )
+    except ComparisonEngineError as exc:
+        raise ValueError(str(exc)) from exc
 
 
 def calculate_log_likelihood(
@@ -199,35 +208,15 @@ def calculate_log_likelihood(
     tokens_a: int,
     tokens_b: int,
 ) -> float:
-    if count_a < 0 or count_b < 0:
-        raise ValueError("counts must be >= 0")
-    if tokens_a <= 0 or tokens_b <= 0:
-        raise ValueError("tokens must be > 0")
-    if count_a > tokens_a or count_b > tokens_b:
-        raise ValueError("counts must not exceed tokens")
-
-    observed = (
-        float(count_a),
-        float(tokens_a - count_a),
-        float(count_b),
-        float(tokens_b - count_b),
-    )
-    row_totals = (float(tokens_a), float(tokens_b))
-    col_totals = (float(count_a + count_b), float(tokens_a + tokens_b - count_a - count_b))
-    grand_total = float(tokens_a + tokens_b)
-
-    total = 0.0
-    for row_index, row_total in enumerate(row_totals):
-        for col_index, col_total in enumerate(col_totals):
-            obs = observed[row_index * 2 + col_index]
-            if obs <= 0:
-                continue
-            expected = row_total * col_total / grand_total
-            if expected > 0:
-                total += obs * math.log(obs / expected)
-
-    g2 = 2.0 * total
-    return 0.0 if g2 < 0 and abs(g2) < EPSILON else max(0.0, g2)
+    try:
+        return engine_log_likelihood(
+            count_a=float(count_a),
+            count_b=float(count_b),
+            total_a=float(tokens_a),
+            total_b=float(tokens_b),
+        )
+    except ComparisonEngineError as exc:
+        raise ValueError(str(exc)) from exc
 
 
 def _primary_value(row: ComparisonRow, sort_by: str) -> float | int | str:
@@ -280,6 +269,31 @@ def _sort_rows(rows: list[ComparisonRow], spec: ComparisonSpec) -> list[Comparis
     return sorted(rows, key=cmp_to_key(compare))
 
 
+def _frequency_table_from_counter(
+    *,
+    label: str,
+    counter: Counter[str],
+    comparison_name: str,
+) -> FrequencyTable:
+    counts: dict[str, int] = {}
+    for item, value in counter.items():
+        if not isinstance(item, str):
+            raise ValueError(f"comparison '{comparison_name}': counter keys must be strings")
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(f"comparison '{comparison_name}': counter values must be integers")
+        counts[item] = value
+    try:
+        return FrequencyTable.from_counts(label, counts)
+    except ComparisonEngineError as exc:
+        raise ValueError(str(exc)) from exc
+
+
+def _int_count(value: float) -> int:
+    if not float(value).is_integer():
+        raise ValueError("group comparison counts must be integers")
+    return int(value)
+
+
 def compare_counters(
     *,
     counter_a: Counter[str],
@@ -294,54 +308,48 @@ def compare_counters(
     if tokens_b == 0:
         raise ValueError(f"comparison '{spec.name}': group '{spec.group_b}' has zero target tokens")
 
-    all_items = set(counter_a) | set(counter_b)
-    rows_before_filter = len(all_items)
+    table_a = _frequency_table_from_counter(
+        label=spec.group_a,
+        counter=counter_a,
+        comparison_name=spec.name,
+    )
+    table_b = _frequency_table_from_counter(
+        label=spec.group_b,
+        counter=counter_b,
+        comparison_name=spec.name,
+    )
+    try:
+        engine_result = compare_pair(
+            table_a,
+            table_b,
+            options=PairwiseComparisonOptions(
+                scale=spec.scale,
+                min_total_count=spec.min_total_count,
+                zero_handling=ZeroHandling(ZeroHandlingMode.ZERO_ONLY, spec.zero_correction),
+            ),
+        )
+    except ComparisonEngineError as exc:
+        raise ValueError(str(exc)) from exc
+
     rows: list[ComparisonRow] = []
-
-    for item in all_items:
-        count_a = int(counter_a.get(item, 0))
-        count_b = int(counter_b.get(item, 0))
-        total_count = count_a + count_b
-        if total_count < spec.min_total_count:
-            continue
-
-        rate_a = count_a / tokens_a * spec.scale
-        rate_b = count_b / tokens_b * spec.scale
-        log_ratio = calculate_log_ratio(
-            count_a=count_a,
-            count_b=count_b,
-            tokens_a=tokens_a,
-            tokens_b=tokens_b,
-            zero_correction=spec.zero_correction,
-        )
-        log_likelihood = calculate_log_likelihood(
-            count_a=count_a,
-            count_b=count_b,
-            tokens_a=tokens_a,
-            tokens_b=tokens_b,
-        )
-        if log_ratio > EPSILON:
-            direction = spec.group_a
-        elif log_ratio < -EPSILON:
-            direction = spec.group_b
-        else:
-            direction = "equal"
-
+    for row in engine_result.rows:
+        count_a = _int_count(row.count_a)
+        count_b = _int_count(row.count_b)
         rows.append(
             ComparisonRow(
-                item=str(item),
+                item=row.item,
                 group_a_count=count_a,
                 group_b_count=count_b,
                 group_a_tokens=tokens_a,
                 group_b_tokens=tokens_b,
                 scale=spec.scale,
-                group_a_rate=rate_a,
-                group_b_rate=rate_b,
-                rate_difference=rate_a - rate_b,
-                log_ratio=log_ratio,
-                log_likelihood=log_likelihood,
-                direction=direction,
-                total_count=total_count,
+                group_a_rate=row.rate_a,
+                group_b_rate=row.rate_b,
+                rate_difference=row.rate_difference,
+                log_ratio=row.log_ratio,
+                log_likelihood=row.log_likelihood,
+                direction=row.direction,
+                total_count=_int_count(row.total_count),
             )
         )
 
@@ -351,8 +359,8 @@ def compare_counters(
         analysis_unit=analysis_unit,
         group_a_tokens=tokens_a,
         group_b_tokens=tokens_b,
-        vocabulary_union_size=len(all_items),
-        rows_before_filter=rows_before_filter,
+        vocabulary_union_size=engine_result.vocabulary_union_size,
+        rows_before_filter=engine_result.rows_before_filter,
         rows_after_filter=len(rows),
         rows=tuple(rows),
     )

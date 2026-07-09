@@ -7,6 +7,15 @@ import sys
 from pathlib import Path
 from typing import Any, Iterable, TextIO
 
+from nlpo_toolkit.comparison import (
+    ComparisonEngineError,
+    FrequencyTable,
+    PairwiseComparisonOptions,
+    ZeroHandling,
+    ZeroHandlingMode,
+    compare_many,
+    compare_pair,
+)
 
 KEY_COLUMN_CANDIDATES = ("lemma", "term", "key", "ngram", "token")
 COUNT_COLUMN_CANDIDATES = ("count", "freq", "frequency")
@@ -111,17 +120,67 @@ def load_frequency_csv(
     return table
 
 
-def _relative(count: float, total: float, smoothing: float, vocab_size: int) -> float:
-    denominator = total + smoothing * vocab_size
-    if denominator <= 0:
-        return 0.0
-    return (count + smoothing) / denominator
+def load_frequency_table(
+    path: Path,
+    *,
+    label: str,
+    key_column: str | None = None,
+    count_column: str | None = None,
+) -> FrequencyTable:
+    try:
+        return FrequencyTable.from_counts(
+            label,
+            load_frequency_csv(path, key_column=key_column, count_column=count_column),
+        )
+    except ComparisonEngineError as exc:
+        raise CompareError(str(exc)) from exc
 
 
-def _raw_relative(count: float, total: float) -> float:
-    if total <= 0:
-        return 0.0
-    return count / total
+def _frequency_table_from_mapping(label: str, table: dict[str, float]) -> FrequencyTable:
+    try:
+        return FrequencyTable.from_counts(label, table)
+    except ComparisonEngineError as exc:
+        raise CompareError(str(exc)) from exc
+
+
+def _render_pair_rows(result: Any) -> list[dict[str, Any]]:
+    label_a = result.table_a.label
+    label_b = result.table_b.label
+    rows: list[dict[str, Any]] = []
+    for row in result.rows:
+        rows.append(
+            {
+                "term": row.item,
+                f"{label_a}_count": row.count_a,
+                f"{label_b}_count": row.count_b,
+                f"{label_a}_relative": row.rate_a,
+                f"{label_b}_relative": row.rate_b,
+                "difference": row.rate_difference,
+                "ratio": row.ratio,
+                "log_ratio": row.log_ratio,
+                "total_count": row.total_count,
+            }
+        )
+    return rows
+
+
+def _render_many_rows(result: Any) -> list[dict[str, Any]]:
+    labels = [table.label for table in result.tables]
+    rows: list[dict[str, Any]] = []
+    for row in result.rows:
+        rendered: dict[str, Any] = {"term": row.item}
+        for label in labels:
+            rendered[f"{label}_count"] = row.counts[label]
+        for label in labels:
+            rendered[f"{label}_relative"] = row.rates[label]
+        rendered["max_label"] = row.max_label
+        rendered["max_relative"] = row.max_rate
+        rendered["min_label"] = row.min_label
+        rendered["min_relative"] = row.min_rate
+        rendered["range_relative"] = row.range_relative
+        rendered["total_count"] = row.total_count
+        rows.append(rendered)
+    return rows
 
 
 def compare_frequency_tables(
@@ -137,47 +196,31 @@ def compare_frequency_tables(
     if smoothing < 0:
         raise CompareError("--smoothing must be non-negative")
 
-    terms = sorted(set().union(*(set(t) for t in tables)))
-    totals = [sum(table.values()) for table in tables]
-    vocab_size = max(len(terms), 1)
-    rows: list[dict[str, Any]] = []
+    frequency_tables = [
+        _frequency_table_from_mapping(label, table)
+        for label, table in zip(labels, tables)
+    ]
+    try:
+        if len(frequency_tables) == 2:
+            result = compare_pair(
+                frequency_tables[0],
+                frequency_tables[1],
+                options=PairwiseComparisonOptions(
+                    scale=1.0,
+                    min_total_count=min_total_count,
+                    zero_handling=ZeroHandling(ZeroHandlingMode.ADDITIVE, smoothing),
+                ),
+            )
+            return _render_pair_rows(result)
 
-    for term in terms:
-        counts = [table.get(term, 0.0) for table in tables]
-        total_count = sum(counts)
-        if total_count < min_total_count:
-            continue
-
-        relatives = [_raw_relative(count, total) for count, total in zip(counts, totals)]
-
-        row: dict[str, Any] = {"term": term}
-        for label, count in zip(labels, counts):
-            row[f"{label}_count"] = count
-        for label, rel in zip(labels, relatives):
-            row[f"{label}_relative"] = rel
-
-        if len(tables) == 2:
-            rel_a, rel_b = relatives
-            smoothed_a, smoothed_b = [
-                _relative(count, total, smoothing, vocab_size)
-                for count, total in zip(counts, totals)
-            ]
-            row["difference"] = rel_a - rel_b
-            row["ratio"] = smoothed_a / smoothed_b if smoothed_b else math.inf
-            row["log_ratio"] = math.log2(row["ratio"]) if row["ratio"] > 0 else -math.inf
-        else:
-            max_idx = max(range(len(relatives)), key=lambda i: relatives[i])
-            min_idx = min(range(len(relatives)), key=lambda i: relatives[i])
-            row["max_label"] = labels[max_idx]
-            row["max_relative"] = relatives[max_idx]
-            row["min_label"] = labels[min_idx]
-            row["min_relative"] = relatives[min_idx]
-            row["range_relative"] = relatives[max_idx] - relatives[min_idx]
-
-        row["total_count"] = total_count
-        rows.append(row)
-
-    return rows
+        result = compare_many(
+            frequency_tables,
+            scale=1.0,
+            min_total_count=min_total_count,
+        )
+        return _render_many_rows(result)
+    except ComparisonEngineError as exc:
+        raise CompareError(str(exc)) from exc
 
 
 def labels_from_paths(paths: list[Path]) -> list[str]:
@@ -292,15 +335,31 @@ def run_compare(
         raise CompareError("--labels must have the same length as --inputs")
     effective_labels = labels or labels_from_paths(inputs)
     tables = [
-        load_frequency_csv(path, key_column=key_column, count_column=count_column)
-        for path in inputs
+        load_frequency_table(
+            path,
+            label=label,
+            key_column=key_column,
+            count_column=count_column,
+        )
+        for path, label in zip(inputs, effective_labels)
     ]
-    rows = compare_frequency_tables(
-        tables,
-        effective_labels,
-        smoothing=smoothing,
-        min_total_count=min_total_count,
-    )
+    try:
+        if len(tables) == 2:
+            result = compare_pair(
+                tables[0],
+                tables[1],
+                options=PairwiseComparisonOptions(
+                    scale=1.0,
+                    min_total_count=min_total_count,
+                    zero_handling=ZeroHandling(ZeroHandlingMode.ADDITIVE, smoothing),
+                ),
+            )
+            rows = _render_pair_rows(result)
+        else:
+            result = compare_many(tables, scale=1.0, min_total_count=min_total_count)
+            rows = _render_many_rows(result)
+    except ComparisonEngineError as exc:
+        raise CompareError(str(exc)) from exc
     sort_key = sort or ("abs-log-ratio" if len(inputs) == 2 else "range-relative")
     rows = sort_compare_rows(rows, sort_key=sort_key, ascending=ascending)
     if top is not None:

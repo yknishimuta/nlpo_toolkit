@@ -307,6 +307,12 @@ CSV rows use generic columns such as `item`, `group_a_count`, and
 `group_b_count`; actual group names are stored in the `group_a` and `group_b`
 columns.
 
+Configured group comparison and `nlpo compare` use the same comparison math
+engine, but keep separate inputs and outputs. Group comparison reads in-memory
+Counters from the current run and writes fixed keyness columns including
+`log_likelihood`; `nlpo compare` reads existing CSV files and keeps its dynamic
+CSV-comparison columns.
+
 Rates are normalized frequencies:
 
 ```text
@@ -415,9 +421,11 @@ nlpo compare \
 
 `log-ratio` is `log2(relative_a / relative_b)` with additive smoothing, so
 positive values are more characteristic of the first input and negative values
-are more characteristic of the second input. For three or more inputs, the
-output reports each label's count and relative frequency plus the max/min label
-and relative-frequency range.
+are more characteristic of the second input. This smoothing is the existing
+Compare CLI behavior and is distinct from configured group comparison's
+zero-only `zero_correction`. For three or more inputs, the output reports each
+label's count and relative frequency plus the max/min label and
+relative-frequency range.
 
 ## Features CLI
 
