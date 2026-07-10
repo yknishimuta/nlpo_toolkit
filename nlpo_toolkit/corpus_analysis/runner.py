@@ -15,12 +15,11 @@ from nlpo_toolkit.backends import (
     create_nlp_backend,
     render_backend_info,
 )
-from .config import AppConfig, TraceConfig, ensure_app_config
+from .config import AppConfig, TraceConfig
 from .corpus import (
     CorpusWorkItem,
     PreparedCorpus,
     prepare_corpora,
-    resolve_corpus_work_items,
     resolve_project_path,
     run_preprocess_if_needed,
     sanitize_label,
@@ -28,7 +27,6 @@ from .corpus import (
 from .comparison import (
     comparison_csv_name,
     comparison_result_meta,
-    parse_comparison_specs,
     run_comparisons,
     write_comparison_csv,
     write_group_comparisons_json,
@@ -42,13 +40,17 @@ from .outputs import (
     write_run_meta,
 )
 from .partition_validation import (
-    parse_partition_specs,
     partition_result_meta,
     partition_result_summary,
     sanitize_partition_name,
     validate_partitions,
     write_partition_validation_csv,
     write_partition_validation_json,
+)
+from .run_plan import (
+    RunPlan,
+    build_run_plan,
+    ensure_out_dir,
 )
 from .analysis_cache import (
     AnalysisCacheGroupResult,
@@ -83,6 +85,7 @@ class RunnerDependencies:
 
 @dataclass(frozen=True)
 class RunContext:
+    plan: RunPlan
     project_root: Path
     config_path: Path
     config: AppConfig
@@ -235,28 +238,6 @@ def _validate_trace_artifact_paths(
             )
 
 
-def _resolve_analysis_unit(config: AppConfig) -> tuple[str, bool, tuple[str, str]]:
-    """
-    Returns:
-      - unit: "lemma" | "surface"
-      - use_lemma: bool (to pass into count_group_fn)
-      - csv_header: (col1, col2)
-    """
-    unit = config.analysis_unit
-    use_lemma = (unit == "lemma")
-
-    # default headers
-    if unit == "lemma":
-        header = ("lemma", "count")
-    else:
-        header = ("word", "frequency")
-
-    # optional override: csv_header: ["...", "..."]
-    if config.csv_header is not None:
-        header = config.csv_header
-
-    return unit, use_lemma, header
-
 def _format_normalization_kv(norm: object) -> str:
     if hasattr(norm, "__dataclass_fields__"):
         norm_dict = asdict(norm)
@@ -283,46 +264,6 @@ def _format_normalization_kv(norm: object) -> str:
         parts.append(f"{k}={norm_dict[k]}")
 
     return " ".join(parts)
-
-
-def _resolve_run_paths(
-    *,
-    project_root: Path | None,
-    script_dir: Path | None,
-    config_path: Path,
-) -> tuple[Path, Path]:
-    if project_root is None:
-        if script_dir is None:
-            raise TypeError("project_root is required")
-        project_root = script_dir
-
-    resolved_root = Path(project_root).resolve()
-    resolved_config = Path(config_path)
-    if not resolved_config.is_absolute():
-        resolved_config = (resolved_root / resolved_config).resolve()
-    if not resolved_config.exists():
-        raise FileNotFoundError(f"Config file not found: {resolved_config}")
-    return resolved_root, resolved_config
-
-
-def _resolve_grouping_flags(
-    *,
-    config: AppConfig,
-    group_by_file: bool | None,
-    auto_single_cleaned: bool,
-) -> tuple[str, bool, bool]:
-    grouping_mode = config.grouping.mode
-    auto_mode = bool(auto_single_cleaned) or grouping_mode == "auto_single_cleaned"
-    per_file = (bool(group_by_file) or grouping_mode == "per_file") and not auto_mode
-    return grouping_mode, per_file, auto_mode
-
-
-def _resolve_out_dir(config: AppConfig, project_root: Path) -> Path:
-    out_dir = Path(config.out_dir)
-    if not out_dir.is_absolute():
-        out_dir = (project_root / out_dir).resolve()
-    out_dir.mkdir(parents=True, exist_ok=True)
-    return out_dir
 
 
 def _initialize_nlp(
@@ -381,69 +322,6 @@ def _load_roman_exceptions(config: AppConfig, project_root: Path) -> frozenset[s
     return load_roman_exceptions(path)
 
 
-def _validate_specs_against_grouping(
-    *,
-    partition_specs: Sequence[Any],
-    comparison_specs: Sequence[Any],
-    per_file: bool,
-) -> None:
-    if partition_specs and per_file:
-        raise ValueError("validations.partitions cannot be used with --group-by-file or grouping.mode: per_file")
-    if comparison_specs and per_file:
-        raise ValueError("comparisons cannot be used with grouping.mode=per_file")
-
-
-def _validate_partition_group_references(
-    *,
-    partition_specs: Sequence[Any],
-    group_files: Mapping[str, Sequence[Path]],
-) -> None:
-    for spec in partition_specs:
-        for name in (spec.whole, *spec.parts):
-            if not group_files.get(name):
-                raise ValueError(f"Partition {spec.name} references empty group: {name}")
-
-
-def _parse_and_validate_specs(
-    *,
-    config: AppConfig,
-    per_file: bool,
-) -> tuple[tuple[Any, ...], tuple[Any, ...]]:
-    partition_specs = tuple(parse_partition_specs(config))
-    comparison_specs = tuple(parse_comparison_specs(config))
-    _validate_specs_against_grouping(
-        partition_specs=partition_specs,
-        comparison_specs=comparison_specs,
-        per_file=per_file,
-    )
-    return partition_specs, comparison_specs
-
-
-def _resolve_and_validate_work_items(
-    *,
-    config: AppConfig,
-    project_root: Path,
-    cleaned_dir: Path | None,
-    group_by_file: bool | None,
-    auto_single_cleaned: bool,
-    error_on_empty_group: bool,
-    partition_specs: Sequence[Any],
-) -> tuple[tuple[CorpusWorkItem, ...], Mapping[str, tuple[Path, ...]]]:
-    resolved = resolve_corpus_work_items(
-        config=config,
-        project_root=project_root,
-        cleaned_dir=cleaned_dir,
-        group_by_file=bool(group_by_file),
-        auto_single_cleaned=auto_single_cleaned,
-        error_on_empty_group=error_on_empty_group,
-    )
-    _validate_partition_group_references(
-        partition_specs=partition_specs,
-        group_files=resolved.group_files,
-    )
-    return tuple(resolved.work_items), resolved.group_files
-
-
 def prepare_run_context(
     *,
     project_root: Path | None,
@@ -454,74 +332,53 @@ def prepare_run_context(
     error_on_empty_group: bool,
     dependencies: RunnerDependencies,
 ) -> RunContext:
-    resolved_root, resolved_config = _resolve_run_paths(
+    plan = build_run_plan(
         project_root=project_root,
         script_dir=script_dir,
         config_path=config_path,
-    )
-    config = ensure_app_config(dependencies.load_config(resolved_config))
-    if not config.groups:
-        raise ValueError("config.groups must be a non-empty mapping")
-
-    grouping_mode, per_file, auto_mode = _resolve_grouping_flags(
-        config=config,
         group_by_file=group_by_file,
         auto_single_cleaned=auto_single_cleaned,
-    )
-    partition_specs, comparison_specs = _parse_and_validate_specs(
-        config=config,
-        per_file=per_file,
-    )
-
-    cleaned_dir = run_preprocess_if_needed(
-        config=config,
-        project_root=resolved_root,
+        error_on_empty_group=error_on_empty_group,
+        load_config_fn=dependencies.load_config,
+        preprocess_mode="execute",
         clean_mod=dependencies.clean_module,
+        preprocess_fn=run_preprocess_if_needed,
     )
-    out_dir = _resolve_out_dir(config, resolved_root)
-    analysis_unit, use_lemma, csv_header = _resolve_analysis_unit(config)
+    ensure_out_dir(plan.out_dir)
     nlp, backend_info, package = _initialize_nlp(
-        config=config,
+        config=plan.config,
         dependencies=dependencies,
     )
     splitter_nlp = _initialize_sentence_splitter(
-        config=config,
+        config=plan.config,
         package=package,
         dependencies=dependencies,
     )
-    roman_exceptions = _load_roman_exceptions(config, resolved_root)
-    work_items, group_files = _resolve_and_validate_work_items(
-        config=config,
-        project_root=resolved_root,
-        cleaned_dir=cleaned_dir,
-        group_by_file=bool(group_by_file),
-        auto_single_cleaned=auto_single_cleaned,
-        error_on_empty_group=error_on_empty_group,
-        partition_specs=partition_specs,
-    )
+    roman_exceptions = _load_roman_exceptions(plan.config, plan.project_root)
 
     return RunContext(
-        project_root=resolved_root,
-        config_path=resolved_config,
-        config=config,
-        out_dir=out_dir,
-        grouping_mode=grouping_mode,
-        per_file=per_file,
-        auto_mode=auto_mode,
-        auto_group_name=config.grouping.auto_group_name,
-        analysis_unit=analysis_unit,
-        use_lemma=use_lemma,
-        csv_header=csv_header,
-        partition_specs=partition_specs,
-        comparison_specs=comparison_specs,
-        work_items=work_items,
-        group_files=group_files,
+        plan=plan,
+        project_root=plan.project_root,
+        config_path=plan.config_path,
+        config=plan.config,
+        out_dir=plan.out_dir,
+        grouping_mode=plan.grouping_mode,
+        per_file=plan.per_file,
+        auto_mode=plan.auto_mode,
+        auto_group_name=plan.auto_group_name,
+        analysis_unit=plan.analysis_unit,
+        use_lemma=plan.use_lemma,
+        csv_header=plan.csv_header,
+        partition_specs=plan.partition_specs,
+        comparison_specs=plan.comparison_specs,
+        work_items=plan.work_items,
+        group_files=plan.group_files,
         nlp=nlp,
         backend_info=backend_info,
-        stanza_package=config.nlp.stanza_package,
+        stanza_package=plan.config.nlp.stanza_package,
         splitter_nlp=splitter_nlp,
         roman_exceptions=roman_exceptions,
-        cleaned_dir=cleaned_dir,
+        cleaned_dir=plan.cleaned_dir,
     )
 
 

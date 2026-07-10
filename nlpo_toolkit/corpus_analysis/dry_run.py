@@ -11,16 +11,13 @@ from .config import (
     unknown_filter_keys,
     unknown_top_level_keys,
 )
-from .comparison import parse_comparison_specs
 from .corpus import (
-    cleaned_txt_files,
     inspect_preprocess,
     resolve_cleaner_plan,
-    resolve_corpus_work_items,
     resolve_project_path,
 )
 from .io_utils import expand_globs
-from .partition_validation import parse_partition_specs
+from .run_plan import RunPlan, build_run_plan
 
 
 class DuplicateKeyLoader(yaml.SafeLoader):
@@ -101,6 +98,59 @@ def _count_cleaner_input_files(cleaner_config_path: Path) -> int:
     return len(expand_globs([str(input_path)]))
 
 
+def render_run_plan(plan: RunPlan, *, project_root: Path) -> list[str]:
+    lines: list[str] = []
+
+    if plan.auto_mode:
+        lines.append("[OK] grouping mode: auto_single_cleaned")
+        files = plan.group_files.get(plan.auto_group_name, ())
+        if files:
+            lines.append(
+                "[OK] auto selected cleaned file: "
+                f"{_display_path(files[0], project_root)}"
+            )
+    elif plan.per_file:
+        lines.append("[OK] grouping mode: per_file")
+
+    for group_name, files in plan.group_files.items():
+        lines.append(f"[OK] group {group_name} matched files: {len(files)}")
+        for file_path in files:
+            lines.append(f"  - {_display_path(file_path, project_root)}")
+
+    return lines
+
+
+def _render_spec_diagnostics(plan: RunPlan) -> tuple[list[str], int]:
+    lines: list[str] = []
+    exit_code = 0
+
+    for spec in plan.partition_specs:
+        empty_refs = [name for name in (spec.whole, *spec.parts) if not plan.group_files.get(name)]
+        if empty_refs:
+            for group_name in empty_refs:
+                lines.append(f"[ERROR] partition {spec.name} references empty group: {group_name}")
+            exit_code = 1
+        else:
+            lines.append(
+                f"[OK] partition {spec.name}: whole={spec.whole} parts={','.join(spec.parts)}"
+            )
+
+    for spec in plan.comparison_specs:
+        empty_refs = [name for name in (spec.group_a, spec.group_b) if not plan.group_files.get(name)]
+        if empty_refs:
+            for group_name in empty_refs:
+                lines.append(f"[ERROR] comparison {spec.name} references empty group: {group_name}")
+            exit_code = 1
+        else:
+            lines.append(
+                f"[OK] comparison {spec.name}: group_a={spec.group_a} "
+                f"group_b={spec.group_b} scale={spec.scale} "
+                f"min_total_count={spec.min_total_count}"
+            )
+
+    return lines, exit_code
+
+
 def dry_run_count_vocabula(
     *,
     project_root: Path,
@@ -125,12 +175,8 @@ def dry_run_count_vocabula(
         print(f"[ERROR] config: {exc}")
         return 1
 
-    grouping_mode = cfg.grouping.mode
-    auto_mode = bool(auto_single_cleaned) or grouping_mode == "auto_single_cleaned"
-
     cleaner_plan = resolve_cleaner_plan(cfg, project_root)
     cleaner_config_path = cleaner_plan.config_path if cleaner_plan is not None else None
-    cleaned_dir: Path | None = None
     if cleaner_config_path is not None:
         if cleaner_config_path.exists():
             lines.append(
@@ -140,9 +186,10 @@ def dry_run_count_vocabula(
             try:
                 cleaned_dir = inspect_preprocess(cleaner_plan)
                 lines.append(f"[OK] input files: {_count_cleaner_input_files(cleaner_config_path)}")
-                lines.append(f"[OK] cleaned output dir: {_display_path(cleaned_dir, project_root)}")
+                if cleaned_dir is not None:
+                    lines.append(f"[OK] cleaned output dir: {_display_path(cleaned_dir, project_root)}")
             except Exception as exc:
-                lines.append(f"[ERROR] cleaner config: {exc}")
+                lines.append(f"[ERROR] {exc}")
                 exit_code = 1
         else:
             lines.append(
@@ -150,105 +197,34 @@ def dry_run_count_vocabula(
                 f"{_display_path(cleaner_config_path, project_root)}"
             )
             exit_code = 1
-    else:
-        if auto_mode:
-            group_files = {}
-        else:
-            resolved = resolve_corpus_work_items(
-                config=cfg,
-                project_root=project_root,
-                cleaned_dir=None,
-                group_by_file=group_by_file,
-                auto_single_cleaned=False,
-                error_on_empty_group=False,
-            )
-            group_files = resolved.group_files
-        lines.append(f"[OK] input files: {sum(len(files) for files in group_files.values())}")
 
-    if auto_mode:
-        auto_group_name = cfg.grouping.auto_group_name
-        try:
-            cleaned_files = cleaned_txt_files(cleaned_dir)
-            if not cleaned_files:
-                lines.append(
-                    "[ERROR] --auto-single-cleaned was enabled, "
-                    f"but no .txt files were found in {_display_path(cleaned_dir or Path('cleaned'), project_root)}"
-                )
-                group_files = {auto_group_name: []}
-                exit_code = 1
-            elif len(cleaned_files) > 1:
-                lines.append(
-                    "[ERROR] --auto-single-cleaned expected exactly one cleaned .txt file, "
-                    f"but found {len(cleaned_files)}:"
-                )
-                for file_path in cleaned_files:
-                    lines.append(f"  {_display_path(file_path, project_root)}")
-                lines.append("")
-                lines.append("Remove stale cleaned files, or specify groups.files explicitly.")
-                group_files = {auto_group_name: cleaned_files}
-                exit_code = 1
-            else:
-                lines.append("[OK] grouping mode: auto_single_cleaned")
-                lines.append(
-                    "[OK] auto selected cleaned file: "
-                    f"{_display_path(cleaned_files[0], project_root)}"
-                )
-                group_files = {auto_group_name: cleaned_files}
-        except ValueError as exc:
-            lines.append(f"[ERROR] {exc}")
-            group_files = {auto_group_name: []}
-            exit_code = 1
-    else:
-        resolved = resolve_corpus_work_items(
-            config=cfg,
+    try:
+        plan = build_run_plan(
             project_root=project_root,
-            cleaned_dir=cleaned_dir,
+            script_dir=None,
+            config_path=config_path,
             group_by_file=group_by_file,
             auto_single_cleaned=auto_single_cleaned,
             error_on_empty_group=False,
+            load_config_fn=lambda _path: cfg,
+            preprocess_mode="inspect",
+            validate_references=False,
         )
-        group_files = resolved.group_files
-
-    for group_name, files in group_files.items():
-        if not files and error_on_empty_group:
-            lines.append(f"[ERROR] group {group_name} matched files: 0")
-            exit_code = 1
-        else:
-            lines.append(f"[OK] group {group_name} matched files: {len(files)}")
-        for file_path in files:
-            lines.append(f"  - {_display_path(file_path, project_root)}")
-
-    partition_specs = parse_partition_specs(cfg)
-    if partition_specs and group_by_file:
-        lines.append("[ERROR] validations.partitions cannot be used with --group-by-file")
+        if cleaner_config_path is None:
+            lines.append(f"[OK] input files: {sum(len(files) for files in plan.group_files.values())}")
+        lines.extend(render_run_plan(plan, project_root=project_root))
+        if error_on_empty_group:
+            for group_name, files in plan.group_files.items():
+                if not files:
+                    lines.append(f"[ERROR] group {group_name} matched files: 0")
+                    exit_code = 1
+        spec_lines, spec_exit_code = _render_spec_diagnostics(plan)
+        lines.extend(spec_lines)
+        lines.append(f"[OK] output dir: {_display_path(plan.out_dir, project_root)}")
+        exit_code = max(exit_code, spec_exit_code)
+    except Exception as exc:
+        lines.append(f"[ERROR] {exc}")
         exit_code = 1
-    for spec in partition_specs:
-        empty_refs = [name for name in (spec.whole, *spec.parts) if not group_files.get(name)]
-        if empty_refs:
-            for group_name in empty_refs:
-                lines.append(f"[ERROR] partition {spec.name} references empty group: {group_name}")
-            exit_code = 1
-        else:
-            lines.append(
-                f"[OK] partition {spec.name}: whole={spec.whole} parts={','.join(spec.parts)}"
-            )
-
-    comparison_specs = parse_comparison_specs(cfg)
-    if comparison_specs and group_by_file:
-        lines.append("[ERROR] comparisons cannot be used with grouping.mode=per_file")
-        exit_code = 1
-    for spec in comparison_specs:
-        empty_refs = [name for name in (spec.group_a, spec.group_b) if not group_files.get(name)]
-        if empty_refs:
-            for group_name in empty_refs:
-                lines.append(f"[ERROR] comparison {spec.name} references empty group: {group_name}")
-            exit_code = 1
-        else:
-            lines.append(
-                f"[OK] comparison {spec.name}: group_a={spec.group_a} "
-                f"group_b={spec.group_b} scale={spec.scale} "
-                f"min_total_count={spec.min_total_count}"
-            )
 
     for key in duplicate_keys:
         lines.append(f"[WARN] duplicate YAML key: {key}")
@@ -273,13 +249,6 @@ def dry_run_count_vocabula(
             else:
                 lines.append(f"[ERROR] ref_tags patterns missing: {_display_path(patterns_path, project_root)}")
                 exit_code = 1
-
-    out_dir = resolve_project_path(project_root, cfg.out_dir)
-    lines.append(f"[OK] output dir: {_display_path(out_dir, project_root)}")
-
-    mode = "auto_single_cleaned" if auto_mode else ("per_file" if group_by_file else grouping_mode)
-    if mode == "per_file":
-        lines.append("[OK] grouping mode: per_file")
 
     for line in lines:
         print(line)
