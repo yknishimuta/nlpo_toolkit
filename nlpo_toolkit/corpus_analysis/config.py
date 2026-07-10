@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, Mapping
 
@@ -733,6 +733,152 @@ def ensure_app_config(config: AppConfig | Mapping[str, object]) -> AppConfig:
     return _build_app_config(config)
 
 
+def _nlp_to_dict(config: NLPConfig) -> dict[str, object]:
+    stanza_package: object
+    if isinstance(config.stanza_package, Mapping):
+        stanza_package = dict(config.stanza_package)
+    else:
+        stanza_package = config.stanza_package
+    return {
+        "backend": config.backend,
+        "language": config.language,
+        "stanza_package": stanza_package,
+        "model_name": config.model_name,
+        "cpu_only": config.cpu_only,
+    }
+
+
+def _normalization_to_dict(config: NormalizationConfig) -> dict[str, object]:
+    return {
+        "enabled": config.enabled,
+        "casefold": config.casefold,
+        "uv": config.uv,
+        "ij": config.ij,
+        "diacritics": config.diacritics,
+        "ligatures": dict(config.ligatures) if config.ligatures is not None else None,
+        "map_u_v": config.map_u_v,
+        "map_i_j": config.map_i_j,
+        "strip_diacritics": config.strip_diacritics,
+        "normalize_ligatures": config.normalize_ligatures,
+        "unicode_nf": config.unicode_nf,
+    }
+
+
+def _analysis_cache_to_dict(config: AnalysisCacheConfig) -> dict[str, object]:
+    return {
+        "enabled": config.enabled,
+        "dir": config.directory,
+        "use_manifest": config.use_manifest,
+        "manifest_key_mode": config.manifest_key_mode,
+        "lock_timeout_sec": config.lock_timeout_sec,
+    }
+
+
+def _lemma_cache_to_dict(
+    config: LemmaCacheConfig,
+    *,
+    include_manifest_key_mode: bool = True,
+) -> dict[str, object]:
+    out: dict[str, object] = {
+        "enabled": config.enabled,
+        "dir": config.directory,
+        "use_manifest": config.use_manifest,
+        "lock_timeout_sec": config.lock_timeout_sec,
+        "include_ref_tags_in_config_hash": config.include_ref_tags_in_config_hash,
+    }
+    if include_manifest_key_mode:
+        out["manifest_key_mode"] = config.manifest_key_mode
+    return out
+
+
+def _analysis_cache_from_legacy_lemma(
+    config: LemmaCacheConfig,
+    *,
+    include_manifest_key_mode: bool,
+) -> AnalysisCacheConfig:
+    return AnalysisCacheConfig(
+        enabled=config.enabled,
+        directory=config.directory,
+        use_manifest=config.use_manifest,
+        manifest_key_mode=(
+            config.manifest_key_mode
+            if include_manifest_key_mode
+            else "relative"
+        ),
+        lock_timeout_sec=config.lock_timeout_sec,
+    )
+
+
+def _cache_config_items(config: AppConfig) -> tuple[tuple[str, dict[str, object]], ...]:
+    default_lemma = LemmaCacheConfig()
+    if config.lemma_cache == default_lemma:
+        return (("analysis_cache", _analysis_cache_to_dict(config.analysis_cache)),)
+
+    if config.analysis_cache == _analysis_cache_from_legacy_lemma(
+        config.lemma_cache,
+        include_manifest_key_mode=True,
+    ):
+        return (
+            (
+                "lemma_cache",
+                _lemma_cache_to_dict(config.lemma_cache, include_manifest_key_mode=True),
+            ),
+        )
+
+    if config.analysis_cache == _analysis_cache_from_legacy_lemma(
+        config.lemma_cache,
+        include_manifest_key_mode=False,
+    ):
+        return (
+            (
+                "lemma_cache",
+                _lemma_cache_to_dict(config.lemma_cache, include_manifest_key_mode=False),
+            ),
+        )
+
+    raise ValueError(
+        "AppConfig contains incompatible analysis_cache and lemma_cache values; "
+        "cannot serialize both because the input schema allows only one cache section."
+    )
+
+
+def _preprocess_to_dict(config: PreprocessConfig) -> dict[str, object] | None:
+    if config == PreprocessConfig():
+        return None
+    if config.kind != "cleaner":
+        raise ValueError(f"Unsupported preprocess.kind for serialization: {config.kind!r}")
+    return {
+        "kind": "cleaner",
+        "config": config.config,
+    }
+
+
+def _comparison_to_dict(spec: ComparisonSpec) -> dict[str, object]:
+    return {
+        "name": spec.name,
+        "group_a": spec.group_a,
+        "group_b": spec.group_b,
+        "scale": spec.scale,
+        "zero_correction": spec.zero_correction,
+        "min_total_count": spec.min_total_count,
+        "report": spec.report,
+        "sort": {
+            "by": spec.sort_by,
+            "descending": spec.sort_descending,
+        },
+    }
+
+
+def _partition_to_dict(spec: PartitionSpec) -> dict[str, object]:
+    return {
+        "name": spec.name,
+        "whole": spec.whole,
+        "parts": list(spec.parts),
+        "on_mismatch": spec.on_mismatch,
+        "report": spec.report,
+    }
+
+
 def config_to_dict(config: AppConfig) -> dict[str, object]:
     groups = {
         name: {"files": list(group.files)}
@@ -740,9 +886,11 @@ def config_to_dict(config: AppConfig) -> dict[str, object]:
     }
     out: dict[str, object] = {
         "groups": groups,
-        "preprocess": asdict(config.preprocess),
-        "grouping": asdict(config.grouping),
-        "nlp": asdict(config.nlp),
+        "grouping": {
+            "mode": config.grouping.mode,
+            "auto_group_name": config.grouping.auto_group_name,
+        },
+        "nlp": _nlp_to_dict(config.nlp),
         "language": config.nlp.language,
         "stanza_package": config.nlp.stanza_package,
         "cpu_only": config.nlp.cpu_only,
@@ -753,9 +901,16 @@ def config_to_dict(config: AppConfig) -> dict[str, object]:
             "exclude_lemmas": config.filters.exclude_lemmas,
         },
         "upos_targets": sorted(config.filters.upos_targets),
-        "normalization": asdict(config.normalization),
-        "dictcheck": asdict(config.dictcheck),
-        "ref_tags": asdict(config.ref_tags),
+        "normalization": _normalization_to_dict(config.normalization),
+        "dictcheck": {
+            "enabled": config.dictcheck.enabled,
+            "wordlist": config.dictcheck.wordlist,
+            "lemma_normalize": config.dictcheck.lemma_normalize,
+        },
+        "ref_tags": {
+            "enabled": config.ref_tags.enabled,
+            "patterns": config.ref_tags.patterns,
+        },
         "trace": {
             "enabled": config.trace.enabled,
             "path": config.trace.path,
@@ -764,33 +919,35 @@ def config_to_dict(config: AppConfig) -> dict[str, object]:
             "write_truncation_marker": config.trace.write_truncation_marker,
         },
         "artifacts": {
-            "tokens": asdict(config.artifacts.tokens),
+            "tokens": {
+                "enabled": config.artifacts.tokens.enabled,
+                "path": config.artifacts.tokens.path,
+            },
         },
-        "archive": asdict(config.archive),
-        "analysis_cache": {
-            "enabled": config.analysis_cache.enabled,
-            "dir": config.analysis_cache.directory,
-            "use_manifest": config.analysis_cache.use_manifest,
-            "manifest_key_mode": config.analysis_cache.manifest_key_mode,
-            "lock_timeout_sec": config.analysis_cache.lock_timeout_sec,
+        "archive": {
+            "enabled": config.archive.enabled,
+            "runs_dir": config.archive.runs_dir,
+            "include_input": config.archive.include_input,
+            "include_cleaned": config.archive.include_cleaned,
         },
-        "lemma_cache": {
-            "enabled": config.lemma_cache.enabled,
-            "dir": config.lemma_cache.directory,
-            "use_manifest": config.lemma_cache.use_manifest,
-            "manifest_key_mode": config.lemma_cache.manifest_key_mode,
-            "lock_timeout_sec": config.lemma_cache.lock_timeout_sec,
-            "include_ref_tags_in_config_hash": config.lemma_cache.include_ref_tags_in_config_hash,
+        "prune": {
+            "keep_days": config.prune.keep_days,
+            "keep_files": config.prune.keep_files,
+            "lock_ttl_sec": config.prune.lock_ttl_sec,
         },
-        "prune": asdict(config.prune),
         "analysis_unit": config.analysis_unit,
         "out_dir": config.out_dir,
         "vocab_path": config.vocab_path,
-        "comparisons": [asdict(spec) for spec in config.comparisons],
+        "comparisons": [_comparison_to_dict(spec) for spec in config.comparisons],
         "validations": {
-            "partitions": [asdict(spec) for spec in config.partition_validations],
+            "partitions": [_partition_to_dict(spec) for spec in config.partition_validations],
         },
     }
+    preprocess = _preprocess_to_dict(config.preprocess)
+    if preprocess is not None:
+        out["preprocess"] = preprocess
+    for key, value in _cache_config_items(config):
+        out[key] = value
     if config.csv_header is not None:
         out["csv_header"] = list(config.csv_header)
     return out
