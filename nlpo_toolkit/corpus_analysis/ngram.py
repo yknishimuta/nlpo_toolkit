@@ -10,7 +10,8 @@ from typing import Iterable, TextIO
 
 from .config import load_config
 from .corpus import prepare_corpora, resolve_corpus_work_items, run_preprocess_if_needed
-from .token_artifact import TokenArtifactError, TokenRecord, read_token_rows, token_artifact_metadata_path
+from .analysis_records import TokenRecord
+from .token_artifact import TokenArtifactError, read_token_rows, token_artifact_metadata_path
 
 
 class NgramError(ValueError):

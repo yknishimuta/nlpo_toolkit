@@ -20,7 +20,7 @@ from nlpo_toolkit.corpus_analysis.analysis_cache import (
 from nlpo_toolkit.corpus_analysis import cache_storage
 from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis import runner as runner_mod
-from nlpo_toolkit.corpus_analysis.token_artifact import NLPAnalysisRecord
+from nlpo_toolkit.corpus_analysis.analysis_records import NLPAnalysisRecord
 from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
 
 

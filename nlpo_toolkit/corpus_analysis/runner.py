@@ -60,13 +60,15 @@ from .analysis_cache import (
     get_or_compute_analysis_records,
     prepared_text_sha256,
 )
-from .token_artifact import (
+from .analysis_records import (
     AnalysisOptions,
-    DiagnosticTraceWriter,
-    TokenArtifactMetadata,
-    TokenArtifactWriter,
     evaluate_analysis_record,
     iter_nlp_analysis_records_from_text,
+)
+from .diagnostic_trace import DiagnosticTraceWriter
+from .token_artifact import (
+    TokenArtifactMetadata,
+    TokenArtifactWriter,
     token_artifact_metadata_path,
 )
 from nlpo_toolkit.nlp import load_roman_exceptions

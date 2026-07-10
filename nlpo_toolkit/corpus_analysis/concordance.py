@@ -6,7 +6,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import TextIO
 
-from .token_artifact import TokenArtifactError, TokenRecord, read_token_rows, token_artifact_metadata_path
+from .analysis_records import TokenRecord
+from .token_artifact import TokenArtifactError, read_token_rows, token_artifact_metadata_path
 
 
 class ConcordanceError(ValueError):

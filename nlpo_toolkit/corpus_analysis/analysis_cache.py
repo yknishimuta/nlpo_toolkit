@@ -15,7 +15,7 @@ from .cache_storage import (
     acquire_cache_lock,
     release_cache_lock,
 )
-from .token_artifact import NLPAnalysisRecord
+from .analysis_records import NLPAnalysisRecord
 
 
 ANALYSIS_CACHE_FORMAT = "nlpo-analysis-cache"
