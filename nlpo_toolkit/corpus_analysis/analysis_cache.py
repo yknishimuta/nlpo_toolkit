@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Iterator, Mapping
 
-from .lemma_cache import (
+from .cache_storage import (
     CacheLockTimeout,
     PruneReport,
     acquire_cache_lock,

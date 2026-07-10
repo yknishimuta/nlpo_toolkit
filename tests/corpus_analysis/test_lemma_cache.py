@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 import nlpo_toolkit.corpus_analysis.lemma_cache as lc
+from nlpo_toolkit.corpus_analysis import cache_storage
 
 
 def _write_text(p: Path, s: str) -> None:
@@ -311,6 +312,7 @@ def test_prune_cache_removes_old_objects_and_stale_locks(tmp_path: Path) -> None
         verbose=False,
     )
 
+    assert isinstance(rep, cache_storage.PruneReport)
     assert rep.removed_objects >= 1
     assert rep.removed_locks >= 1
     assert not obj.exists()

@@ -4,9 +4,12 @@ import csv
 import json
 from pathlib import Path
 
+import pytest
+
 from nlpo_toolkit.corpus_analysis.analysis_cache import (
     AnalysisFingerprint,
     build_analysis_cache_key,
+    cache_lock_path,
     cache_metadata_path,
     cache_object_path,
     get_or_compute_analysis_records,
@@ -14,6 +17,7 @@ from nlpo_toolkit.corpus_analysis.analysis_cache import (
     prune_analysis_cache,
     read_analysis_records,
 )
+from nlpo_toolkit.corpus_analysis import cache_storage
 from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis import runner as runner_mod
 from nlpo_toolkit.corpus_analysis.token_artifact import NLPAnalysisRecord
@@ -218,6 +222,33 @@ def test_prune_analysis_cache_removes_payload_metadata_pairs(tmp_path: Path) -> 
         lock_ttl_sec=0,
     )
 
+    assert isinstance(report, cache_storage.PruneReport)
     assert report.removed_objects == 1
     assert not payload.exists()
     assert not meta.exists()
+
+
+def test_analysis_cache_releases_lock_when_compute_fails(tmp_path: Path) -> None:
+    cache_dir = tmp_path / ".analysis_cache"
+    text_hash = prepared_text_sha256("boom")
+    fingerprint = AnalysisFingerprint(backend="fake", language="la")
+    key = build_analysis_cache_key(prepared_text_sha256=text_hash, fingerprint=fingerprint)
+    lock_path = cache_lock_path(cache_dir.resolve(), key)
+
+    def fail():
+        raise RuntimeError("boom")
+        yield
+
+    records, status, _payload, _meta = get_or_compute_analysis_records(
+        cache_dir=cache_dir,
+        cache_key=key,
+        prepared_text_sha256=text_hash,
+        prepared_text_length=4,
+        fingerprint=fingerprint,
+        compute_records=fail,
+    )
+
+    assert status == "miss"
+    with pytest.raises(RuntimeError, match="boom"):
+        list(records)
+    assert not lock_path.exists()

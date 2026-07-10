@@ -11,6 +11,13 @@ from typing import Any, Callable, Mapping, Optional
 
 from collections import Counter
 
+from .cache_storage import (
+    CacheLockTimeout,
+    PruneReport,
+    acquire_cache_lock,
+    release_cache_lock,
+)
+
 
 CACHE_VERSION = 4  # bump when payload schema/behavior changes
 
@@ -227,52 +234,6 @@ def cache_lock_file_path(cache_dir: Path, cache_key: str) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# File lock (simple lockfile)
-# ---------------------------------------------------------------------------
-
-class CacheLockTimeout(RuntimeError):
-    pass
-
-
-def _acquire_lock(lock_path: Path, *, timeout_sec: float = 300.0, poll_sec: float = 0.1) -> None:
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    start = time.time()
-    pid = os.getpid()
-
-    while True:
-        try:
-            fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            try:
-                os.write(fd, f"pid={pid}\n".encode("utf-8"))
-            finally:
-                os.close(fd)
-            return
-        except FileExistsError:
-            if (time.time() - start) >= timeout_sec:
-                raise CacheLockTimeout(f"Timeout acquiring lock: {lock_path}")
-            time.sleep(poll_sec)
-
-
-def acquire_cache_lock(lock_path: Path, *, timeout_sec: float = 300.0, poll_sec: float = 0.1) -> None:
-    """Acquire a cache lock file with the legacy lockfile semantics."""
-    _acquire_lock(lock_path, timeout_sec=timeout_sec, poll_sec=poll_sec)
-
-
-def _release_lock(lock_path: Path) -> None:
-    try:
-        lock_path.unlink()
-    except FileNotFoundError:
-        pass
-    except OSError:
-        pass
-
-
-def release_cache_lock(lock_path: Path) -> None:
-    """Release a cache lock file."""
-    _release_lock(lock_path)
-
-
-# ---------------------------------------------------------------------------
 # Config hash
 # ---------------------------------------------------------------------------
 
@@ -388,7 +349,7 @@ def get_or_compute_cached(
 
     # Miss: lock compute/write
     lock_path = _lock_file_path(cache_dir, cache_key)
-    _acquire_lock(lock_path, timeout_sec=lock_timeout_sec)
+    acquire_cache_lock(lock_path, timeout_sec=lock_timeout_sec)
     try:
         # double-check after lock
         if cpath.exists():
@@ -407,7 +368,7 @@ def get_or_compute_cached(
             print(f"[CACHE] miss: computed -> {cpath.name}")
         return payload, False
     finally:
-        _release_lock(lock_path)
+        release_cache_lock(lock_path)
 
 
 # ---------------------------------------------------------------------------
@@ -439,14 +400,6 @@ def _load_payload_json(path: Path) -> LemmaCachePayload:
 # ---------------------------------------------------------------------------
 # Prune / cleanup
 # ---------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class PruneReport:
-    removed_objects: int
-    removed_locks: int
-    removed_empty_dirs: int
-    bytes_freed: int
-
 
 def prune_cache(
     cache_dir: Path,
