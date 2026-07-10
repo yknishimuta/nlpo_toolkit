@@ -6,10 +6,6 @@ NLP-backed vocabulary counting, and reproducible frequency-table workflows.
 Corpus analysis functionality lives in `nlpo_toolkit.corpus_analysis` and is
 exposed through the `nlpo` command.
 
-The former Python package `nlpo_toolkit.count_vocabula` is deprecated. Use
-`nlpo_toolkit.corpus_analysis` for new Python code. The CLI command remains
-`nlpo count-vocabula`.
-
 CLI subcommands are implemented under `nlpo_toolkit.corpus_analysis.cli`.
 Each command module defines its parser registration and execution handler.
 

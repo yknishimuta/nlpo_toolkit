@@ -30,18 +30,6 @@ def test_token_artifact_compatibility_reexports_are_identical() -> None:
     assert token_artifact.LEGACY_TRACE_COLUMNS is diagnostic_trace.LEGACY_TRACE_COLUMNS
 
 
-def test_deprecated_count_vocabula_token_artifact_reexports_are_identical() -> None:
-    from nlpo_toolkit.corpus_analysis import analysis_records
-    from nlpo_toolkit.corpus_analysis import diagnostic_trace
-    from nlpo_toolkit.corpus_analysis import token_artifact
-    from nlpo_toolkit.count_vocabula import token_artifact as old_token_artifact
-
-    assert old_token_artifact.NLPAnalysisRecord is analysis_records.NLPAnalysisRecord
-    assert old_token_artifact.TokenRecord is analysis_records.TokenRecord
-    assert old_token_artifact.TokenArtifactWriter is token_artifact.TokenArtifactWriter
-    assert old_token_artifact.DiagnosticTraceWriter is diagnostic_trace.DiagnosticTraceWriter
-
-
 def test_analysis_cache_imports_analysis_record_from_canonical_module() -> None:
     from nlpo_toolkit.corpus_analysis import analysis_cache
     from nlpo_toolkit.corpus_analysis import analysis_records

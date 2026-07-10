@@ -5,9 +5,10 @@ from pathlib import Path
 
 def test_obsolete_nlp_adapter_modules_are_removed() -> None:
     module_name = "nlp" + "_adapters.py"
+    old_package = "count" + "_vocabula"
 
     assert not Path("nlpo_toolkit/corpus_analysis", module_name).exists()
-    assert not Path("nlpo_toolkit/count_vocabula", module_name).exists()
+    assert not Path("nlpo_toolkit", old_package, module_name).exists()
 
 
 def test_no_transformers_latin_adapter_references_remain() -> None:

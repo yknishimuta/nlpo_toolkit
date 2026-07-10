@@ -99,13 +99,9 @@ assert "nlpo_toolkit.corpus_analysis.lemma_cache" not in sys.modules
     subprocess.run([sys.executable, "-c", code], check=True)
 
 
-def test_legacy_lemma_cache_reexports_shared_types() -> None:
+def test_lemma_cache_reexports_shared_types() -> None:
     from nlpo_toolkit.corpus_analysis import cache_storage
     from nlpo_toolkit.corpus_analysis import lemma_cache
-    from nlpo_toolkit.count_vocabula import lemma_cache as old_lemma_cache
 
     assert lemma_cache.CacheLockTimeout is cache_storage.CacheLockTimeout
-    assert old_lemma_cache.CacheLockTimeout is cache_storage.CacheLockTimeout
-
     assert lemma_cache.PruneReport is cache_storage.PruneReport
-    assert old_lemma_cache.PruneReport is cache_storage.PruneReport
