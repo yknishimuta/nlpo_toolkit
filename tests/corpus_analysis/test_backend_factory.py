@@ -12,6 +12,7 @@ from nlpo_toolkit.backends import (
     BuiltNLPBackend,
     NLPBackendConfigError,
     NLPBackendInfo,
+    TransformersBackend as PublicTransformersBackend,
     create_nlp_backend,
 )
 from nlpo_toolkit.backends.factory import render_backend_info
@@ -42,6 +43,34 @@ class FakeBackend:
             ],
             text=text,
         )
+
+
+def test_transformers_backend_remains_public() -> None:
+    assert PublicTransformersBackend is TransformersBackend
+
+
+def test_transformers_latin_adapter_is_not_exported() -> None:
+    import nlpo_toolkit.backends as backends
+
+    legacy_name = "Transformers" + "LatinAdapter"
+
+    assert legacy_name not in backends.__all__
+    assert not hasattr(backends, legacy_name)
+
+
+def test_transformers_backend_module_has_no_legacy_adapter() -> None:
+    import nlpo_toolkit.backends.transformers_backend as module
+
+    legacy_name = "Transformers" + "LatinAdapter"
+
+    assert not hasattr(module, legacy_name)
+
+
+def test_backend_package_imports_without_legacy_adapter() -> None:
+    import nlpo_toolkit.backends as backends
+
+    assert hasattr(backends, "TransformersBackend")
+    assert hasattr(backends, "create_nlp_backend")
 
 
 def test_fake_backend_works_for_count_and_features() -> None:

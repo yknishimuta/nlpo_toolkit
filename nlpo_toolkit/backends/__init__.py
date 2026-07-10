@@ -8,7 +8,6 @@ from .factory import (
 from .transformers_backend import (
     NLPBackendUnavailableError,
     TransformersBackend,
-    TransformersLatinAdapter,
 )
 
 __all__ = [
@@ -17,7 +16,6 @@ __all__ = [
     "NLPBackendInfo",
     "NLPBackendUnavailableError",
     "TransformersBackend",
-    "TransformersLatinAdapter",
     "create_nlp_backend",
     "render_backend_info",
 ]

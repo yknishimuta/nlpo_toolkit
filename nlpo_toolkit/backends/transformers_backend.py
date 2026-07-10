@@ -63,7 +63,3 @@ def _optional_int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
-
-
-# Deprecated compatibility name. New code should import TransformersBackend.
-TransformersLatinAdapter = TransformersBackend
