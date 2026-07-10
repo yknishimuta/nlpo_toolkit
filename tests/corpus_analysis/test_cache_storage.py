@@ -46,26 +46,23 @@ def test_cache_lock_times_out_when_lock_exists(tmp_path: Path) -> None:
 def test_cache_modules_share_lock_and_prune_types() -> None:
     from nlpo_toolkit.corpus_analysis import analysis_cache
     from nlpo_toolkit.corpus_analysis import cache_storage
-    from nlpo_toolkit.corpus_analysis import lemma_cache
 
     assert analysis_cache.CacheLockTimeout is cache_storage.CacheLockTimeout
-    assert lemma_cache.CacheLockTimeout is cache_storage.CacheLockTimeout
-
     assert analysis_cache.PruneReport is cache_storage.PruneReport
-    assert lemma_cache.PruneReport is cache_storage.PruneReport
 
 
-def test_analysis_cache_does_not_import_lemma_cache() -> None:
+def test_analysis_cache_imports_only_shared_cache_storage() -> None:
     path = Path("nlpo_toolkit/corpus_analysis/analysis_cache.py")
     tree = ast.parse(path.read_text(encoding="utf-8"))
+    removed_module = "lemma" + "_cache"
 
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
-            assert not (node.level == 1 and node.module == "lemma_cache")
-            assert node.module != "nlpo_toolkit.corpus_analysis.lemma_cache"
+            assert not (node.level == 1 and node.module == removed_module)
+            assert node.module != f"nlpo_toolkit.corpus_analysis.{removed_module}"
         if isinstance(node, ast.Import):
             assert all(
-                alias.name != "nlpo_toolkit.corpus_analysis.lemma_cache"
+                alias.name != f"nlpo_toolkit.corpus_analysis.{removed_module}"
                 for alias in node.names
             )
 
@@ -76,7 +73,7 @@ def test_cache_storage_has_no_payload_module_dependencies() -> None:
     forbidden = {
         "analysis_cache",
         "config",
-        "lemma_cache",
+        "lemma" + "_cache",
         "runner",
         "token_artifact",
     }
@@ -90,18 +87,11 @@ def test_cache_storage_has_no_payload_module_dependencies() -> None:
                 assert alias.name.split(".")[-1] not in forbidden
 
 
-def test_importing_analysis_cache_does_not_load_lemma_cache() -> None:
+def test_importing_analysis_cache_does_not_load_removed_cache_module() -> None:
     code = """
 import sys
 import nlpo_toolkit.corpus_analysis.analysis_cache
-assert "nlpo_toolkit.corpus_analysis.lemma_cache" not in sys.modules
+removed = "nlpo_toolkit.corpus_analysis." + "lemma" + "_cache"
+assert removed not in sys.modules
 """
     subprocess.run([sys.executable, "-c", code], check=True)
-
-
-def test_lemma_cache_reexports_shared_types() -> None:
-    from nlpo_toolkit.corpus_analysis import cache_storage
-    from nlpo_toolkit.corpus_analysis import lemma_cache
-
-    assert lemma_cache.CacheLockTimeout is cache_storage.CacheLockTimeout
-    assert lemma_cache.PruneReport is cache_storage.PruneReport

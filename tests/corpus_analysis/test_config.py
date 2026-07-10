@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from pathlib import Path
 import pytest
 import yaml
 
 from nlpo_toolkit.corpus_analysis.config import (
-    AnalysisCacheConfig,
     AppConfig,
-    LemmaCacheConfig,
     config_to_dict,
     ensure_app_config,
     load_config,
@@ -16,10 +13,9 @@ from nlpo_toolkit.corpus_analysis.config import (
 
 
 def _assert_cache_sections_exclusive(serialized: dict[str, object]) -> None:
-    assert not (
-        "analysis_cache" in serialized
-        and "lemma_cache" in serialized
-    )
+    removed_key = "lemma" + "_cache"
+    assert "analysis_cache" in serialized
+    assert removed_key not in serialized
 
 
 def _assert_config_round_trip(config: AppConfig) -> dict[str, object]:
@@ -191,8 +187,8 @@ def test_load_config_nested_values_and_config_to_dict(tmp_path: Path):
                 "trace:",
                 "  enabled: true",
                 "  max_rows: 10",
-                "lemma_cache:",
-                "  dir: cache/lemmas",
+                "analysis_cache:",
+                "  dir: cache/analysis",
                 "",
             ]
         ),
@@ -209,16 +205,14 @@ def test_load_config_nested_values_and_config_to_dict(tmp_path: Path):
     assert cfg.filters.upos_targets == frozenset({"NOUN", "PROPN"})
     assert cfg.filters.roman_exceptions_file == "config/roman.txt"
     assert cfg.trace.max_rows == 10
-    assert cfg.lemma_cache.directory == "cache/lemmas"
-    assert cfg.analysis_cache.directory == "cache/lemmas"
+    assert cfg.analysis_cache.directory == "cache/analysis"
     assert data["groups"] == {"corpus_a": {"files": ["input/corpus_a.txt"]}}
     assert data["upos_targets"] == ["NOUN", "PROPN"]
-    assert "lemma_cache" in data
-    assert "analysis_cache" not in data
+    assert data["analysis_cache"]["dir"] == "cache/analysis"
     assert ensure_app_config(data) == cfg
 
 
-def test_load_config_parses_analysis_cache_and_rejects_legacy_conflict(tmp_path: Path):
+def test_load_config_parses_analysis_cache(tmp_path: Path):
     cfg_path = tmp_path / "cfg.yml"
     cfg_path.write_text(
         "\n".join(
@@ -240,23 +234,7 @@ def test_load_config_parses_analysis_cache_and_rejects_legacy_conflict(tmp_path:
     data = config_to_dict(cfg)
     _assert_cache_sections_exclusive(data)
     assert "analysis_cache" in data
-    assert "lemma_cache" not in data
     assert ensure_app_config(data) == cfg
-
-    cfg_path.write_text(
-        "\n".join(
-            [
-                "groups:",
-                "  corpus_a: {files: [input/corpus_a.txt]}",
-                "analysis_cache: {enabled: true}",
-                "lemma_cache: {enabled: true}",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    with pytest.raises(ValueError, match="Specify only one of analysis_cache"):
-        load_config(cfg_path)
 
 
 def test_config_to_dict_round_trips_minimal_config():
@@ -370,7 +348,7 @@ def test_config_to_dict_round_trips_cleaner_and_full_sections():
         "config": "cleaners/config/sample.yml",
     }
     assert "analysis_cache" in serialized
-    assert "lemma_cache" not in serialized
+    assert ("lemma" + "_cache") not in serialized
 
 
 def test_config_to_dict_round_trips_partition_validation():
@@ -448,50 +426,49 @@ def test_config_to_dict_round_trips_comparisons():
     ]
 
 
-def test_config_to_dict_round_trips_legacy_lemma_cache():
+def test_config_to_dict_round_trips_analysis_cache():
     original = ensure_app_config(
         {
             "groups": {
                 "text": {"files": ["input/*.txt"]},
             },
-            "lemma_cache": {
+            "analysis_cache": {
                 "enabled": True,
-                "dir": "cache/lemmas",
+                "dir": "cache/analysis",
                 "use_manifest": False,
+                "manifest_key_mode": "relative",
                 "lock_timeout_sec": 12.5,
-                "include_ref_tags_in_config_hash": False,
             },
         }
     )
 
     serialized = _assert_config_round_trip(original)
 
-    assert "lemma_cache" in serialized
-    assert "analysis_cache" not in serialized
+    assert serialized["analysis_cache"] == {
+        "enabled": True,
+        "dir": "cache/analysis",
+        "use_manifest": False,
+        "manifest_key_mode": "relative",
+        "lock_timeout_sec": 12.5,
+    }
 
 
-def test_config_to_dict_rejects_incompatible_cache_sections():
-    base = ensure_app_config(
-        {
-            "groups": {
-                "text": {"files": ["input/*.txt"]},
-            },
-        }
-    )
-    incompatible = replace(
-        base,
-        analysis_cache=AnalysisCacheConfig(
-            enabled=True,
-            directory="analysis-cache",
-        ),
-        lemma_cache=LemmaCacheConfig(
-            enabled=True,
-            directory="lemma-cache",
-        ),
-    )
+def test_config_rejects_removed_cache_key():
+    removed_key = "lemma" + "_cache"
 
-    with pytest.raises(ValueError, match="incompatible analysis_cache and lemma_cache"):
-        config_to_dict(incompatible)
+    with pytest.raises(ValueError, match="Unknown top-level config"):
+        ensure_app_config(
+            {
+                "groups": {
+                    "text": {
+                        "files": ["input/*.txt"],
+                    }
+                },
+                removed_key: {
+                    "enabled": True,
+                },
+            }
+        )
 
 
 def test_config_to_dict_output_is_yaml_safe():

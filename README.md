@@ -127,8 +127,6 @@ analysis_cache:
 
 The cache is an internal optimization and is not copied into run archives or
 listed in `generated_outputs`. Use token artifacts for stable research outputs.
-The old `lemma_cache` setting is deprecated and old Counter cache objects are
-not converted to the new analysis cache format.
 
 Use `nlpo cache clear` to remove the configured analysis cache for a project
 instead of running `rm -rf .analysis_cache` manually.
@@ -139,9 +137,8 @@ nlpo cache clear
 
 By default, the current directory is treated as the project root. If
 `config/groups.config.yml` exists, the command reads `analysis_cache.dir` from
-that config and clears that directory. If a project still uses deprecated
-`lemma_cache.dir`, that directory is cleared for compatibility. If neither
-setting is present, it clears `.analysis_cache` under the project root.
+that config and clears that directory. If no cache directory is configured, it
+clears `.analysis_cache` under the project root.
 
 Use an explicit project root:
 

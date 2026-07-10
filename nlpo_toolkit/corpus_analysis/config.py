@@ -32,7 +32,6 @@ KNOWN_TOP_LEVEL_KEYS = frozenset(
         "grouping",
         "groups",
         "language",
-        "lemma_cache",
         "nlp",
         "normalization",
         "out_dir",
@@ -150,16 +149,6 @@ class ArchiveConfig:
 
 
 @dataclass(frozen=True)
-class LemmaCacheConfig:
-    enabled: bool = False
-    directory: str = ".lemma_cache"
-    use_manifest: bool = True
-    manifest_key_mode: str = "absolute"
-    lock_timeout_sec: float = 300.0
-    include_ref_tags_in_config_hash: bool = True
-
-
-@dataclass(frozen=True)
 class AnalysisCacheConfig:
     enabled: bool = False
     directory: str = ".analysis_cache"
@@ -189,7 +178,6 @@ class AppConfig:
     artifacts: ArtifactsConfig = field(default_factory=ArtifactsConfig)
     archive: ArchiveConfig = ArchiveConfig()
     analysis_cache: AnalysisCacheConfig = AnalysisCacheConfig()
-    lemma_cache: LemmaCacheConfig = LemmaCacheConfig()
     prune: PruneConfig = PruneConfig()
     analysis_unit: AnalysisUnit = "lemma"
     out_dir: str = "output"
@@ -569,62 +557,26 @@ def _parse_archive_config(value: object) -> ArchiveConfig:
     )
 
 
-def _parse_lemma_cache_config(value: object) -> LemmaCacheConfig:
-    cache = _optional_mapping(value, context="lemma_cache")
-    return LemmaCacheConfig(
-        enabled=_bool_value(cache.get("enabled"), context="lemma_cache.enabled", default=False),
-        directory=_str_value(cache.get("dir", ".lemma_cache"), context="lemma_cache.dir"),
-        use_manifest=_bool_value(
-            cache.get("use_manifest"),
-            context="lemma_cache.use_manifest",
-            default=True,
-        ),
-        manifest_key_mode=_str_value(
-            cache.get("manifest_key_mode", "absolute"),
-            context="lemma_cache.manifest_key_mode",
-        ),
-        lock_timeout_sec=_float_value(
-            cache.get("lock_timeout_sec"),
-            context="lemma_cache.lock_timeout_sec",
-            default=300.0,
-            minimum_exclusive=0.0,
-        ),
-        include_ref_tags_in_config_hash=_bool_value(
-            cache.get("include_ref_tags_in_config_hash"),
-            context="lemma_cache.include_ref_tags_in_config_hash",
-            default=True,
-        ),
-    )
-
-
-def _parse_analysis_cache_config(
-    analysis_value: object,
-    lemma_value: object,
-) -> AnalysisCacheConfig:
-    if analysis_value is not None and lemma_value is not None:
-        raise ValueError("Specify only one of analysis_cache and deprecated lemma_cache")
-    raw = analysis_value if analysis_value is not None else lemma_value
-    context = "analysis_cache" if analysis_value is not None else "lemma_cache"
-    default_dir = ".analysis_cache" if analysis_value is not None else ".lemma_cache"
-    cache = _optional_mapping(raw, context=context)
+def _parse_analysis_cache_config(value: object) -> AnalysisCacheConfig:
+    cache = _optional_mapping(value, context="analysis_cache")
     return AnalysisCacheConfig(
-        enabled=_bool_value(cache.get("enabled"), context=f"{context}.enabled", default=False),
+        enabled=_bool_value(cache.get("enabled"), context="analysis_cache.enabled", default=False),
         directory=_str_value(
-            cache.get("dir", default_dir),
-            context=f"{context}.dir",
+            cache.get("dir", ".analysis_cache"),
+            context="analysis_cache.dir",
         ),
         use_manifest=_bool_value(
             cache.get("use_manifest"),
-            context=f"{context}.use_manifest",
+            context="analysis_cache.use_manifest",
             default=True,
         ),
         manifest_key_mode=_str_value(
             cache.get("manifest_key_mode", "relative"),
-            context=f"{context}.manifest_key_mode",
+            context="analysis_cache.manifest_key_mode",
         ),
         lock_timeout_sec=_float_value(
             cache.get("lock_timeout_sec"),
-            context=f"{context}.lock_timeout_sec",
+            context="analysis_cache.lock_timeout_sec",
             default=300.0,
             minimum_exclusive=0.0,
         ),
@@ -678,6 +630,10 @@ def _reject_deprecated_keys(raw: Mapping[str, object]) -> None:
 
 
 def _build_app_config(raw: Mapping[str, object]) -> AppConfig:
+    unknown = unknown_top_level_keys(raw)
+    if unknown:
+        formatted = ", ".join(sorted(unknown))
+        raise ValueError(f"Unknown top-level config keys: {formatted}")
     _reject_deprecated_keys(raw)
     normalized = _normalize_groups(raw)
 
@@ -700,11 +656,7 @@ def _build_app_config(raw: Mapping[str, object]) -> AppConfig:
         trace=_parse_trace_config(normalized.get("trace")),
         artifacts=_parse_artifacts_config(normalized.get("artifacts")),
         archive=_parse_archive_config(normalized.get("archive")),
-        analysis_cache=_parse_analysis_cache_config(
-            normalized.get("analysis_cache"),
-            normalized.get("lemma_cache"),
-        ),
-        lemma_cache=_parse_lemma_cache_config(normalized.get("lemma_cache")),
+        analysis_cache=_parse_analysis_cache_config(normalized.get("analysis_cache")),
         prune=_parse_prune_config(normalized.get("prune")),
         analysis_unit=_parse_analysis_unit(normalized.get("analysis_unit")),
         out_dir=_str_value(normalized.get("out_dir", "output"), context="out_dir"),
@@ -772,74 +724,6 @@ def _analysis_cache_to_dict(config: AnalysisCacheConfig) -> dict[str, object]:
         "manifest_key_mode": config.manifest_key_mode,
         "lock_timeout_sec": config.lock_timeout_sec,
     }
-
-
-def _lemma_cache_to_dict(
-    config: LemmaCacheConfig,
-    *,
-    include_manifest_key_mode: bool = True,
-) -> dict[str, object]:
-    out: dict[str, object] = {
-        "enabled": config.enabled,
-        "dir": config.directory,
-        "use_manifest": config.use_manifest,
-        "lock_timeout_sec": config.lock_timeout_sec,
-        "include_ref_tags_in_config_hash": config.include_ref_tags_in_config_hash,
-    }
-    if include_manifest_key_mode:
-        out["manifest_key_mode"] = config.manifest_key_mode
-    return out
-
-
-def _analysis_cache_from_legacy_lemma(
-    config: LemmaCacheConfig,
-    *,
-    include_manifest_key_mode: bool,
-) -> AnalysisCacheConfig:
-    return AnalysisCacheConfig(
-        enabled=config.enabled,
-        directory=config.directory,
-        use_manifest=config.use_manifest,
-        manifest_key_mode=(
-            config.manifest_key_mode
-            if include_manifest_key_mode
-            else "relative"
-        ),
-        lock_timeout_sec=config.lock_timeout_sec,
-    )
-
-
-def _cache_config_items(config: AppConfig) -> tuple[tuple[str, dict[str, object]], ...]:
-    default_lemma = LemmaCacheConfig()
-    if config.lemma_cache == default_lemma:
-        return (("analysis_cache", _analysis_cache_to_dict(config.analysis_cache)),)
-
-    if config.analysis_cache == _analysis_cache_from_legacy_lemma(
-        config.lemma_cache,
-        include_manifest_key_mode=True,
-    ):
-        return (
-            (
-                "lemma_cache",
-                _lemma_cache_to_dict(config.lemma_cache, include_manifest_key_mode=True),
-            ),
-        )
-
-    if config.analysis_cache == _analysis_cache_from_legacy_lemma(
-        config.lemma_cache,
-        include_manifest_key_mode=False,
-    ):
-        return (
-            (
-                "lemma_cache",
-                _lemma_cache_to_dict(config.lemma_cache, include_manifest_key_mode=False),
-            ),
-        )
-
-    raise ValueError(
-        "AppConfig contains incompatible analysis_cache and lemma_cache values; "
-        "cannot serialize both because the input schema allows only one cache section."
-    )
 
 
 def _preprocess_to_dict(config: PreprocessConfig) -> dict[str, object] | None:
@@ -946,8 +830,7 @@ def config_to_dict(config: AppConfig) -> dict[str, object]:
     preprocess = _preprocess_to_dict(config.preprocess)
     if preprocess is not None:
         out["preprocess"] = preprocess
-    for key, value in _cache_config_items(config):
-        out[key] = value
+    out["analysis_cache"] = _analysis_cache_to_dict(config.analysis_cache)
     if config.csv_header is not None:
         out["csv_header"] = list(config.csv_header)
     return out
