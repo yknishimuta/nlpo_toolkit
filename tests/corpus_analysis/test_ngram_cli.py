@@ -3,7 +3,10 @@ from __future__ import annotations
 import csv
 
 from nlpo_toolkit.corpus_analysis import cli
-from nlpo_toolkit.corpus_analysis.ngram import build_ngrams_from_rows
+from nlpo_toolkit.corpus_analysis.ngram import (
+    build_ngrams_from_rows,
+    read_token_artifact_rows,
+)
 from nlpo_toolkit.corpus_analysis.token_artifact import (
     TokenArtifactMetadata,
     TokenArtifactWriter,
@@ -11,7 +14,7 @@ from nlpo_toolkit.corpus_analysis.token_artifact import (
 )
 
 
-def _write_trace(path):
+def _write_artifact(path):
     rows = [
         ["g1", "0", "Respondeo", "respondeo"],
         ["g1", "0", "dicendum", "dicendum"],
@@ -24,12 +27,20 @@ def _write_trace(path):
         ["g2", "0", "dicendum", "dicendum"],
         ["g2", "0", "sit", "esse"],
     ]
-    path.write_text(
-        "group\tsent_idx\ttoken\tlemma\n"
-        + "\n".join("\t".join(row) for row in rows)
-        + "\n",
-        encoding="utf-8",
-    )
+    records = []
+    global_index = 0
+    sentence_positions: dict[tuple[str, str], int] = {}
+    for group, sentence_index, token, lemma in rows:
+        key = (group, sentence_index)
+        token_index = sentence_positions.get(key, 0)
+        sentence_positions[key] = token_index + 1
+        records.append(
+            TokenRecord(group, f"input/{group}.txt", 0, int(sentence_index), token_index, global_index, None, None, None, None, "", token, lemma, "NOUN", lemma, True, None, None)
+        )
+        global_index += 1
+    with TokenArtifactWriter(path, metadata=TokenArtifactMetadata(group="mixed")) as writer:
+        for record in records:
+            writer.write(record)
 
 
 def test_build_lemma_bigrams_counts_rows():
@@ -114,14 +125,14 @@ def test_build_filters_symbol_only_tokens():
 
 
 def test_ngram_cli_writes_tsv_stdout_with_min_count_and_top(tmp_path, capsys):
-    trace_path = tmp_path / "trace.tsv"
-    _write_trace(trace_path)
+    tokens_path = tmp_path / "tokens.tsv"
+    _write_artifact(tokens_path)
 
     rc = cli.main(
         [
             "ngram",
-            "--trace",
-            str(trace_path),
+            "--tokens",
+            str(tokens_path),
             "--n",
             "2",
             "--field",
@@ -141,15 +152,15 @@ def test_ngram_cli_writes_tsv_stdout_with_min_count_and_top(tmp_path, capsys):
 
 
 def test_ngram_cli_writes_csv_by_group(tmp_path):
-    trace_path = tmp_path / "trace.tsv"
+    tokens_path = tmp_path / "tokens.tsv"
     out_path = tmp_path / "ngrams.csv"
-    _write_trace(trace_path)
+    _write_artifact(tokens_path)
 
     rc = cli.main(
         [
             "ngram",
-            "--trace",
-            str(trace_path),
+            "--tokens",
+            str(tokens_path),
             "--n",
             "3",
             "--field",
@@ -190,7 +201,7 @@ def test_ngram_cli_reads_token_artifact_and_respects_boundaries(tmp_path, capsys
         for record in records:
             writer.write(record)
 
-    rc = cli.main(["ngram", "--trace", str(artifact), "--n", "2", "--field", "lemma"])
+    rc = cli.main(["ngram", "--tokens", str(artifact), "--n", "2", "--field", "lemma"])
 
     assert rc == 0
     assert capsys.readouterr().out.splitlines() == [
@@ -200,21 +211,33 @@ def test_ngram_cli_reads_token_artifact_and_respects_boundaries(tmp_path, capsys
     ]
 
 
-def test_ngram_cli_rejects_missing_trace_field(tmp_path, capsys):
+def test_artifact_ngram_uses_included_records_order_and_all_boundaries(tmp_path):
+    artifact = tmp_path / "tokens.tsv"
+    records = [
+        TokenRecord("g", "a.txt", 0, 0, 1, 2, None, None, None, None, "", "b", "b", "NOUN", "b", True, None, None, section="s1"),
+        TokenRecord("g", "a.txt", 0, 0, 0, 1, None, None, None, None, "", "a", "a", "NOUN", "a", True, None, None, section="s1"),
+        TokenRecord("g", "a.txt", 0, 0, 2, 3, None, None, None, None, "", "x", "x", "PUNCT", None, False, "upos_not_targeted", None, section="s1"),
+        TokenRecord("g", "a.txt", 0, 0, 0, 4, None, None, None, None, "", "c", "c", "NOUN", "c", True, None, None, section="s2"),
+        TokenRecord("g", "a.txt", 1, 0, 0, 5, None, None, None, None, "", "d", "d", "NOUN", "d", True, None, None, section="s2"),
+        TokenRecord("g", "b.txt", 1, 0, 0, 6, None, None, None, None, "", "e", "e", "NOUN", "e", True, None, None, section="s2"),
+        TokenRecord("h", "b.txt", 1, 0, 0, 7, None, None, None, None, "", "f", "f", "NOUN", "f", True, None, None, section="s2"),
+    ]
+    with TokenArtifactWriter(artifact, metadata=TokenArtifactMetadata(group="mixed")) as writer:
+        for record in records:
+            writer.write(record)
+
+    rows = read_token_artifact_rows(artifact, "lemma")
+    result = build_ngrams_from_rows(rows, n=2, field="lemma")
+
+    assert [row["lemma"] for row in rows] == ["a", "b", "c", "d", "e", "f"]
+    assert result == [{"ngram": "a b", "count": 1, "n": 2, "field": "lemma"}]
+
+
+def test_ngram_cli_rejects_tsv_without_artifact_metadata(tmp_path, capsys):
     trace_path = tmp_path / "trace.tsv"
     trace_path.write_text("token\narma\n", encoding="utf-8")
 
-    rc = cli.main(["ngram", "--trace", str(trace_path), "--field", "lemma"])
+    rc = cli.main(["ngram", "--tokens", str(trace_path), "--field", "lemma"])
 
     assert rc == 1
-    assert "Trace must contain 'lemma' column" in capsys.readouterr().err
-
-
-def test_ngram_cli_rejects_missing_group_column_for_by_group(tmp_path, capsys):
-    trace_path = tmp_path / "trace.tsv"
-    trace_path.write_text("sent_idx\ttoken\tlemma\n0\tarma\tarma\n", encoding="utf-8")
-
-    rc = cli.main(["ngram", "--trace", str(trace_path), "--by-group"])
-
-    assert rc == 1
-    assert "Trace must contain 'group' column when --by-group is used" in capsys.readouterr().err
+    assert "metadata" in capsys.readouterr().err

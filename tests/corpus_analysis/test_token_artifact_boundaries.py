@@ -14,9 +14,8 @@ from nlpo_toolkit.corpus_analysis.token_artifact import (
 )
 
 
-def test_token_artifact_compatibility_reexports_are_identical() -> None:
+def test_token_artifact_analysis_record_reexports_are_identical() -> None:
     from nlpo_toolkit.corpus_analysis import analysis_records
-    from nlpo_toolkit.corpus_analysis import diagnostic_trace
     from nlpo_toolkit.corpus_analysis import token_artifact
 
     assert token_artifact.NLPAnalysisRecord is analysis_records.NLPAnalysisRecord
@@ -26,8 +25,6 @@ def test_token_artifact_compatibility_reexports_are_identical() -> None:
         token_artifact.evaluate_analysis_record
         is analysis_records.evaluate_analysis_record
     )
-    assert token_artifact.DiagnosticTraceWriter is diagnostic_trace.DiagnosticTraceWriter
-    assert token_artifact.LEGACY_TRACE_COLUMNS is diagnostic_trace.LEGACY_TRACE_COLUMNS
 
 
 def test_analysis_cache_imports_analysis_record_from_canonical_module() -> None:

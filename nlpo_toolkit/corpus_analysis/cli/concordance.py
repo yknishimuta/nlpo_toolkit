@@ -11,10 +11,10 @@ from .common import CLIContext, set_handler
 def register(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser("concordance")
     parser.add_argument(
-        "--trace",
+        "--tokens",
         type=Path,
         required=True,
-        help="Token artifact or legacy trace TSV path.",
+        help="Complete token artifact TSV path.",
     )
     parser.add_argument(
         "--keys",
@@ -32,7 +32,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         "--field",
         choices=("token", "lemma"),
         default="lemma",
-        help="Trace field to search.",
+        help="Token artifact field to search.",
     )
     parser.add_argument("--format", choices=("tsv", "csv"), default="tsv", help="Output format.")
     parser.add_argument(
@@ -47,7 +47,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
 def execute(args: argparse.Namespace, context: CLIContext) -> int:
     try:
         return write_concordance(
-            trace_path=args.trace,
+            tokens_path=args.tokens,
             keys=list(args.keys),
             field=args.field,
             window=args.window,

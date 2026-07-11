@@ -1,3 +1,5 @@
+"""N-gram generation from complete token artifacts or configured text."""
+
 from __future__ import annotations
 
 import csv
@@ -11,7 +13,7 @@ from typing import Iterable, TextIO
 from .config import load_config
 from .corpus import prepare_corpora, resolve_corpus_work_items, run_preprocess_if_needed
 from .analysis_records import TokenRecord
-from .token_artifact import TokenArtifactError, read_token_rows, token_artifact_metadata_path
+from .token_artifact import TokenArtifactError, read_token_records
 
 
 class NgramError(ValueError):
@@ -39,34 +41,31 @@ def _normalize_item(value: object) -> str | None:
 
 
 def _sequence_key(row: dict[str, str], by_group: bool) -> tuple[str, ...]:
-    parts: list[str] = []
-    if "group" in row:
-        parts.append(row.get("group", ""))
-    for column in ("file", "label", "chunk"):
-        if column in row:
-            parts.append(row.get(column, ""))
-    if "sentence" in row:
-        parts.append(row.get("sentence", ""))
-    elif "sent_idx" in row:
-        parts.append(row.get("sent_idx", ""))
-    return tuple(parts)
-
-
-def _legacy_fieldnames(path: Path) -> list[str]:
-    if token_artifact_metadata_path(path).exists():
-        return []
-    with path.open("r", encoding="utf-8", newline="") as f:
-        reader = csv.reader(f, delimiter="\t")
-        return next(reader, [])
+    return tuple(
+        row.get(column, "")
+        for column in (
+            "group",
+            "source_file",
+            "section",
+            "chunk_index",
+            "sentence_index",
+        )
+        if column in row
+    ) or tuple(
+        row.get(column, "")
+        for column in ("group", "file", "label", "chunk", "sentence", "sent_idx")
+        if column in row
+    )
 
 
 def _row_from_record(record: TokenRecord) -> dict[str, str]:
     return {
         "group": record.group,
-        "file": record.source_file or "",
-        "chunk": str(record.chunk_index),
-        "sent_idx": str(record.sentence_index),
-        "sentence": record.sentence,
+        "source_file": record.source_file or "",
+        "section": record.section or "",
+        "chunk_index": str(record.chunk_index),
+        "sentence_index": str(record.sentence_index),
+        "token_index": str(record.token_index),
         "token": record.token,
         "lemma": record.lemma or "",
     }
@@ -187,22 +186,33 @@ def build_ngrams_from_rows(
     )
 
 
-def read_trace_rows(trace_path: Path, field: str, *, by_group: bool = False) -> list[dict[str, str]]:
-    if not trace_path.exists():
-        raise NgramError(f"Trace not found: {trace_path}")
-    fieldnames = _legacy_fieldnames(trace_path)
-    if fieldnames and field not in fieldnames:
-        raise NgramError(f"Trace must contain '{field}' column.")
-    if fieldnames and by_group and "group" not in fieldnames:
-        raise NgramError("Trace must contain 'group' column when --by-group is used.")
+def read_token_artifact_rows(
+    tokens_path: Path,
+    field: str,
+    *,
+    by_group: bool = False,
+) -> list[dict[str, str]]:
+    if field not in {"token", "lemma"}:
+        raise NgramError("field must be 'token' or 'lemma'.")
     try:
-        return [
+        rows = [
             _row_from_record(record)
-            for record in read_token_rows(trace_path)
+            for record in read_token_records(tokens_path, verify_hash=True)
             if record.included
         ]
     except TokenArtifactError as exc:
         raise NgramError(str(exc)) from exc
+    return sorted(
+        rows,
+        key=lambda row: (
+            row["group"],
+            row["source_file"],
+            row["section"],
+            int(row["chunk_index"]),
+            int(row["sentence_index"]),
+            int(row["token_index"]),
+        ),
+    )
 
 
 def _rows_from_text(text: str, group: str) -> list[dict[str, str]]:
@@ -259,9 +269,9 @@ def write_ngram_rows(
     return 0
 
 
-def write_ngrams_from_trace(
+def write_ngrams_from_tokens(
     *,
-    trace_path: Path,
+    tokens_path: Path,
     n: int,
     field: str,
     by_group: bool,
@@ -271,7 +281,7 @@ def write_ngrams_from_trace(
     out_path: Path | None,
 ) -> int:
     rows = build_ngrams_from_rows(
-        read_trace_rows(trace_path, field, by_group=by_group),
+        read_token_artifact_rows(tokens_path, field, by_group=by_group),
         n=n,
         field=field,
         by_group=by_group,
@@ -300,7 +310,10 @@ def write_ngrams_from_config(
     clean_mod: object | None = None,
 ) -> int:
     if field != "token":
-        raise NgramError("Config input currently supports --field token only. Use --trace for lemma n-grams.")
+        raise NgramError(
+            "Config input currently supports --field token only. "
+            "Use --tokens with a token artifact for lemma n-grams."
+        )
     rows = build_ngrams_from_rows(
         read_config_text_rows(project_root, config_path, clean_mod=clean_mod),
         n=n,

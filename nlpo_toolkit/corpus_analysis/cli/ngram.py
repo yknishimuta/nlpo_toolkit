@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-from ..ngram import NgramError, write_ngrams_from_config, write_ngrams_from_trace
+from ..ngram import NgramError, write_ngrams_from_config, write_ngrams_from_tokens
 from .common import CLIContext, resolve_config_path, resolve_project_root, set_handler
 
 
@@ -18,11 +18,12 @@ except Exception:
 def register(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser("ngram")
     parser.add_argument("--n", type=int, default=2, help="N-gram size.")
-    parser.add_argument(
-        "--trace",
+    inputs = parser.add_mutually_exclusive_group(required=True)
+    inputs.add_argument(
+        "--tokens",
         type=Path,
         default=None,
-        help="Token artifact or legacy trace TSV path.",
+        help="Complete token artifact TSV path.",
     )
     parser.add_argument(
         "--project-root",
@@ -30,7 +31,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         default=Path.cwd(),
         help="Project root used with --config input.",
     )
-    parser.add_argument(
+    inputs.add_argument(
         "--config",
         type=Path,
         default=None,
@@ -40,12 +41,12 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         "--field",
         choices=("token", "lemma"),
         default="lemma",
-        help="Trace field to use for n-grams.",
+        help="Token artifact field to use for n-grams.",
     )
     parser.add_argument(
         "--by-group",
         action="store_true",
-        help="Aggregate n-grams separately for each trace group.",
+        help="Aggregate n-grams separately for each token artifact group.",
     )
     parser.add_argument("--min-count", type=int, default=1, help="Minimum frequency to include.")
     parser.add_argument("--top", type=int, default=None, help="Limit output to the top N n-grams.")
@@ -61,9 +62,9 @@ def register(subparsers: argparse._SubParsersAction) -> None:
 
 def execute(args: argparse.Namespace, context: CLIContext) -> int:
     try:
-        if args.trace is not None:
-            return write_ngrams_from_trace(
-                trace_path=args.trace,
+        if args.tokens is not None:
+            return write_ngrams_from_tokens(
+                tokens_path=args.tokens,
                 n=args.n,
                 field=args.field,
                 by_group=bool(args.by_group),

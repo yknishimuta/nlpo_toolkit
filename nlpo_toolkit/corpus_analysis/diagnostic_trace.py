@@ -1,21 +1,20 @@
-"""Legacy diagnostic trace TSV output.
+"""Optional diagnostic trace TSV output for human inspection.
 
-Diagnostic traces may be filtered or truncated and are not stable,
-complete token artifacts.
+Diagnostic traces may be filtered or truncated and must not be used as
+reusable downstream analysis input.
 """
 
 from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import Any, Collection, Iterator
+from typing import Any, Collection
 
 from .analysis_records import TokenRecord
 
 __all__ = [
     "DiagnosticTraceWriter",
     "LEGACY_TRACE_COLUMNS",
-    "read_legacy_trace_records",
 ]
 
 LEGACY_TRACE_COLUMNS = (
@@ -106,48 +105,3 @@ class DiagnosticTraceWriter:
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
         if self._file is not None:
             self._file.close()
-
-
-def _legacy_int(value: str | None, default: int = 0) -> int:
-    try:
-        return int(value or "")
-    except ValueError:
-        return default
-
-
-def read_legacy_trace_records(path: Path) -> Iterator[TokenRecord]:
-    path = Path(path)
-    if not path.exists():
-        raise ValueError(f"Trace not found: {path}")
-    with path.open("r", encoding="utf-8", newline="") as f:
-        reader = csv.DictReader(f, delimiter="\t")
-        for idx, row in enumerate(reader):
-            token = row.get("token", "")
-            if token == "(trace stopped; counting continues)" or row.get("upos") == "TRACE_TRUNCATED":
-                continue
-            group = row.get("group") or row.get("label") or ""
-            key = row.get("lemma") or row.get("token") or ""
-            source_file = row.get("source_file") or row.get("file") or None
-            start_in_chunk = row.get("token_char_start_in_chunk") or row.get("char_start_in_chunk")
-            start_in_text = row.get("token_char_start_in_text") or row.get("char_start_in_text")
-            yield TokenRecord(
-                group=group,
-                source_file=source_file,
-                section=None,
-                chunk_index=_legacy_int(row.get("chunk") or row.get("chunk_index")),
-                sentence_index=_legacy_int(row.get("sent_idx") or row.get("sentence_index")),
-                token_index=_legacy_int(row.get("token_idx") or row.get("token_index")),
-                global_token_index=_legacy_int(row.get("global_row") or row.get("global_token_index"), idx + 1),
-                char_start_in_chunk=_legacy_int(start_in_chunk) if start_in_chunk not in (None, "") else None,
-                char_end_in_chunk=None,
-                char_start_in_text=_legacy_int(start_in_text) if start_in_text not in (None, "") else None,
-                char_end_in_text=None,
-                sentence=row.get("sentence", ""),
-                token=token,
-                lemma=row.get("lemma") or None,
-                upos=row.get("upos") or None,
-                analysis_key=key.strip().lower() or None,
-                included=True,
-                exclusion_reason=None,
-                ref_tag=row.get("ref_tag") or None,
-            )

@@ -1,3 +1,5 @@
+"""KWIC concordance generation from complete token artifacts."""
+
 from __future__ import annotations
 
 import csv
@@ -7,7 +9,7 @@ from pathlib import Path
 from typing import TextIO
 
 from .analysis_records import TokenRecord
-from .token_artifact import TokenArtifactError, read_token_rows, token_artifact_metadata_path
+from .token_artifact import TokenArtifactError, read_token_records
 
 
 class ConcordanceError(ValueError):
@@ -21,24 +23,17 @@ def _open_output(path: Path | None) -> tuple[TextIO, bool]:
     return path.open("w", encoding="utf-8", newline=""), True
 
 
-def _legacy_fieldnames(path: Path) -> list[str]:
-    if token_artifact_metadata_path(path).exists():
-        return []
-    with path.open("r", encoding="utf-8", newline="") as f:
-        reader = csv.reader(f, delimiter="\t")
-        return next(reader, [])
-
-
 def _field_value(record: TokenRecord, field: str) -> str:
     if field == "token":
         return record.token
     return record.lemma or ""
 
 
-def _sequence_key(record: TokenRecord) -> tuple[str, str, int, int]:
+def _sequence_key(record: TokenRecord) -> tuple[str, str, str, int, int]:
     return (
         record.group,
         record.source_file or "",
+        record.section or "",
         record.chunk_index,
         record.sentence_index,
     )
@@ -73,7 +68,7 @@ def _kwic_from_sequence(
 
 def build_concordance_rows(
     *,
-    trace_path: Path,
+    tokens_path: Path,
     keys: list[str],
     field: str,
     window: int,
@@ -84,38 +79,32 @@ def build_concordance_rows(
         raise ConcordanceError("window must be zero or greater.")
     if not keys:
         raise ConcordanceError("--keys must contain at least one search key.")
-    if not trace_path.exists():
-        raise ConcordanceError(f"Trace not found: {trace_path}")
-
     key_set = {key.strip().lower() for key in keys if key.strip()}
     if not key_set:
         raise ConcordanceError("--keys must contain at least one search key.")
 
-    fieldnames = _legacy_fieldnames(trace_path)
-    if fieldnames and field not in fieldnames:
-        raise ConcordanceError(f"Trace must contain '{field}' column.")
-
     try:
-        records = [record for record in read_token_rows(trace_path) if record.included]
+        all_records = list(read_token_records(tokens_path, verify_hash=True))
     except TokenArtifactError as exc:
         raise ConcordanceError(str(exc)) from exc
+    matched_records = [record for record in all_records if record.included]
 
     metadata_columns = [
         column
         for column, predicate in (
-            ("file", any(record.source_file for record in records)),
-            ("group", any(record.group for record in records)),
-            ("sentence", any(record.sentence for record in records)),
+            ("file", any(record.source_file for record in all_records)),
+            ("group", any(record.group for record in all_records)),
+            ("sentence", any(record.sentence for record in all_records)),
         )
         if predicate
     ]
     output_columns = metadata_columns + ["key", "field", "token", "lemma", "left", "node", "right"]
     rows: list[dict[str, str]] = []
-    sequences: dict[tuple[str, str, int, int], list[TokenRecord]] = defaultdict(list)
-    for record in records:
+    sequences: dict[tuple[str, str, str, int, int], list[TokenRecord]] = defaultdict(list)
+    for record in all_records:
         sequences[_sequence_key(record)].append(record)
 
-    for record in records:
+    for record in matched_records:
         value = _field_value(record, field).strip()
         if value.lower() not in key_set:
             continue
@@ -150,7 +139,7 @@ def build_concordance_rows(
 
 def write_concordance(
     *,
-    trace_path: Path,
+    tokens_path: Path,
     keys: list[str],
     field: str,
     window: int,
@@ -161,7 +150,7 @@ def write_concordance(
         raise ConcordanceError("output format must be 'tsv' or 'csv'.")
 
     columns, rows = build_concordance_rows(
-        trace_path=trace_path,
+        tokens_path=tokens_path,
         keys=keys,
         field=field,
         window=window,

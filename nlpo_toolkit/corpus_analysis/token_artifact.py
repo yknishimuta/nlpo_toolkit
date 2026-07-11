@@ -1,4 +1,8 @@
-"""Stable token artifact TSV serialization and validation."""
+"""Stable and complete token artifact serialization and validation.
+
+Token artifacts are the supported input for downstream token-based commands
+such as concordance and n-gram analysis.
+"""
 
 from __future__ import annotations
 
@@ -17,11 +21,6 @@ from .analysis_records import (
     evaluate_analysis_record,
     iter_nlp_analysis_records_from_text,
     iter_token_records,
-)
-from .diagnostic_trace import (
-    DiagnosticTraceWriter,
-    LEGACY_TRACE_COLUMNS,
-    read_legacy_trace_records as _read_legacy_trace_records,
 )
 
 TOKEN_ARTIFACT_SCHEMA_NAME = "nlpo-token-artifact"
@@ -59,7 +58,6 @@ __all__ = [
     "TokenArtifactWriter",
     "read_token_artifact_metadata",
     "read_token_records",
-    "read_token_rows",
     "token_artifact_metadata_path",
     "validate_token_artifact",
     # Compatibility re-exports
@@ -70,9 +68,6 @@ __all__ = [
     "evaluate_analysis_record",
     "iter_nlp_analysis_records_from_text",
     "iter_token_records",
-    "DiagnosticTraceWriter",
-    "LEGACY_TRACE_COLUMNS",
-    "read_legacy_trace_records",
 ]
 
 
@@ -347,20 +342,3 @@ def validate_token_artifact(path: Path) -> TokenArtifactMetadata:
     for _record in read_token_records(path, verify_hash=True):
         pass
     return metadata
-
-
-def read_legacy_trace_records(path: Path) -> Iterator[TokenRecord]:
-    try:
-        yield from _read_legacy_trace_records(path)
-    except ValueError as exc:
-        raise TokenArtifactError(str(exc)) from exc
-
-
-def read_token_rows(path: Path, *, allow_legacy_trace: bool = True) -> Iterator[TokenRecord]:
-    if token_artifact_metadata_path(path).exists():
-        yield from read_token_records(path)
-        return
-    if allow_legacy_trace:
-        yield from read_legacy_trace_records(path)
-        return
-    raise TokenArtifactError(f"Token artifact metadata was not found: {token_artifact_metadata_path(path)}")

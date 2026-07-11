@@ -11,57 +11,25 @@ from nlpo_toolkit.corpus_analysis.token_artifact import (
 )
 
 
-def _write_trace(path):
-    path.write_text(
-        "\t".join(
-            [
-                "file",
-                "group",
-                "sentence",
-                "token_idx",
-                "token",
-                "lemma",
-                "upos",
-            ]
-        )
-        + "\n"
-        + "\t".join(
-            [
-                "input/a.txt",
-                "g1",
-                "arma virumque cano Troiae qui primus ab oris",
-                "1",
-                "virumque",
-                "vir",
-                "NOUN",
-            ]
-        )
-        + "\n"
-        + "\t".join(
-            [
-                "input/b.txt",
-                "g2",
-                "litora multum ille et terris iactatus et alto",
-                "2",
-                "ille",
-                "ille",
-                "PRON",
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+def _write_artifact(path):
+    records = [
+        TokenRecord("g1", "input/a.txt", 0, 0, 1, 0, None, None, None, None, "arma virumque cano Troiae qui primus ab oris", "virumque", "vir", "NOUN", "vir", True, None, None),
+        TokenRecord("g2", "input/b.txt", 0, 0, 2, 1, None, None, None, None, "litora multum ille et terris iactatus et alto", "ille", "ille", "PRON", "ille", True, None, None),
+    ]
+    with TokenArtifactWriter(path, metadata=TokenArtifactMetadata(group="mixed")) as writer:
+        for record in records:
+            writer.write(record)
 
 
 def test_concordance_writes_tsv_to_stdout(tmp_path, capsys):
-    trace_path = tmp_path / "trace.tsv"
-    _write_trace(trace_path)
+    tokens_path = tmp_path / "tokens.tsv"
+    _write_artifact(tokens_path)
 
     rc = cli.main(
         [
             "concordance",
-            "--trace",
-            str(trace_path),
+            "--tokens",
+            str(tokens_path),
             "--keys",
             "vir",
             "--field",
@@ -95,15 +63,15 @@ def test_concordance_writes_tsv_to_stdout(tmp_path, capsys):
 
 
 def test_concordance_writes_csv_file_for_multiple_token_keys(tmp_path):
-    trace_path = tmp_path / "trace.tsv"
+    tokens_path = tmp_path / "tokens.tsv"
     out_path = tmp_path / "kwic.csv"
-    _write_trace(trace_path)
+    _write_artifact(tokens_path)
 
     rc = cli.main(
         [
             "concordance",
-            "--trace",
-            str(trace_path),
+            "--tokens",
+            str(tokens_path),
             "--keys",
             "virumque",
             "ille",
@@ -126,11 +94,11 @@ def test_concordance_writes_csv_file_for_multiple_token_keys(tmp_path):
 
 
 def test_concordance_is_case_insensitive(tmp_path):
-    trace_path = tmp_path / "trace.tsv"
-    _write_trace(trace_path)
+    tokens_path = tmp_path / "tokens.tsv"
+    _write_artifact(tokens_path)
 
     columns, rows = build_concordance_rows(
-        trace_path=trace_path,
+        tokens_path=tokens_path,
         keys=["VIR"],
         field="lemma",
         window=2,
@@ -153,23 +121,31 @@ def test_concordance_reads_token_artifact_sequence_for_kwic(tmp_path):
             writer.write(record)
 
     columns, rows = build_concordance_rows(
-        trace_path=artifact,
+        tokens_path=artifact,
         keys=["vir"],
         field="lemma",
         window=2,
     )
 
     assert columns[:3] == ["file", "group", "sentence"]
-    assert rows[0]["left"] == "arma"
+    assert rows[0]["left"] == "arma ,"
     assert rows[0]["node"] == "virumque"
     assert rows[0]["right"] == ""
 
+    _columns, excluded_rows = build_concordance_rows(
+        tokens_path=artifact,
+        keys=[","],
+        field="token",
+        window=2,
+    )
+    assert excluded_rows == []
 
-def test_concordance_rejects_missing_trace(tmp_path, capsys):
+
+def test_concordance_rejects_missing_token_artifact(tmp_path, capsys):
     rc = cli.main(
         [
             "concordance",
-            "--trace",
+            "--tokens",
             str(tmp_path / "missing.tsv"),
             "--keys",
             "vir",
@@ -177,18 +153,18 @@ def test_concordance_rejects_missing_trace(tmp_path, capsys):
     )
 
     assert rc == 1
-    assert "Trace not found" in capsys.readouterr().err
+    assert "Token artifact not found" in capsys.readouterr().err
 
 
 def test_concordance_rejects_negative_window(tmp_path, capsys):
-    trace_path = tmp_path / "trace.tsv"
-    _write_trace(trace_path)
+    tokens_path = tmp_path / "tokens.tsv"
+    _write_artifact(tokens_path)
 
     rc = cli.main(
         [
             "concordance",
-            "--trace",
-            str(trace_path),
+            "--tokens",
+            str(tokens_path),
             "--keys",
             "vir",
             "--window",
@@ -198,3 +174,14 @@ def test_concordance_rejects_negative_window(tmp_path, capsys):
 
     assert rc == 1
     assert "window must be zero or greater" in capsys.readouterr().err
+
+
+def test_concordance_rejects_tsv_without_artifact_metadata(tmp_path):
+    path = tmp_path / "trace.tsv"
+    path.write_text("label\ttoken\tlemma\ng\tArma\tarma\n", encoding="utf-8")
+
+    import pytest
+    from nlpo_toolkit.corpus_analysis.concordance import ConcordanceError
+
+    with pytest.raises(ConcordanceError, match="metadata"):
+        build_concordance_rows(tokens_path=path, keys=["arma"], field="lemma", window=2)
