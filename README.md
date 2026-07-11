@@ -176,6 +176,7 @@ groups:
 
 out_dir: output
 nlp:
+  backend: stanza
   language: la
   stanza_package: perseus
   cpu_only: true
@@ -224,6 +225,7 @@ groups:
 
 out_dir: output
 nlp:
+  backend: stanza
   language: la
   stanza_package: perseus
   cpu_only: true
@@ -583,6 +585,7 @@ groups:
 
 out_dir: output
 nlp:
+  backend: stanza
   language: la
   stanza_package: perseus
   cpu_only: true

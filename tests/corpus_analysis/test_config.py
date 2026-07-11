@@ -8,6 +8,7 @@ import yaml
 
 from nlpo_toolkit.corpus_analysis.config import (
     AppConfig,
+    KNOWN_TOP_LEVEL_KEYS,
     NormalizationConfig,
     config_to_dict,
     ensure_app_config,
@@ -610,8 +611,62 @@ def test_load_config_rejects_top_level_non_mapping(tmp_path: Path):
         load_config(cfg_path)
 
 
-def test_load_config_loads_repository_config():
+def test_repository_config_is_canonical():
     cfg = load_config(Path("config/groups.config.yml"))
 
     assert isinstance(cfg, AppConfig)
-    assert cfg.groups
+    assert cfg.grouping.mode == "groups"
+    assert cfg.grouping.auto_group_name == "text"
+    assert cfg.nlp.backend == "transformers"
+    assert cfg.nlp.model_name == "pranaydeep/latin-bert"
+    assert cfg.nlp.language == "la"
+    assert cfg.nlp.stanza_package == "perseus"
+    assert cfg.nlp.cpu_only is True
+    assert cfg.analysis_unit == "lemma"
+    assert cfg.filters.upos_targets == frozenset({"NOUN", "PROPN"})
+    assert cfg.filters.min_token_length == 2
+    assert cfg.filters.drop_roman_numerals is True
+    assert cfg.normalization.enabled is True
+    assert cfg.trace.enabled is True
+    assert cfg.trace.path == "output/trace.tsv"
+    assert cfg.trace.only_keys == frozenset()
+    assert cfg.artifacts.tokens.enabled is False
+    assert cfg.archive.enabled is False
+    assert set(cfg.groups) == {
+        "satyricon_full",
+        "satyricon_cena",
+        "satyricon_non_cena",
+    }
+
+
+def test_repository_config_uses_only_canonical_top_level_keys():
+    raw = yaml.safe_load(
+        Path("config/groups.config.yml").read_text(encoding="utf-8")
+    )
+    assert isinstance(raw, dict)
+    assert set(raw) <= KNOWN_TOP_LEVEL_KEYS
+
+
+def test_repository_config_round_trips_through_python_and_yaml():
+    original = load_config(Path("config/groups.config.yml"))
+    serialized = config_to_dict(original)
+    assert ensure_app_config(serialized) == original
+
+    dumped = yaml.safe_dump(serialized, sort_keys=False, allow_unicode=True)
+    assert ensure_app_config(yaml.safe_load(dumped)) == original
+
+
+def test_repository_config_references_existing_files():
+    project_root = Path(".").resolve()
+    cfg = load_config(Path("config/groups.config.yml"))
+    references = (
+        cfg.preprocess.config,
+        cfg.ref_tags.patterns,
+        cfg.dictcheck.wordlist,
+        cfg.dictcheck.lemma_normalize,
+        cfg.filters.roman_exceptions_file,
+    )
+
+    for value in references:
+        assert value is not None
+        assert (project_root / value).is_file(), value
