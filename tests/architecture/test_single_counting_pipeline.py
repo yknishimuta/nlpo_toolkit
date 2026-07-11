@@ -5,7 +5,7 @@ from dataclasses import fields
 from pathlib import Path
 
 import nlpo_toolkit.nlp as nlp
-from nlpo_toolkit.corpus_analysis.runner import RunnerDependencies
+from nlpo_toolkit.corpus_analysis.runner_types import RunnerDependencies
 
 
 def test_analysis_pipeline_does_not_call_legacy_counter() -> None:

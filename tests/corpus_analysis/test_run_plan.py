@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-import nlpo_toolkit.corpus_analysis.runner as runner_mod
+from nlpo_toolkit.corpus_analysis.runner_types import RunnerDependencies
+from nlpo_toolkit.corpus_analysis.runtime import prepare_run_context
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.run_plan import build_run_plan
 
@@ -432,7 +433,7 @@ def test_prepare_run_context_validates_plan_before_nlp_initialization(tmp_path: 
             info=NLPBackendInfo(name="fake", language="la"),
         )
 
-    deps = runner_mod.RunnerDependencies(
+    deps = RunnerDependencies(
         load_config=_loader(
             {
                 "groups": {
@@ -448,7 +449,7 @@ def test_prepare_run_context_validates_plan_before_nlp_initialization(tmp_path: 
     )
 
     with pytest.raises(ValueError, match="comparison ab references empty group: a"):
-        runner_mod.prepare_run_context(
+        prepare_run_context(
             project_root=tmp_path,
             script_dir=None,
             config_path=config_path,

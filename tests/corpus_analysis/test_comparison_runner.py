@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
+import nlpo_toolkit.corpus_analysis.runtime as runtime_mod
 from nlpo_toolkit.corpus_analysis.archive import create_run_archive
 from nlpo_toolkit.corpus_analysis.dry_run import dry_run_count_vocabula
 from tests.corpus_analysis.fake_nlp import FakeNLPBackend, fake_backend_factory
@@ -30,7 +31,7 @@ def _run_with_config(
     config_path = project_root / "groups.config.yml"
     config_path.write_text("dummy", encoding="utf-8")
 
-    monkeypatch.setattr(runner_mod, "run_preprocess_if_needed", lambda **kwargs: None)
+    monkeypatch.setattr(runtime_mod, "run_preprocess_if_needed", lambda **kwargs: None)
 
     if counter_by_text is None:
         counter_by_text = {
@@ -225,7 +226,7 @@ def test_runner_rejects_group_by_file_with_comparisons(
         },
         "comparisons": [{"name": "comparison_1", "group_a": "corpus_a", "group_b": "corpus_b"}],
     }
-    monkeypatch.setattr(runner_mod, "run_preprocess_if_needed", lambda **kwargs: None)
+    monkeypatch.setattr(runtime_mod, "run_preprocess_if_needed", lambda **kwargs: None)
 
     with pytest.raises(ValueError, match="comparisons cannot be used"):
         runner_mod.run(

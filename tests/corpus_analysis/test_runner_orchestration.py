@@ -1,0 +1,50 @@
+from __future__ import annotations
+
+from pathlib import Path
+from types import SimpleNamespace
+
+import nlpo_toolkit.corpus_analysis.runner as runner_mod
+
+
+def test_run_orchestrates_steps_in_order(monkeypatch, tmp_path: Path) -> None:
+    calls: list[str] = []
+    context = SimpleNamespace()
+    analysis = SimpleNamespace()
+    partitions = SimpleNamespace(exit_code=7)
+    comparisons = SimpleNamespace()
+
+    monkeypatch.setattr(
+        runner_mod.runtime,
+        "prepare_run_context",
+        lambda **kwargs: calls.append("prepare") or context,
+    )
+    monkeypatch.setattr(
+        runner_mod.analysis_pipeline,
+        "analyze_corpora",
+        lambda ctx, deps: calls.append("analyze") or analysis,
+    )
+    monkeypatch.setattr(
+        runner_mod.post_analysis,
+        "execute_partition_validations",
+        lambda **kwargs: calls.append("partitions") or partitions,
+    )
+    monkeypatch.setattr(
+        runner_mod.post_analysis,
+        "execute_group_comparisons",
+        lambda **kwargs: calls.append("comparisons") or comparisons,
+    )
+    monkeypatch.setattr(
+        runner_mod.run_reporting,
+        "write_run_report",
+        lambda **kwargs: calls.append("report"),
+    )
+
+    rc = runner_mod.run(
+        project_root=tmp_path,
+        config_path=tmp_path / "config.yml",
+        load_config_fn=lambda path: {},
+        clean_mod=object(),
+    )
+
+    assert calls == ["prepare", "analyze", "partitions", "comparisons", "report"]
+    assert rc == 7

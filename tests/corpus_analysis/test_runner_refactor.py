@@ -4,8 +4,23 @@ from collections import Counter
 from pathlib import Path
 
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
+from nlpo_toolkit.corpus_analysis.analysis_pipeline import (
+    analyze_one_corpus,
+    apply_lemma_normalization,
+    split_known_unknown,
+)
 from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
-import nlpo_toolkit.corpus_analysis.runner as runner_mod
+from nlpo_toolkit.corpus_analysis.run_reporting import (
+    build_final_run_metadata,
+    build_summary_lines,
+)
+from nlpo_toolkit.corpus_analysis.runner_types import (
+    AnalysisResults,
+    ComparisonRunResult,
+    PartitionRunResult,
+    RunnerDependencies,
+)
+from nlpo_toolkit.corpus_analysis.runtime import prepare_run_context
 from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
 
 
@@ -34,7 +49,7 @@ def _backend_factory(config):
 
 
 def _base_dependencies():
-    return runner_mod.RunnerDependencies(
+    return RunnerDependencies(
         load_config=lambda _path: {},
         clean_module=object(),
         backend_factory=_backend_factory,
@@ -45,7 +60,7 @@ def _base_dependencies():
 def test_apply_lemma_normalization_is_pure() -> None:
     counter = Counter({"omninus": 2, "omnino": 1})
 
-    result = runner_mod.apply_lemma_normalization(
+    result = apply_lemma_normalization(
         counter,
         {"omninus": "omnino"},
     )
@@ -55,7 +70,7 @@ def test_apply_lemma_normalization_is_pure() -> None:
 
 
 def test_split_known_unknown() -> None:
-    known, unknown = runner_mod.split_known_unknown(
+    known, unknown = split_known_unknown(
         Counter({"arma": 2, "ignotus": 1}),
         {"arma"},
     )
@@ -76,14 +91,14 @@ def test_prepare_run_context_resolves_per_file_work_items(tmp_path: Path) -> Non
             "groups": {"group_a": {"files": ["input/*.txt"]}},
         }
 
-    deps = runner_mod.RunnerDependencies(
+    deps = RunnerDependencies(
         load_config=load_config,
         clean_module=object(),
         backend_factory=_backend_factory,
         render_stanza_package_table=lambda *_args, **_kwargs: [],
     )
 
-    context = runner_mod.prepare_run_context(
+    context = prepare_run_context(
         project_root=tmp_path,
         script_dir=None,
         config_path=config_path,
@@ -93,9 +108,9 @@ def test_prepare_run_context_resolves_per_file_work_items(tmp_path: Path) -> Non
         dependencies=deps,
     )
 
-    assert context.per_file is True
-    assert [item.label for item in context.work_items] == ["sample_text_a"]
-    assert context.out_dir == (tmp_path / "output").resolve()
+    assert context.plan.per_file is True
+    assert [item.label for item in context.plan.work_items] == ["sample_text_a"]
+    assert context.plan.out_dir == (tmp_path / "output").resolve()
 
 
 def test_analyze_one_corpus_writes_expected_outputs_from_record_pipeline(tmp_path: Path) -> None:
@@ -129,13 +144,13 @@ def test_analyze_one_corpus_writes_expected_outputs_from_record_pipeline(tmp_pat
             },
         }
 
-    deps = runner_mod.RunnerDependencies(
+    deps = RunnerDependencies(
         load_config=load_config,
         clean_module=object(),
         backend_factory=_backend_factory,
         render_stanza_package_table=lambda *_args, **_kwargs: [],
     )
-    context = runner_mod.prepare_run_context(
+    context = prepare_run_context(
         project_root=tmp_path,
         script_dir=None,
         config_path=config_path,
@@ -152,7 +167,7 @@ def test_analyze_one_corpus_writes_expected_outputs_from_record_pipeline(tmp_pat
         ref_tag_counts=Counter({"tag_a": 1}),
     )
 
-    result = runner_mod.analyze_one_corpus(
+    result = analyze_one_corpus(
         context=context,
         dependencies=deps,
         corpus=corpus,
@@ -182,13 +197,13 @@ def test_summary_lines_and_metadata_include_existing_fields(tmp_path: Path) -> N
             "groups": {"group_a": {"files": ["input/a.txt"]}},
         }
 
-    deps = runner_mod.RunnerDependencies(
+    deps = RunnerDependencies(
         load_config=load_config,
         clean_module=object(),
         backend_factory=_backend_factory,
         render_stanza_package_table=lambda *_args, **_kwargs: [],
     )
-    context = runner_mod.prepare_run_context(
+    context = prepare_run_context(
         project_root=tmp_path,
         script_dir=None,
         config_path=config_path,
@@ -197,7 +212,7 @@ def test_summary_lines_and_metadata_include_existing_fields(tmp_path: Path) -> N
         error_on_empty_group=False,
         dependencies=deps,
     )
-    analysis = runner_mod.AnalysisResults(
+    analysis = AnalysisResults(
         groups=(),
         counters_by_group={},
         files_by_group={"group_a": ((tmp_path / "input" / "a.txt").resolve(),)},
@@ -205,22 +220,22 @@ def test_summary_lines_and_metadata_include_existing_fields(tmp_path: Path) -> N
         trace_paths={},
         generated_outputs=(),
     )
-    partitions = runner_mod.PartitionRunResult((), (), (), (), 0)
-    comparisons = runner_mod.ComparisonRunResult((), (), ())
+    partitions = PartitionRunResult((), (), (), (), 0)
+    comparisons = ComparisonRunResult((), (), ())
 
-    lines = runner_mod.build_summary_lines(
+    lines = build_summary_lines(
         context=context,
         analysis=analysis,
         partitions=partitions,
         comparisons=comparisons,
         dependencies=deps,
     )
-    meta = runner_mod.build_final_run_metadata(
+    meta = build_final_run_metadata(
         context=context,
         analysis=analysis,
         partitions=partitions,
         comparisons=comparisons,
-        generated_outputs=(context.out_dir / "summary.txt", context.out_dir / "run_meta.json"),
+        generated_outputs=(context.plan.out_dir / "summary.txt", context.plan.out_dir / "run_meta.json"),
     )
 
     assert lines[:6] == [
