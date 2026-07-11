@@ -6,10 +6,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from nlpo_toolkit.backends import create_nlp_backend
+from nlpo_toolkit.nlp import build_stanza_pipeline
 
 from ..config import load_config
 from ..features import FeatureError, run_features
-from ..nlp_hooks import build_pipeline
 from .common import (
     CLIContext,
     add_project_config_arguments,
@@ -19,12 +19,22 @@ from .common import (
 )
 
 
-_DEFAULT_BUILD_PIPELINE = build_pipeline
-
 try:
     from nlpo_toolkit.latin.cleaners import run_clean_corpus as clean_mod
 except Exception:
     clean_mod = SimpleNamespace(main=lambda argv: 0)
+
+
+def build_pipeline(language: str, stanza_package: str, cpu_only: bool):
+    backend = build_stanza_pipeline(
+        lang=language,
+        package=stanza_package,
+        use_gpu=not cpu_only,
+    )
+    return backend, stanza_package
+
+
+_DEFAULT_BUILD_PIPELINE = build_pipeline
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:

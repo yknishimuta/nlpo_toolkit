@@ -2,29 +2,12 @@ from __future__ import annotations
 
 import csv
 import json
-from collections import Counter
 from pathlib import Path
 
 from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis.archive import create_run_archive
 from nlpo_toolkit.corpus_analysis import runner as runner_mod
-
-
-def _write_trace(path: Path, label: str, max_rows: int) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    row_count = max_rows if max_rows > 0 else 2
-    with path.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["label", "token"], delimiter="\t")
-        writer.writeheader()
-        for index in range(row_count):
-            writer.writerow({"label": label, "token": f"{label}_token_{index}"})
-
-
-def _count_group_fn(text, nlp, **kwargs):
-    trace_tsv = kwargs.get("trace_tsv")
-    if trace_tsv is not None:
-        _write_trace(Path(trace_tsv), str(kwargs.get("label", "")), int(kwargs.get("trace_max_rows", 0)))
-    return Counter({str(kwargs.get("label", "item")): 1})
+from tests.corpus_analysis.fake_nlp import fake_backend_factory
 
 
 def _run(project_root: Path, config_path: Path, *, group_by_file: bool = False) -> int:
@@ -34,9 +17,8 @@ def _run(project_root: Path, config_path: Path, *, group_by_file: bool = False) 
         group_by_file=group_by_file,
         load_config_fn=load_config,
         clean_mod=object(),
-        build_pipeline_fn=lambda *a, **k: (object(), "package_a"),
+        backend_factory=fake_backend_factory(),
         build_sentence_splitter_fn=None,
-        count_group_fn=_count_group_fn,
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
 

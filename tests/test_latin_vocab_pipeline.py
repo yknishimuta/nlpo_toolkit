@@ -10,7 +10,6 @@ from nlpo_toolkit.nlp import (
     build_stanza_pipeline,
     tokenize_all_pos,
     count_nouns,
-    count_nouns_streaming,
     normalize_token,
 )
 
@@ -73,7 +72,6 @@ def nlp_utils():
     return {
         "tokenize_all_pos": tokenize_all_pos,
         "count_nouns": count_nouns,
-        "count_nouns_streaming": count_nouns_streaming,
         "normalize_token": normalize_token,
     }
 
@@ -150,31 +148,6 @@ def test_count_nouns_surface_matches_expected(
 
     counter = count_nouns(test_text_1, nlp, use_lemma=False, upos_targets={"NOUN"})
     assert counter == Counter(expected_surface_counts)
-
-
-def test_count_nouns_streaming_equals_non_streaming(
-    test_text_1,
-    nlp,
-    nlp_utils,
-):
-    """
-    Verify that the streaming version (count_nouns_streaming)
-    produces the same result as the non-streaming version.
-    """
-    count_nouns = nlp_utils["count_nouns"]
-    count_nouns_streaming = nlp_utils["count_nouns_streaming"]
-
-    baseline = count_nouns(test_text_1, nlp, use_lemma=True, upos_targets={"NOUN"})
-    streaming = count_nouns_streaming(
-        test_text_1,
-        nlp,
-        use_lemma=True,
-        upos_targets={"NOUN"},
-        chunk_chars=20,
-        label="test_chunk",
-    )
-
-    assert streaming == baseline
 
 
 def test_normalize_on_test_input_2(

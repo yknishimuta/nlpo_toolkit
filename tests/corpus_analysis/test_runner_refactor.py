@@ -6,12 +6,24 @@ from pathlib import Path
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
-from nlpo_toolkit.models import NLPDocument
+from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
 
 
 class FakeBackend:
     def __call__(self, text: str) -> NLPDocument:
-        return NLPDocument(text=text)
+        return NLPDocument(
+            text=text,
+            sentences=[
+                NLPSentence(
+                    text=text,
+                    tokens=[
+                        NLPToken("item_a", "item_a", "NOUN", 0, 6),
+                        NLPToken("item_a", "item_a", "NOUN", 7, 13),
+                        NLPToken("item_b", "item_b", "NOUN", 14, 20),
+                    ],
+                )
+            ],
+        )
 
 
 def _backend_factory(config):
@@ -21,12 +33,11 @@ def _backend_factory(config):
     )
 
 
-def _base_dependencies(*, count_group=None):
+def _base_dependencies():
     return runner_mod.RunnerDependencies(
         load_config=lambda _path: {},
         clean_module=object(),
         backend_factory=_backend_factory,
-        count_group=count_group or (lambda *_args, **_kwargs: Counter()),
         render_stanza_package_table=lambda *_args, **_kwargs: [],
     )
 
@@ -69,7 +80,6 @@ def test_prepare_run_context_resolves_per_file_work_items(tmp_path: Path) -> Non
         load_config=load_config,
         clean_module=object(),
         backend_factory=_backend_factory,
-        count_group=lambda *_args, **_kwargs: Counter(),
         render_stanza_package_table=lambda *_args, **_kwargs: [],
     )
 
@@ -88,7 +98,7 @@ def test_prepare_run_context_resolves_per_file_work_items(tmp_path: Path) -> Non
     assert context.out_dir == (tmp_path / "output").resolve()
 
 
-def test_analyze_one_corpus_writes_expected_outputs_and_passes_filter_args(tmp_path: Path) -> None:
+def test_analyze_one_corpus_writes_expected_outputs_from_record_pipeline(tmp_path: Path) -> None:
     (tmp_path / "input").mkdir()
     input_path = tmp_path / "input" / "a.txt"
     input_path.write_text("ignored", encoding="utf-8")
@@ -119,18 +129,10 @@ def test_analyze_one_corpus_writes_expected_outputs_and_passes_filter_args(tmp_p
             },
         }
 
-    captured: dict[str, object] = {}
-
-    def count_group(text, nlp, **kwargs):
-        captured["text"] = text
-        captured.update(kwargs)
-        return Counter({"item_a": 2, "item_b": 1})
-
     deps = runner_mod.RunnerDependencies(
         load_config=load_config,
         clean_module=object(),
         backend_factory=_backend_factory,
-        count_group=count_group,
         render_stanza_package_table=lambda *_args, **_kwargs: [],
     )
     context = runner_mod.prepare_run_context(
@@ -158,12 +160,6 @@ def test_analyze_one_corpus_writes_expected_outputs_and_passes_filter_args(tmp_p
         lemma_normalization_map=None,
     )
 
-    assert captured["text"] == "prepared text"
-    assert captured["use_lemma"] is True
-    assert captured["min_token_length"] == 3
-    assert captured["drop_roman_numerals"] is True
-    assert captured["roman_exceptions"] == frozenset({"xiv"})
-    assert captured["trace_max_rows"] == 2
     assert result.counter == Counter({"item_a": 2, "item_b": 1})
     generated_names = [path.name for path in result.generated_outputs]
     assert generated_names == [
@@ -190,7 +186,6 @@ def test_summary_lines_and_metadata_include_existing_fields(tmp_path: Path) -> N
         load_config=load_config,
         clean_module=object(),
         backend_factory=_backend_factory,
-        count_group=lambda *_args, **_kwargs: Counter(),
         render_stanza_package_table=lambda *_args, **_kwargs: [],
     )
     context = runner_mod.prepare_run_context(

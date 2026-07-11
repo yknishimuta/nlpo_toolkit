@@ -7,14 +7,13 @@ from pathlib import Path
 
 import pytest
 
-import nlpo_toolkit.corpus_analysis.nlp_hooks as nlp_hooks
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
 from nlpo_toolkit.nlp import (
     RomanExceptionsError,
     count_nouns,
-    count_nouns_streaming,
     load_roman_exceptions,
 )
+from tests.corpus_analysis.fake_nlp import fake_backend_factory
 
 
 @dataclass
@@ -151,48 +150,6 @@ def test_lemma_mode_uses_configured_exceptions_but_not_surface_builtin(tmp_path:
     assert result == Counter({"xiv": 1})
 
 
-def test_fast_and_trace_paths_use_same_roman_exceptions(tmp_path: Path):
-    trace_path = tmp_path / "trace.tsv"
-
-    fast = count_nouns_streaming(
-        "ignored",
-        _fake_nlp(),
-        use_lemma=False,
-        drop_roman_numerals=True,
-        roman_exceptions=frozenset({"xiv"}),
-    )
-    traced = count_nouns_streaming(
-        "ignored",
-        _fake_nlp(),
-        use_lemma=False,
-        drop_roman_numerals=True,
-        roman_exceptions=frozenset({"xiv"}),
-        trace_tsv=trace_path,
-        trace_max_rows=100,
-        label="group_a",
-    )
-
-    assert fast == traced == Counter({"xiv": 1, "rosa": 1})
-    trace_text = trace_path.read_text(encoding="utf-8")
-    assert "xiv" in trace_text
-    assert "\tiv\t" not in trace_text
-
-
-def test_nlp_hooks_count_group_uses_roman_exception_file(tmp_path: Path):
-    path = tmp_path / "roman.txt"
-    path.write_text("xiv\n", encoding="utf-8")
-
-    result = nlp_hooks.count_group(
-        "ignored",
-        _fake_nlp(),
-        use_lemma=False,
-        drop_roman_numerals=True,
-        roman_exceptions_file=path,
-    )
-
-    assert result == Counter({"xiv": 1, "rosa": 1})
-
-
 def test_runner_integration_uses_roman_exception_file_in_final_csv(tmp_path: Path, monkeypatch):
     (tmp_path / "input").mkdir()
     (tmp_path / "input" / "a.txt").write_text("ignored", encoding="utf-8")
@@ -219,9 +176,10 @@ def test_runner_integration_uses_roman_exception_file_in_final_csv(tmp_path: Pat
         config_path=config_path,
         load_config_fn=load_config_fn,
         clean_mod=object(),
-        build_pipeline_fn=lambda *args, **kwargs: (_fake_nlp(), "perseus"),
+        backend_factory=fake_backend_factory(
+            [("xiv", "xiv", "NOUN"), ("iv", "iv", "NOUN"), ("rosa", "rosa", "NOUN")]
+        ),
         build_sentence_splitter_fn=None,
-        count_group_fn=nlp_hooks.count_group,
         render_stanza_package_table_fn=lambda *args, **kwargs: [],
     )
 
@@ -265,12 +223,6 @@ def test_runner_loads_roman_exceptions_once_for_multiple_groups(tmp_path: Path, 
         calls.append(path)
         return frozenset({"xiv"})
 
-    seen_exceptions: list[frozenset[str]] = []
-
-    def fake_count_group(text, nlp, **kwargs):
-        seen_exceptions.append(kwargs["roman_exceptions"])
-        return Counter({"xiv": 1})
-
     monkeypatch.setattr(runner_mod, "run_preprocess_if_needed", lambda **kwargs: None)
     monkeypatch.setattr(runner_mod, "load_roman_exceptions", fake_loader)
 
@@ -279,12 +231,21 @@ def test_runner_loads_roman_exceptions_once_for_multiple_groups(tmp_path: Path, 
         config_path=config_path,
         load_config_fn=load_config_fn,
         clean_mod=object(),
-        build_pipeline_fn=lambda *args, **kwargs: (object(), "perseus"),
+        backend_factory=fake_backend_factory(
+            [("xiv", "xiv", "NOUN"), ("iv", "iv", "NOUN")]
+        ),
         build_sentence_splitter_fn=None,
-        count_group_fn=fake_count_group,
         render_stanza_package_table_fn=lambda *args, **kwargs: [],
     )
 
     assert rc == 0
     assert calls == [(tmp_path / "config" / "roman.txt").resolve()]
-    assert seen_exceptions == [frozenset({"xiv"}), frozenset({"xiv"})]
+    for label in ("group_a", "group_b"):
+        rows = list(
+            csv.DictReader(
+                (tmp_path / "output" / f"frequency_{label}.csv").open(
+                    encoding="utf-8"
+                )
+            )
+        )
+        assert {row["lemma"]: int(row["count"]) for row in rows} == {"xiv": 1}

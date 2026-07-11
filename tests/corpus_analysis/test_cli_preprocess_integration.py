@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from collections import Counter
 import csv
 
 import pytest
 
 from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.cli import count as mod
+from tests.corpus_analysis.fake_nlp import fake_backend_factory
 
 # Dummy stanza-like objects
 class DummySentence:
@@ -89,10 +89,14 @@ def test_preprocess_cleaner_integration_fixed(tmp_path, monkeypatch):
 
     monkeypatch.setattr(mod.clean_mod, "main", fake_cleaner_main)
 
-    # --- Stub NLP pipeline + counting (avoid Stanza)
-    monkeypatch.setattr(mod, "build_pipeline", lambda *a, **k: (object(), "perseus"))
     monkeypatch.setattr(mod, "build_sentence_splitter", lambda *a, **k: DummySplitter())
-    monkeypatch.setattr(mod, "count_group", lambda *a, **k: Counter({"rosa": 2, "puella": 1}))
+    monkeypatch.setattr(
+        mod,
+        "create_nlp_backend",
+        fake_backend_factory(
+            [("rosa", "rosa", "NOUN"), ("rosa", "rosa", "NOUN"), ("puella", "puella", "NOUN")]
+        ),
+    )
     monkeypatch.setattr(mod, "render_stanza_package_table", lambda *a, **k: ["[stanza stub]"])
 
     # --- Act

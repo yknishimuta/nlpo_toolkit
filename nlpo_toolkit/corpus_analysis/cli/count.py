@@ -7,16 +7,15 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from nlpo_toolkit.backends import create_nlp_backend
+from nlpo_toolkit.nlp import (
+    build_sentence_splitter as _build_sentence_splitter,
+    build_stanza_pipeline,
+    render_stanza_package_table,
+)
 
 from ..archive import RunArchiveError, create_run_archive
 from ..config import ensure_app_config, load_config
 from ..dry_run import dry_run_count_vocabula
-from ..nlp_hooks import (
-    build_pipeline,
-    build_sentence_splitter,
-    count_group,
-    render_stanza_package_table,
-)
 from ..runner import run
 from .common import (
     CLIContext,
@@ -26,14 +25,27 @@ from .common import (
     set_handler,
 )
 
-
-_DEFAULT_BUILD_PIPELINE = build_pipeline
-_DEFAULT_BUILD_SENTENCE_SPLITTER = build_sentence_splitter
-
 try:
     from nlpo_toolkit.latin.cleaners import run_clean_corpus as clean_mod
 except Exception:
     clean_mod = SimpleNamespace(main=lambda argv: 0)
+
+
+def build_pipeline(language: str, stanza_package: str, cpu_only: bool):
+    backend = build_stanza_pipeline(
+        lang=language,
+        package=stanza_package,
+        use_gpu=not cpu_only,
+    )
+    return backend, stanza_package
+
+
+def build_sentence_splitter(language: str, stanza_package: str, cpu_only: bool):
+    return _build_sentence_splitter(language, stanza_package, cpu_only)
+
+
+_DEFAULT_BUILD_PIPELINE = build_pipeline
+_DEFAULT_BUILD_SENTENCE_SPLITTER = build_sentence_splitter
 
 
 def run_count_vocabula(
@@ -66,7 +78,6 @@ def run_count_vocabula(
             build_pipeline_fn=legacy_build_pipeline,
             backend_factory=None if legacy_build_pipeline is not None else create_nlp_backend,
             build_sentence_splitter_fn=legacy_sentence_splitter,
-            count_group_fn=count_group,
             render_stanza_package_table_fn=render_stanza_package_table,
             error_on_empty_group=error_on_empty_group,
             auto_single_cleaned=auto_single_cleaned,

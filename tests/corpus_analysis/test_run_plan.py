@@ -444,7 +444,6 @@ def test_prepare_run_context_validates_plan_before_nlp_initialization(tmp_path: 
         ),
         clean_module=object(),
         backend_factory=backend_factory,
-        count_group=lambda *_args, **_kwargs: Counter(),
         render_stanza_package_table=lambda *_args, **_kwargs: [],
     )
 

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from collections import Counter
 import csv
 
 from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.cli import count as mod
+from tests.corpus_analysis.fake_nlp import fake_backend_factory
 
 
 def test_dictcheck_enabled_creates_known_unknown(tmp_path, monkeypatch):
@@ -65,12 +65,12 @@ def test_dictcheck_enabled_creates_known_unknown(tmp_path, monkeypatch):
     monkeypatch.setattr(mod.Path, "exists", fake_exists)
 
     
-    # Stub NLP build + counting so we don't download Stanza models
-    monkeypatch.setattr(mod, "build_pipeline", lambda *a, **k: (object(), "perseus"))
     monkeypatch.setattr(
         mod,
-        "count_group",
-        lambda text, nlp, **kwargs: Counter({"rosa": 2, "puella": 1}),
+        "create_nlp_backend",
+        fake_backend_factory(
+            [("rosa", "rosa", "NOUN"), ("rosa", "rosa", "NOUN"), ("puella", "puella", "NOUN")]
+        ),
     )
     monkeypatch.setattr(mod, "render_stanza_package_table", lambda nlp, pkg: ["[stanza stub]"])
 
@@ -136,8 +136,7 @@ def test_dictcheck_enabled_requires_wordlist(tmp_path, monkeypatch):
 
     monkeypatch.setattr(mod.Path, "exists", fake_exists)
     
-    monkeypatch.setattr(mod, "build_pipeline", lambda *a, **k: (object(), "perseus"))
-    monkeypatch.setattr(mod, "count_group", lambda text, nlp, **kwargs: Counter({"rosa": 1}))
+    monkeypatch.setattr(mod, "create_nlp_backend", fake_backend_factory([("rosa", "rosa", "NOUN")]))
     monkeypatch.setattr(mod, "render_stanza_package_table", lambda nlp, pkg: ["[stanza stub]"])
 
     import pytest

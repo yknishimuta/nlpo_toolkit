@@ -19,6 +19,7 @@ from nlpo_toolkit.corpus_analysis.corpus import (
     resolve_group_files,
 )
 from nlpo_toolkit.corpus_analysis.config import load_config
+from tests.corpus_analysis.fake_nlp import FakeNLPBackend, fake_backend_factory
 
 
 def _config(data: dict):
@@ -215,18 +216,18 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
     )
     received: dict[str, str] = {}
 
-    def count_group_fn(text, nlp, **kwargs):
-        received["count"] = text
-        return Counter({"item_a": 1})
+    class CaptureCountNLP(FakeNLPBackend):
+        def __call__(self, text):
+            received["count"] = text
+            return super().__call__(text)
 
     runner_mod.run(
         project_root=tmp_path,
         config_path=config_path,
         load_config_fn=load_config,
         clean_mod=object(),
-        build_pipeline_fn=lambda *a, **k: (object(), "package_a"),
+        backend_factory=fake_backend_factory(backend=CaptureCountNLP(tokens=(("item_a", "item_a", "NOUN"),))),
         build_sentence_splitter_fn=None,
-        count_group_fn=count_group_fn,
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
 

@@ -300,7 +300,6 @@ def test_runner_uses_backend_factory_and_records_metadata(tmp_path: Path, monkey
         load_config_fn=load_config_fn,
         clean_mod=object(),
         backend_factory=fake_factory,
-        count_group_fn=runner_mod.__dict__.get("count_group_fn", None) or _count_group,
     )
 
     assert rc == 0
@@ -310,13 +309,6 @@ def test_runner_uses_backend_factory_and_records_metadata(tmp_path: Path, monkey
     assert "xiv,1" in csv_text
     meta_text = (tmp_path / "output" / "run_meta.json").read_text(encoding="utf-8")
     assert '"backend": "fake"' in meta_text
-
-
-def _count_group(text: str, nlp, **kwargs):
-    from nlpo_toolkit.corpus_analysis.nlp_hooks import count_group
-
-    return count_group(text, nlp, **kwargs)
-
 
 def test_render_backend_info_is_generic() -> None:
     assert render_backend_info(

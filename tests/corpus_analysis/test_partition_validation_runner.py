@@ -8,6 +8,16 @@ from pathlib import Path
 import pytest
 
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
+from tests.corpus_analysis.fake_nlp import FakeNLPBackend, fake_backend_factory
+
+
+def _backend_for_counters(counter_by_text: dict[str, Counter]) -> FakeNLPBackend:
+    return FakeNLPBackend(
+        per_text={
+            text: tuple((key, key, "NOUN") for key, count in counter.items() for _ in range(count))
+            for text, counter in counter_by_text.items()
+        }
+    )
 
 
 def _run(
@@ -20,17 +30,13 @@ def _run(
     config_path = tmp_path / "cfg.yml"
     config_path.write_text("dummy", encoding="utf-8")
 
-    def count_group_fn(text, nlp, **kwargs):
-        return counter_by_text[text]
-
     return runner_mod.run(
         project_root=tmp_path,
         config_path=config_path,
         load_config_fn=lambda _p: cfg,
         clean_mod=object(),
-        build_pipeline_fn=lambda *a, **k: (object(), "perseus"),
+        backend_factory=fake_backend_factory(backend=_backend_for_counters(counter_by_text)),
         build_sentence_splitter_fn=None,
-        count_group_fn=count_group_fn,
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
 
@@ -200,8 +206,7 @@ def test_runner_rejects_empty_partition_reference_even_without_empty_group_flag(
             config_path=config_path,
             load_config_fn=lambda _p: _base_cfg(),
             clean_mod=object(),
-            build_pipeline_fn=lambda *a, **k: (object(), "perseus"),
+            backend_factory=fake_backend_factory(),
             build_sentence_splitter_fn=None,
-            count_group_fn=lambda *a, **k: Counter(),
             render_stanza_package_table_fn=lambda *a, **k: [],
         )

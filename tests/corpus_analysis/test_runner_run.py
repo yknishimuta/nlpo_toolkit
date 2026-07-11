@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
+from tests.corpus_analysis.fake_nlp import fake_backend_factory
 
 def test_run_minimal_success(tmp_path: Path, monkeypatch):
     script_dir = tmp_path
@@ -31,14 +32,6 @@ def test_run_minimal_success(tmp_path: Path, monkeypatch):
     # --- stub preprocess
     monkeypatch.setattr(runner_mod, "run_preprocess_if_needed", lambda **kwargs: None)
 
-    # --- stub NLP & counter
-    def build_pipeline_fn(language, stanza_package, cpu_only):
-        return object(), stanza_package
-
-    def count_group_fn(text, nlp, use_lemma=True, upos_targets=None, **kwargs):
-        assert text  # joined
-        return Counter({"deus": 2, "angelus": 1})
-
     # --- capture CSV writes
     calls = []
     def write_frequency_csv(path, counter, header):
@@ -61,9 +54,10 @@ def test_run_minimal_success(tmp_path: Path, monkeypatch):
         config_path=config_path,
         load_config_fn=load_config_fn,
         clean_mod=object(),
-        build_pipeline_fn=build_pipeline_fn,
+        backend_factory=fake_backend_factory(
+            [("deus", "deus", "NOUN"), ("deus", "deus", "NOUN"), ("angelus", "angelus", "NOUN")]
+        ),
         build_sentence_splitter_fn=None,
-        count_group_fn=count_group_fn,
         render_stanza_package_table_fn=render_stanza_package_table_fn,
     )
     assert rc == 0
@@ -83,7 +77,7 @@ def test_run_minimal_success(tmp_path: Path, monkeypatch):
     assert meta["analysis_unit"] == "lemma"
     assert meta["environment"] == {"py": "x"}
 
-def test_run_analysis_unit_surface_passes_use_lemma_false(tmp_path: Path, monkeypatch):
+def test_run_analysis_unit_surface_uses_surface_form(tmp_path: Path, monkeypatch):
     script_dir = tmp_path
     config_path = tmp_path / "cfg.yml"
     config_path.write_text("dummy", encoding="utf-8")
@@ -102,25 +96,24 @@ def test_run_analysis_unit_surface_passes_use_lemma_false(tmp_path: Path, monkey
     monkeypatch.setattr(runner_mod, "collect_runtime_environment", lambda _sd: {})
     monkeypatch.setattr(runner_mod, "write_run_meta", lambda meta, out_dir: None)
 
-    monkeypatch.setattr(runner_mod, "write_frequency_csv", lambda *a, **k: None)
-
-    seen = {}
-    def count_group_fn(text, nlp, use_lemma=True, **kwargs):
-        seen["use_lemma"] = use_lemma
-        return Counter({"X": 1})
+    calls = []
+    monkeypatch.setattr(
+        runner_mod,
+        "write_frequency_csv",
+        lambda path, counter, header: calls.append(dict(counter)),
+    )
 
     rc = runner_mod.run(
         script_dir=script_dir,
         config_path=config_path,
         load_config_fn=load_config_fn,
         clean_mod=object(),
-        build_pipeline_fn=lambda *a, **k: (object(), "perseus"),
+        backend_factory=fake_backend_factory([("X", "lemma_x", "NOUN")]),
         build_sentence_splitter_fn=None,
-        count_group_fn=count_group_fn,
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
     assert rc == 0
-    assert seen["use_lemma"] is False
+    assert calls == [{"x": 1}]
 
 def test_run_dictcheck_requires_wordlist(tmp_path: Path, monkeypatch):
     script_dir = tmp_path
@@ -146,9 +139,8 @@ def test_run_dictcheck_requires_wordlist(tmp_path: Path, monkeypatch):
             config_path=config_path,
             load_config_fn=load_config_fn,
             clean_mod=object(),
-            build_pipeline_fn=lambda *a, **k: (object(), "perseus"),
+            backend_factory=fake_backend_factory([("a", "a", "NOUN")]),
             build_sentence_splitter_fn=None,
-            count_group_fn=lambda *a, **k: Counter({"a": 1}),
             render_stanza_package_table_fn=lambda *a, **k: [],
         )
 
@@ -183,9 +175,10 @@ def test_run_dictcheck_writes_known_unknown(tmp_path: Path, monkeypatch):
         config_path=config_path,
         load_config_fn=load_config_fn,
         clean_mod=object(),
-        build_pipeline_fn=lambda *a, **k: (object(), "perseus"),
+        backend_factory=fake_backend_factory(
+            [("deus", "deus", "NOUN"), ("deus", "deus", "NOUN"), ("angelus", "angelus", "NOUN")]
+        ),
         build_sentence_splitter_fn=None,
-        count_group_fn=lambda *a, **k: Counter({"deus": 2, "angelus": 1}),
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
     assert rc == 0
@@ -196,7 +189,7 @@ def test_run_dictcheck_writes_known_unknown(tmp_path: Path, monkeypatch):
         "frequency_g.unknown.csv",
     ]
 
-def test_run_passes_filter_args_to_count_group(tmp_path: Path, monkeypatch):
+def test_run_applies_filter_options_in_record_pipeline(tmp_path: Path, monkeypatch):
     script_dir = tmp_path
     config_path = tmp_path / "cfg.yml"
     config_path.write_text("dummy", encoding="utf-8")
@@ -222,29 +215,27 @@ def test_run_passes_filter_args_to_count_group(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(runner_mod, "build_run_meta", lambda **kwargs: {})
     monkeypatch.setattr(runner_mod, "collect_runtime_environment", lambda _sd: {})
     monkeypatch.setattr(runner_mod, "write_run_meta", lambda meta, out_dir: None)
-    monkeypatch.setattr(runner_mod, "write_frequency_csv", lambda *a, **k: None)
-
-    captured_kwargs = {}
-    def fake_count_group_fn(text, nlp, **kwargs):
-        captured_kwargs.update(kwargs)
-        return Counter({"X": 1})
+    counters = []
+    monkeypatch.setattr(
+        runner_mod,
+        "write_frequency_csv",
+        lambda path, counter, header: counters.append(dict(counter)),
+    )
 
     rc = runner_mod.run(
         script_dir=script_dir,
         config_path=config_path,
         load_config_fn=load_config_fn,
         clean_mod=object(),
-        build_pipeline_fn=lambda *a, **k: (object(), "perseus"),
+        backend_factory=fake_backend_factory(
+            [("ab", "ab", "NOUN"), ("xiv", "xiv", "NOUN"), ("rosa", "rosa", "NOUN")]
+        ),
         build_sentence_splitter_fn=None,
-        count_group_fn=fake_count_group_fn,
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
     
     assert rc == 0
-    assert captured_kwargs.get("min_token_length") == 3
-    assert captured_kwargs.get("drop_roman_numerals") is True
-    assert captured_kwargs.get("roman_exceptions") == frozenset({"xiv"})
-    assert "roman_exceptions_file" not in captured_kwargs
+    assert counters == [{"xiv": 1, "rosa": 1}]
 
 
 def test_run_group_by_file_writes_one_csv_per_input_file(tmp_path: Path, monkeypatch):
@@ -278,17 +269,13 @@ def test_run_group_by_file_writes_one_csv_per_input_file(tmp_path: Path, monkeyp
     meta_calls = []
     monkeypatch.setattr(runner_mod, "write_run_meta", lambda meta, out_dir: meta_calls.append(meta))
 
-    def count_group_fn(text, nlp, **kwargs):
-        return Counter({text: 1})
-
     rc = runner_mod.run(
         project_root=project_root,
         config_path=config_path,
         load_config_fn=load_config_fn,
         clean_mod=object(),
-        build_pipeline_fn=lambda *a, **k: (object(), "perseus"),
+        backend_factory=fake_backend_factory(),
         build_sentence_splitter_fn=None,
-        count_group_fn=count_group_fn,
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
 
@@ -334,9 +321,8 @@ def test_run_group_by_file_cli_override(tmp_path: Path, monkeypatch):
         group_by_file=True,
         load_config_fn=load_config_fn,
         clean_mod=object(),
-        build_pipeline_fn=lambda *a, **k: (object(), "perseus"),
+        backend_factory=fake_backend_factory(),
         build_sentence_splitter_fn=None,
-        count_group_fn=lambda *a, **k: Counter({"rosa": 1}),
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
 
@@ -368,9 +354,8 @@ def test_run_meta_records_generated_outputs_and_actual_group_files(tmp_path: Pat
         config_path=config_path,
         load_config_fn=load_config_fn,
         clean_mod=object(),
-        build_pipeline_fn=lambda *a, **k: (object(), "perseus"),
+        backend_factory=fake_backend_factory(),
         build_sentence_splitter_fn=None,
-        count_group_fn=lambda *a, **k: Counter({"rosa": 1}),
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
 
@@ -397,9 +382,8 @@ def test_run_error_on_empty_group(tmp_path: Path, monkeypatch):
             config_path=config_path,
             load_config_fn=load_config_fn,
             clean_mod=object(),
-            build_pipeline_fn=lambda *a, **k: (object(), "perseus"),
+            backend_factory=fake_backend_factory(),
             build_sentence_splitter_fn=None,
-            count_group_fn=lambda *a, **k: Counter(),
             render_stanza_package_table_fn=lambda *a, **k: [],
             error_on_empty_group=True,
         )
@@ -428,9 +412,8 @@ def test_run_auto_single_cleaned_records_selected_file(tmp_path: Path, monkeypat
         config_path=config_path,
         load_config_fn=load_config_fn,
         clean_mod=object(),
-        build_pipeline_fn=lambda *a, **k: (object(), "perseus"),
+        backend_factory=fake_backend_factory(),
         build_sentence_splitter_fn=None,
-        count_group_fn=lambda *a, **k: Counter({"rosa": 1}),
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
 
@@ -462,9 +445,8 @@ def test_run_auto_single_cleaned_errors_on_zero_files(tmp_path: Path, monkeypatc
             config_path=config_path,
             load_config_fn=load_config_fn,
             clean_mod=object(),
-            build_pipeline_fn=lambda *a, **k: (object(), "perseus"),
+            backend_factory=fake_backend_factory(),
             build_sentence_splitter_fn=None,
-            count_group_fn=lambda *a, **k: Counter(),
             render_stanza_package_table_fn=lambda *a, **k: [],
         )
 
@@ -495,8 +477,7 @@ def test_run_auto_single_cleaned_errors_on_multiple_files(tmp_path: Path, monkey
             config_path=config_path,
             load_config_fn=load_config_fn,
             clean_mod=object(),
-            build_pipeline_fn=lambda *a, **k: (object(), "perseus"),
+            backend_factory=fake_backend_factory(),
             build_sentence_splitter_fn=None,
-            count_group_fn=lambda *a, **k: Counter(),
             render_stanza_package_table_fn=lambda *a, **k: [],
         )

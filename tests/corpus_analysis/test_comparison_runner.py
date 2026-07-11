@@ -10,6 +10,7 @@ import pytest
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
 from nlpo_toolkit.corpus_analysis.archive import create_run_archive
 from nlpo_toolkit.corpus_analysis.dry_run import dry_run_count_vocabula
+from tests.corpus_analysis.fake_nlp import FakeNLPBackend, fake_backend_factory
 
 
 def _write_inputs(project_root: Path) -> None:
@@ -31,19 +32,25 @@ def _run_with_config(
 
     monkeypatch.setattr(runner_mod, "run_preprocess_if_needed", lambda **kwargs: None)
 
-    def count_group_fn(text: str, nlp, **kwargs) -> Counter[str]:
-        if counter_by_text is not None:
-            return counter_by_text[text]
-        return Counter({"item_common": 1})
+    if counter_by_text is None:
+        counter_by_text = {
+            "sample_text_a": Counter({"item_common": 1}),
+            "sample_text_b": Counter({"item_common": 1}),
+        }
+    backend = FakeNLPBackend(
+        per_text={
+            text: tuple((key, key, "NOUN") for key, count in counter.items() for _ in range(count))
+            for text, counter in counter_by_text.items()
+        }
+    )
 
     return runner_mod.run(
         project_root=project_root,
         config_path=config_path,
         load_config_fn=lambda _p: cfg,
         clean_mod=object(),
-        build_pipeline_fn=lambda *a, **k: (object(), "package_a"),
+        backend_factory=fake_backend_factory(backend=backend),
         build_sentence_splitter_fn=None,
-        count_group_fn=count_group_fn,
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
 
@@ -227,9 +234,8 @@ def test_runner_rejects_group_by_file_with_comparisons(
             group_by_file=True,
             load_config_fn=lambda _p: cfg,
             clean_mod=object(),
-            build_pipeline_fn=lambda *a, **k: (object(), "package_a"),
+            backend_factory=fake_backend_factory([("item_a", "item_a", "NOUN")]),
             build_sentence_splitter_fn=None,
-            count_group_fn=lambda *a, **k: Counter({"item_a": 1}),
             render_stanza_package_table_fn=lambda *a, **k: [],
         )
 

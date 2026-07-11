@@ -1,10 +1,10 @@
-from collections import Counter
 from pathlib import Path
 
 import pytest
 
 from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.cli import count as mod
+from tests.corpus_analysis.fake_nlp import fake_backend_factory
 
 
 def test_analysis_unit_invalid_raises_value_error(tmp_path, monkeypatch):
@@ -44,8 +44,7 @@ def test_analysis_unit_invalid_raises_value_error(tmp_path, monkeypatch):
     monkeypatch.setattr(mod.Path, "exists", fake_exists)
 
     
-    monkeypatch.setattr(mod, "build_pipeline", lambda *a, **k: (object(), "perseus"))
-    monkeypatch.setattr(mod, "count_group", lambda *a, **k: Counter({"x": 1}))
+    monkeypatch.setattr(mod, "create_nlp_backend", fake_backend_factory([("x", "x", "NOUN")]))
     monkeypatch.setattr(mod, "render_stanza_package_table", lambda *a, **k: ["[stanza stub]"])
 
     with pytest.raises(ValueError, match=r"analysis_unit"):

@@ -7,7 +7,7 @@ from collections import Counter
 from contextlib import ExitStack
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Iterable, Iterator, List, Mapping, Optional, Sequence, Tuple
 
 from nlpo_toolkit.backends import (
     BuiltNLPBackend,
@@ -62,6 +62,7 @@ from .analysis_cache import (
 )
 from .analysis_records import (
     AnalysisOptions,
+    NLPAnalysisRecord,
     evaluate_analysis_record,
     iter_nlp_analysis_records_from_text,
 )
@@ -78,7 +79,6 @@ from nlpo_toolkit.nlp import load_roman_exceptions
 class RunnerDependencies:
     load_config: Callable[[Path], AppConfig | Mapping[str, object]]
     clean_module: Any
-    count_group: Callable[..., Counter]
     render_stanza_package_table: Callable[..., List[str]]
     build_pipeline: Callable[[str, str, bool], Tuple[Any, str]] | None = None
     backend_factory: Callable[[Any], BuiltNLPBackend] | None = None
@@ -428,17 +428,6 @@ def _text_for_counting(context: RunContext, corpus: PreparedCorpus) -> str:
     return joined
 
 
-def _trace_kwargs_for_label(context: RunContext, trace_paths: Mapping[str, Path], label: str) -> dict[str, Any]:
-    if not context.config.trace.enabled:
-        return {}
-    return {
-        "trace_tsv": trace_paths[label],
-        "trace_max_rows": int(context.config.trace.max_rows or 0),
-        "trace_only_keys": set(context.config.trace.only_keys),
-        "trace_write_truncation_marker": context.config.trace.write_truncation_marker,
-    }
-
-
 def _token_artifact_metadata(
     *,
     context: RunContext,
@@ -481,7 +470,87 @@ def _analysis_fingerprint(context: RunContext) -> AnalysisFingerprint:
     )
 
 
-def _count_with_token_records(
+def build_analysis_options(
+    *,
+    context: RunContext,
+    corpus: PreparedCorpus,
+) -> AnalysisOptions:
+    return AnalysisOptions(
+        group=corpus.label,
+        source_files=tuple(corpus.files),
+        use_lemma=context.use_lemma,
+        upos_targets=frozenset(context.config.filters.upos_targets),
+        min_token_length=context.config.filters.min_token_length,
+        drop_roman_numerals=context.config.filters.drop_roman_numerals,
+        roman_exceptions=context.roman_exceptions,
+    )
+
+
+def obtain_analysis_records(
+    *,
+    context: RunContext,
+    corpus: PreparedCorpus,
+    text: str,
+    analysis_cache_stats: AnalysisCacheRunStats | None = None,
+) -> tuple[Iterator[NLPAnalysisRecord], str, str]:
+    fingerprint = _analysis_fingerprint(context)
+    text_hash = prepared_text_sha256(text)
+    cache_key = build_analysis_cache_key(
+        prepared_text_sha256=text_hash,
+        fingerprint=fingerprint,
+    )
+
+    if context.config.analysis_cache.enabled:
+        raw_records, cache_status, _payload_path, _metadata_path = get_or_compute_analysis_records(
+            cache_dir=_analysis_cache_dir(context),
+            cache_key=cache_key,
+            prepared_text_sha256=text_hash,
+            prepared_text_length=len(text),
+            fingerprint=fingerprint,
+            compute_records=lambda: iter_nlp_analysis_records_from_text(
+                text=text,
+                nlp=context.nlp,
+                chunk_chars=200_000,
+            ),
+            lock_timeout_sec=context.config.analysis_cache.lock_timeout_sec,
+        )
+        return raw_records, cache_status, cache_key
+
+    return (
+        iter_nlp_analysis_records_from_text(
+            text=text,
+            nlp=context.nlp,
+            chunk_chars=200_000,
+        ),
+        "disabled",
+        cache_key,
+    )
+
+
+def consume_analysis_records(
+    *,
+    records: Iterable[NLPAnalysisRecord],
+    options: AnalysisOptions,
+    artifact_writer: TokenArtifactWriter | None,
+    trace_writer: DiagnosticTraceWriter | None,
+) -> tuple[Counter[str], int]:
+    counter: Counter[str] = Counter()
+    record_count = 0
+
+    for raw_record in records:
+        record_count += 1
+        record = evaluate_analysis_record(raw_record, options=options)
+        if artifact_writer is not None:
+            artifact_writer.write(record)
+        if trace_writer is not None:
+            trace_writer.consider(record)
+        if record.included and record.analysis_key:
+            counter[record.analysis_key] += 1
+
+    return counter, record_count
+
+
+def _count_corpus_records(
     *,
     context: RunContext,
     corpus: PreparedCorpus,
@@ -519,54 +588,18 @@ def _count_with_token_records(
                 )
             )
 
-        fingerprint = _analysis_fingerprint(context)
-        text_hash = prepared_text_sha256(text)
-        cache_key = build_analysis_cache_key(
-            prepared_text_sha256=text_hash,
-            fingerprint=fingerprint,
+        raw_records, cache_status, cache_key = obtain_analysis_records(
+            context=context,
+            corpus=corpus,
+            text=text,
+            analysis_cache_stats=analysis_cache_stats,
         )
-
-        if context.config.analysis_cache.enabled:
-            raw_records, cache_status, _payload_path, _metadata_path = get_or_compute_analysis_records(
-                cache_dir=_analysis_cache_dir(context),
-                cache_key=cache_key,
-                prepared_text_sha256=text_hash,
-                prepared_text_length=len(text),
-                fingerprint=fingerprint,
-                compute_records=lambda: iter_nlp_analysis_records_from_text(
-                    text=text,
-                    nlp=context.nlp,
-                    chunk_chars=200_000,
-                ),
-                lock_timeout_sec=context.config.analysis_cache.lock_timeout_sec,
-            )
-        else:
-            cache_status = "disabled"
-            raw_records = iter_nlp_analysis_records_from_text(
-                text=text,
-                nlp=context.nlp,
-                chunk_chars=200_000,
-            )
-
-        options = AnalysisOptions(
-            group=corpus.label,
-            source_files=tuple(corpus.files),
-            use_lemma=context.use_lemma,
-            upos_targets=frozenset(context.config.filters.upos_targets),
-            min_token_length=context.config.filters.min_token_length,
-            drop_roman_numerals=context.config.filters.drop_roman_numerals,
-            roman_exceptions=context.roman_exceptions,
+        counter, record_count = consume_analysis_records(
+            records=raw_records,
+            options=build_analysis_options(context=context, corpus=corpus),
+            artifact_writer=artifact_writer,
+            trace_writer=trace_writer,
         )
-        record_count = 0
-        for raw_record in raw_records:
-            record_count += 1
-            record = evaluate_analysis_record(raw_record, options=options)
-            if artifact_writer is not None:
-                artifact_writer.write(record)
-            if trace_writer is not None:
-                trace_writer.consider(record)
-            if record.included and record.analysis_key:
-                counter[record.analysis_key] += 1
 
         if analysis_cache_stats is not None:
             if cache_status == "hit":
@@ -660,27 +693,14 @@ def analyze_one_corpus(
         generated_outputs.append(ref_tags_path)
 
     text = _text_for_counting(context, corpus)
-    if context.config.artifacts.tokens.enabled or context.config.analysis_cache.enabled:
-        counter, token_artifact_meta, token_generated_outputs = _count_with_token_records(
-            context=context,
-            corpus=corpus,
-            text=text,
-            token_artifact_path=(token_artifact_paths or {}).get(label),
-            trace_path=trace_paths.get(label) if context.config.trace.enabled else None,
-            analysis_cache_stats=analysis_cache_stats,
-        )
-    else:
-        counter = dependencies.count_group(
-            text,
-            context.nlp,
-            use_lemma=context.use_lemma,
-            upos_targets=context.config.filters.upos_targets,
-            min_token_length=context.config.filters.min_token_length,
-            drop_roman_numerals=context.config.filters.drop_roman_numerals,
-            roman_exceptions=context.roman_exceptions,
-            label=label,
-            **_trace_kwargs_for_label(context, trace_paths, label),
-        )
+    counter, token_artifact_meta, token_generated_outputs = _count_corpus_records(
+        context=context,
+        corpus=corpus,
+        text=text,
+        token_artifact_path=(token_artifact_paths or {}).get(label),
+        trace_path=trace_paths.get(label) if context.config.trace.enabled else None,
+        analysis_cache_stats=analysis_cache_stats,
+    )
     if lemma_normalization_map is not None:
         counter = apply_lemma_normalization(counter, lemma_normalization_map)
 
@@ -1015,22 +1035,17 @@ def run(
     build_pipeline_fn: Callable[[str, str, bool], Tuple[Any, str]] | None = None,
     backend_factory: Callable[[Any], BuiltNLPBackend] | None = None,
     build_sentence_splitter_fn: Optional[Callable[..., Any]] = None,
-    count_group_fn: Callable[..., Counter] | None = None,
     render_stanza_package_table_fn: Callable[..., List[str]] | None = None,
     error_on_empty_group: bool = False,
     auto_single_cleaned: bool = False,
 ) -> int:
     """Core runner. Dependencies are injectable for CLI and tests."""
-    if count_group_fn is None:
-        raise TypeError("count_group_fn is required")
-
     dependencies = RunnerDependencies(
         load_config=load_config_fn,
         clean_module=clean_mod,
         build_pipeline=build_pipeline_fn,
         backend_factory=backend_factory,
         build_sentence_splitter=build_sentence_splitter_fn,
-        count_group=count_group_fn,
         render_stanza_package_table=render_stanza_package_table_fn
         or (lambda *_args, **_kwargs: []),
     )

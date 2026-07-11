@@ -1,9 +1,9 @@
 import json
-from collections import Counter
 from pathlib import Path
 
 from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.cli import count as mod
+from tests.corpus_analysis.fake_nlp import fake_backend_factory
 
 
 def test_normalization_policy_is_written_to_summary_and_run_meta(tmp_path, monkeypatch):
@@ -52,10 +52,8 @@ def test_normalization_policy_is_written_to_summary_and_run_meta(tmp_path, monke
     monkeypatch.setattr(mod.Path, "exists", fake_exists)
 
     
-    # Stub NLP build/counter
-    monkeypatch.setattr(mod, "build_pipeline", lambda *a, **k: (object(), "perseus"))
+    monkeypatch.setattr(mod, "create_nlp_backend", fake_backend_factory([("x", "x", "NOUN")]))
     monkeypatch.setattr(mod, "render_stanza_package_table", lambda *a, **k: ["[stanza stub]"])
-    monkeypatch.setattr(mod, "count_group", lambda *a, **k: Counter({"x": 1}))
 
     # Act
     rc = cli.main(["count-vocabula", "--project-root", str(script_dir)])

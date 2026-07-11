@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis import runner as runner_mod
 from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis.token_artifact import read_token_records
@@ -44,9 +45,11 @@ def _run(tmp_path: Path, config_text: str, backend: FakeBackend) -> int:
         config_path=config_path,
         load_config_fn=load_config,
         clean_mod=object(),
-        build_pipeline_fn=lambda *a, **k: (backend, "package_a"),
+        backend_factory=lambda config: BuiltNLPBackend(
+            backend=backend,
+            info=NLPBackendInfo(name="fake", language=config.language, package="package_a"),
+        ),
         build_sentence_splitter_fn=None,
-        count_group_fn=lambda *a, **k: pytest.fail("count_group should not run when token artifacts are enabled"),
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
 

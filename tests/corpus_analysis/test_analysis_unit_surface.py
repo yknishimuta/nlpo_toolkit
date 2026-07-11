@@ -1,9 +1,9 @@
 import csv
-from collections import Counter
 from pathlib import Path
 
 from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.cli import count as mod
+from tests.corpus_analysis.fake_nlp import fake_backend_factory
 
 
 def test_analysis_unit_surface_writes_word_frequency_and_passes_use_lemma_false(tmp_path, monkeypatch):
@@ -45,16 +45,12 @@ def test_analysis_unit_surface_writes_word_frequency_and_passes_use_lemma_false(
     monkeypatch.setattr(mod.Path, "exists", fake_exists)
 
     
-    # Stub NLP build so we don't download Stanza models
-    monkeypatch.setattr(mod, "build_pipeline", lambda *a, **k: (object(), "perseus"))
+    monkeypatch.setattr(
+        mod,
+        "create_nlp_backend",
+        fake_backend_factory([("Rosa", "lemma_rosa", "NOUN"), ("puella", "lemma_puella", "NOUN")]),
+    )
     monkeypatch.setattr(mod, "render_stanza_package_table", lambda *a, **k: ["[stanza stub]"])
-
-    # Assert use_lemma=False is passed into count_group()
-    def fake_count_group(text, nlp, **kwargs):
-        assert kwargs.get("use_lemma") is False
-        return Counter({"Rosa": 2, "puella": 1})
-
-    monkeypatch.setattr(mod, "count_group", fake_count_group)
 
     # --- Act ---
     rc = cli.main(["count-vocabula", "--project-root", str(script_dir)])
@@ -66,3 +62,4 @@ def test_analysis_unit_surface_writes_word_frequency_and_passes_use_lemma_false(
 
     rows = list(csv.reader(csv_path.open(encoding="utf-8")))
     assert rows[0] == ["word", "frequency"]
+    assert {row[0] for row in rows[1:]} == {"rosa", "puella"}
