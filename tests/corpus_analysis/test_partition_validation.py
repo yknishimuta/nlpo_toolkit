@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 
 from nlpo_toolkit.corpus_analysis.config import load_config
+from nlpo_toolkit.corpus_analysis.config import ensure_app_config
+from nlpo_toolkit.corpus_analysis.partition_models import PartitionSpec
 from nlpo_toolkit.corpus_analysis.partition_validation import (
-    PartitionSpec,
-    parse_partition_specs,
     validate_partition,
 )
 
@@ -130,7 +130,7 @@ def _write_cfg(tmp_path: Path, body: str) -> Path:
 
 def test_parse_partition_specs_rejects_unknown_group() -> None:
     with pytest.raises(ValueError, match="unknown group"):
-        parse_partition_specs(
+        ensure_app_config(
             {
                 "groups": {"whole": {"files": []}, "part_a": {"files": []}},
                 "validations": {

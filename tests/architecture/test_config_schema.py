@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def test_config_parser_has_no_removed_top_level_fallbacks() -> None:
-    source = Path("nlpo_toolkit/corpus_analysis/config.py").read_text(encoding="utf-8")
+    source = Path("nlpo_toolkit/corpus_analysis/config/parser.py").read_text(encoding="utf-8")
 
     forbidden = [
         'raw.get("filter")',

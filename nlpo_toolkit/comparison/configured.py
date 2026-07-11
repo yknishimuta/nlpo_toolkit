@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 import re
 from collections import Counter
 from dataclasses import dataclass
@@ -19,21 +18,6 @@ from nlpo_toolkit.comparison import (
 )
 
 
-REPORT_VALUES = {"all", "filtered"}
-SORT_BY_VALUES = {"log_likelihood", "abs_log_ratio", "total_count", "item"}
-COMPARISON_KEYS = frozenset(
-    {
-        "name",
-        "group_a",
-        "group_b",
-        "scale",
-        "zero_correction",
-        "min_total_count",
-        "report",
-        "sort",
-    }
-)
-COMPARISON_SORT_KEYS = frozenset({"by", "descending"})
 EPSILON = 1e-12
 _SAFE_NAME_RE = re.compile(r"[^0-9A-Za-z]+")
 
@@ -83,118 +67,6 @@ class ComparisonResult:
 def sanitize_comparison_name(name: str) -> str:
     safe = _SAFE_NAME_RE.sub("_", name).strip("_").lower()
     return safe or "comparison"
-
-
-def _is_int_not_bool(value: Any) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool)
-
-
-def _is_positive_finite_number(value: Any) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)) and float(value) > 0
-
-
-def parse_comparison_specs(config: Mapping[str, Any]) -> list[ComparisonSpec]:
-    if hasattr(config, "comparisons"):
-        return list(getattr(config, "comparisons"))
-
-    raw_comparisons = config.get("comparisons")
-    if raw_comparisons is None:
-        return []
-    if not isinstance(raw_comparisons, list):
-        raise ValueError("'comparisons' must be a list.")
-
-    grouping = config.get("grouping") or {}
-    if isinstance(grouping, Mapping) and grouping.get("mode", "groups") == "per_file":
-        raise ValueError("comparisons cannot be used with grouping.mode=per_file")
-
-    groups = config.get("groups") or {}
-    if not isinstance(groups, Mapping):
-        raise ValueError("Config 'groups' must be a mapping.")
-    group_names = set(groups)
-
-    specs: list[ComparisonSpec] = []
-    seen_names: set[str] = set()
-
-    for index, raw in enumerate(raw_comparisons):
-        label = f"comparisons[{index}]"
-        if not isinstance(raw, Mapping):
-            raise ValueError(f"{label} must be a mapping.")
-        unknown = sorted(str(key) for key in raw if key not in COMPARISON_KEYS)
-        if unknown:
-            raise ValueError(f"Unknown {label} key(s): {', '.join(unknown)}")
-
-        name = raw.get("name")
-        if not isinstance(name, str) or not name.strip():
-            raise ValueError(f"{label}.name must be a non-empty string.")
-        name = name.strip()
-        if name in seen_names:
-            raise ValueError(f"Duplicate comparison name: {name}")
-        seen_names.add(name)
-
-        group_a = raw.get("group_a")
-        if not isinstance(group_a, str) or not group_a.strip():
-            raise ValueError(f"comparison '{name}': group_a must be a non-empty string.")
-        group_a = group_a.strip()
-
-        group_b = raw.get("group_b")
-        if not isinstance(group_b, str) or not group_b.strip():
-            raise ValueError(f"comparison '{name}': group_b must be a non-empty string.")
-        group_b = group_b.strip()
-
-        if group_a == group_b:
-            raise ValueError(f"comparison '{name}': group_a and group_b must be different.")
-        if group_a not in group_names:
-            raise ValueError(f"comparison '{name}': unknown group_a '{group_a}'")
-        if group_b not in group_names:
-            raise ValueError(f"comparison '{name}': unknown group_b '{group_b}'")
-
-        scale = raw.get("scale", 10_000)
-        if not _is_int_not_bool(scale) or scale <= 0:
-            raise ValueError(f"comparison '{name}': scale must be a positive integer.")
-
-        zero_correction = raw.get("zero_correction", 0.5)
-        if not _is_positive_finite_number(zero_correction):
-            raise ValueError(f"comparison '{name}': zero_correction must be a positive finite number.")
-
-        min_total_count = raw.get("min_total_count", 1)
-        if not _is_int_not_bool(min_total_count) or min_total_count < 1:
-            raise ValueError(f"comparison '{name}': min_total_count must be an integer >= 1.")
-
-        report = raw.get("report", "all")
-        if report not in REPORT_VALUES:
-            raise ValueError(f"comparison '{name}': report must be 'all' or 'filtered'.")
-
-        sort_by = "log_likelihood"
-        sort_descending = True
-        sort = raw.get("sort")
-        if sort is not None:
-            if not isinstance(sort, Mapping):
-                raise ValueError(f"comparison '{name}': sort must be a mapping.")
-            unknown_sort = sorted(str(key) for key in sort if key not in COMPARISON_SORT_KEYS)
-            if unknown_sort:
-                raise ValueError(f"Unknown {label}.sort key(s): {', '.join(unknown_sort)}")
-            sort_by = sort.get("by", "log_likelihood")
-            if sort_by not in SORT_BY_VALUES:
-                raise ValueError(f"comparison '{name}': sort.by must be one of {sorted(SORT_BY_VALUES)}.")
-            sort_descending = sort.get("descending", True)
-            if not isinstance(sort_descending, bool):
-                raise ValueError(f"comparison '{name}': sort.descending must be bool.")
-
-        specs.append(
-            ComparisonSpec(
-                name=name,
-                group_a=group_a,
-                group_b=group_b,
-                scale=int(scale),
-                zero_correction=float(zero_correction),
-                min_total_count=int(min_total_count),
-                report=str(report),
-                sort_by=str(sort_by),
-                sort_descending=bool(sort_descending),
-            )
-        )
-
-    return specs
 
 
 def calculate_log_ratio(

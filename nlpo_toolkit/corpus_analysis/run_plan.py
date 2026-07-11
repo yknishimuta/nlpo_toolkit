@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Literal, Mapping, Sequence
 
-from nlpo_toolkit.comparison.configured import ComparisonSpec, parse_comparison_specs
+from nlpo_toolkit.comparison.configured import ComparisonSpec
 from .config import AppConfig, ensure_app_config
 from .corpus import (
     CorpusWorkItem,
@@ -14,7 +14,7 @@ from .corpus import (
     resolve_corpus_work_items,
 )
 from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner
-from .partition_validation import PartitionSpec, parse_partition_specs
+from .partition_models import PartitionSpec
 
 
 @dataclass(frozen=True)
@@ -202,8 +202,8 @@ def build_run_plan(
         preprocess_fn=preprocess_fn,
     )
     config = corpus_plan.config
-    partition_specs = tuple(parse_partition_specs(config))
-    comparison_specs = tuple(parse_comparison_specs(config))
+    partition_specs = config.partition_validations
+    comparison_specs = config.comparisons
     validate_specs_against_grouping(
         partition_specs=partition_specs,
         comparison_specs=comparison_specs,

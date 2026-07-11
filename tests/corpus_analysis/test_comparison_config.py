@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 
 from nlpo_toolkit.corpus_analysis.config import load_config
-from nlpo_toolkit.comparison.configured import parse_comparison_specs
 
 
 def _write_cfg(tmp_path: Path, body: str) -> Path:
@@ -49,7 +48,7 @@ def test_load_config_accepts_valid_comparison(tmp_path: Path) -> None:
         ),
     )
 
-    specs = parse_comparison_specs(load_config(cfg_path))
+    specs = load_config(cfg_path).comparisons
     assert len(specs) == 1
     assert specs[0].name == "comparison_1"
     assert specs[0].sort_by == "abs_log_ratio"

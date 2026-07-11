@@ -9,19 +9,8 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 
-ON_MISMATCH_VALUES = {"error", "warn"}
-REPORT_VALUES = {"mismatches", "all"}
-PARTITION_KEYS = frozenset({"name", "whole", "parts", "on_mismatch", "report"})
+from .partition_models import PartitionSpec
 _SAFE_NAME_RE = re.compile(r"[^0-9A-Za-z]+")
-
-
-@dataclass(frozen=True)
-class PartitionSpec:
-    name: str
-    whole: str
-    parts: tuple[str, ...]
-    on_mismatch: str
-    report: str
 
 
 @dataclass(frozen=True)
@@ -53,90 +42,6 @@ class PartitionResult:
 def sanitize_partition_name(name: str) -> str:
     safe = _SAFE_NAME_RE.sub("_", name).strip("_").lower()
     return safe or "partition"
-
-
-def parse_partition_specs(config: dict) -> list[PartitionSpec]:
-    if hasattr(config, "partition_validations"):
-        return list(getattr(config, "partition_validations"))
-
-    validations = config.get("validations")
-    if validations is None:
-        return []
-    if not isinstance(validations, dict):
-        raise ValueError("'validations' must be a mapping.")
-
-    raw_partitions = validations.get("partitions")
-    if raw_partitions is None:
-        return []
-    if not isinstance(raw_partitions, list):
-        raise ValueError("'validations.partitions' must be a list.")
-
-    groups = config.get("groups") or {}
-    if not isinstance(groups, dict):
-        raise ValueError("Config 'groups' must be a mapping.")
-    group_names = set(groups)
-
-    specs: list[PartitionSpec] = []
-    seen_names: set[str] = set()
-
-    for index, raw in enumerate(raw_partitions):
-        label = f"validations.partitions[{index}]"
-        if not isinstance(raw, dict):
-            raise ValueError(f"{label} must be a mapping.")
-        unknown = sorted(str(key) for key in raw if key not in PARTITION_KEYS)
-        if unknown:
-            raise ValueError(f"Unknown {label} key(s): {', '.join(unknown)}")
-
-        name = raw.get("name")
-        if not isinstance(name, str) or not name.strip():
-            raise ValueError(f"{label}.name must be a non-empty string.")
-        name = name.strip()
-        if name in seen_names:
-            raise ValueError(f"Duplicate partition name: {name}")
-        seen_names.add(name)
-
-        whole = raw.get("whole")
-        if not isinstance(whole, str) or not whole.strip():
-            raise ValueError(f"{label}.whole must be a non-empty string.")
-        whole = whole.strip()
-
-        parts_raw = raw.get("parts")
-        if not isinstance(parts_raw, list) or not all(
-            isinstance(part, str) and part.strip() for part in parts_raw
-        ):
-            raise ValueError(f"{label}.parts must be list[str].")
-        parts = tuple(part.strip() for part in parts_raw)
-        if len(parts) < 2:
-            raise ValueError(f"{label}.parts must contain at least 2 groups.")
-        if len(set(parts)) != len(parts):
-            raise ValueError(f"{label}.parts must not contain duplicate group names.")
-        if whole in parts:
-            raise ValueError(f"{label}.whole must not be included in parts.")
-
-        on_mismatch = raw.get("on_mismatch", "warn")
-        if on_mismatch not in ON_MISMATCH_VALUES:
-            raise ValueError(f"{label}.on_mismatch must be 'warn' or 'error'.")
-
-        report = raw.get("report", "mismatches")
-        if report not in REPORT_VALUES:
-            raise ValueError(f"{label}.report must be 'mismatches' or 'all'.")
-
-        missing = [group for group in (whole, *parts) if group not in group_names]
-        if missing:
-            joined = ", ".join(missing)
-            raise ValueError(f"Partition {name} references unknown group(s): {joined}")
-
-        specs.append(
-            PartitionSpec(
-                name=name,
-                whole=whole,
-                parts=parts,
-                on_mismatch=str(on_mismatch),
-                report=str(report),
-            )
-        )
-
-    return specs
 
 
 def validate_partition(

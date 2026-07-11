@@ -8,12 +8,12 @@ import yaml
 
 from nlpo_toolkit.corpus_analysis.config import (
     AppConfig,
-    KNOWN_TOP_LEVEL_KEYS,
     NormalizationConfig,
     config_to_dict,
     ensure_app_config,
     load_config,
 )
+from nlpo_toolkit.corpus_analysis.config.schema import KNOWN_TOP_LEVEL_KEYS
 
 
 def _assert_config_round_trip(config: AppConfig) -> dict[str, object]:
