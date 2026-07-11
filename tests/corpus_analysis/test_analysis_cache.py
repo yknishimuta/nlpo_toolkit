@@ -22,6 +22,7 @@ from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis import runner as runner_mod
 from nlpo_toolkit.corpus_analysis.analysis_records import NLPAnalysisRecord
 from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
+from tests.corpus_analysis.fake_nlp import runner_dependencies
 
 
 def _analysis_record(**overrides) -> NLPAnalysisRecord:
@@ -117,14 +118,13 @@ def _run(tmp_path: Path, config_text: str, backend: FakeBackend) -> dict[str, in
     rc = runner_mod.run(
         project_root=tmp_path,
         config_path=config_path,
-        load_config_fn=load_config,
-        clean_mod=object(),
-        backend_factory=lambda config: BuiltNLPBackend(
-            backend=backend,
-            info=NLPBackendInfo(name="fake", language=config.language, package="package_a"),
+        dependencies=runner_dependencies(
+            load_config,
+            lambda config: BuiltNLPBackend(
+                backend=backend,
+                info=NLPBackendInfo(name="fake", language=config.language, package="package_a"),
+            ),
         ),
-        build_sentence_splitter_fn=None,
-        render_stanza_package_table_fn=lambda *a, **k: [],
     )
     assert rc.exit_code == 0
     with (tmp_path / "output" / "frequency_text.csv").open("r", encoding="utf-8", newline="") as f:

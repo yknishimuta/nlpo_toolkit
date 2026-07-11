@@ -14,7 +14,6 @@ from .runner_types import (
     ComparisonRunResult,
     PartitionRunResult,
     RunContext,
-    RunnerDependencies,
     RunResult,
     deduplicate_resolved_paths,
 )
@@ -65,7 +64,6 @@ def build_summary_lines(
     analysis: AnalysisResults,
     partitions: PartitionRunResult,
     comparisons: ComparisonRunResult,
-    dependencies: RunnerDependencies,
 ) -> list[str]:
     plan = context.plan
     lines: list[str] = [
@@ -78,15 +76,7 @@ def build_summary_lines(
         f"normalization: {_format_normalization_kv(plan.config.normalization)}",
         "",
     ]
-    if context.backend_info.name == "stanza":
-        lines.extend(
-            dependencies.render_stanza_package_table(
-                context.nlp,
-                plan.config.nlp.stanza_package,
-            )
-        )
-    else:
-        lines.extend(render_backend_info(context.backend_info))
+    lines.extend(render_backend_info(context.backend_info))
     lines.append("")
 
     if plan.config.ref_tags.enabled:
@@ -224,7 +214,6 @@ def write_run_report(
     analysis: AnalysisResults,
     partitions: PartitionRunResult,
     comparisons: ComparisonRunResult,
-    dependencies: RunnerDependencies,
 ) -> RunReport:
     summary_path = write_summary(
         context.plan.out_dir / "summary.txt",
@@ -233,7 +222,6 @@ def write_run_report(
             analysis=analysis,
             partitions=partitions,
             comparisons=comparisons,
-            dependencies=dependencies,
         ),
     )
     run_meta_path = context.plan.out_dir / "run_meta.json"

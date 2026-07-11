@@ -9,7 +9,7 @@ import nlpo_toolkit.corpus_analysis.analysis_pipeline as analysis_pipeline_mod
 import nlpo_toolkit.corpus_analysis.run_reporting as run_reporting_mod
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
 import nlpo_toolkit.corpus_analysis.runtime as runtime_mod
-from tests.corpus_analysis.fake_nlp import fake_backend_factory
+from tests.corpus_analysis.fake_nlp import fake_backend_factory, runner_dependencies
 
 def test_run_minimal_success(tmp_path: Path, monkeypatch):
     script_dir = tmp_path
@@ -49,20 +49,15 @@ def test_run_minimal_success(tmp_path: Path, monkeypatch):
     meta_calls = []
     monkeypatch.setattr(run_reporting_mod, "write_run_meta", lambda meta, out_dir: meta_calls.append((meta, Path(out_dir))))
 
-    # --- stanza package table
-    def render_stanza_package_table_fn(nlp, stanza_package):
-        return ["table: ok"]
-
     rc = runner_mod.run(
         script_dir=script_dir,
         config_path=config_path,
-        load_config_fn=load_config_fn,
-        clean_mod=object(),
-        backend_factory=fake_backend_factory(
-            [("deus", "deus", "NOUN"), ("deus", "deus", "NOUN"), ("angelus", "angelus", "NOUN")]
+        dependencies=runner_dependencies(
+            load_config_fn,
+            fake_backend_factory(
+                [("deus", "deus", "NOUN"), ("deus", "deus", "NOUN"), ("angelus", "angelus", "NOUN")]
+            ),
         ),
-        build_sentence_splitter_fn=None,
-        render_stanza_package_table_fn=render_stanza_package_table_fn,
     )
     assert rc.exit_code == 0
 
@@ -110,11 +105,10 @@ def test_run_analysis_unit_surface_uses_surface_form(tmp_path: Path, monkeypatch
     rc = runner_mod.run(
         script_dir=script_dir,
         config_path=config_path,
-        load_config_fn=load_config_fn,
-        clean_mod=object(),
-        backend_factory=fake_backend_factory([("X", "lemma_x", "NOUN")]),
-        build_sentence_splitter_fn=None,
-        render_stanza_package_table_fn=lambda *a, **k: [],
+        dependencies=runner_dependencies(
+            load_config_fn,
+            fake_backend_factory([("X", "lemma_x", "NOUN")]),
+        ),
     )
     assert rc.exit_code == 0
     assert calls == [{"x": 1}]
@@ -141,11 +135,10 @@ def test_run_dictcheck_requires_wordlist(tmp_path: Path, monkeypatch):
         runner_mod.run(
             script_dir=script_dir,
             config_path=config_path,
-            load_config_fn=load_config_fn,
-            clean_mod=object(),
-            backend_factory=fake_backend_factory([("a", "a", "NOUN")]),
-            build_sentence_splitter_fn=None,
-            render_stanza_package_table_fn=lambda *a, **k: [],
+            dependencies=runner_dependencies(
+                load_config_fn,
+                fake_backend_factory([("a", "a", "NOUN")]),
+            ),
         )
 
 
@@ -177,13 +170,12 @@ def test_run_dictcheck_writes_known_unknown(tmp_path: Path, monkeypatch):
     rc = runner_mod.run(
         script_dir=script_dir,
         config_path=config_path,
-        load_config_fn=load_config_fn,
-        clean_mod=object(),
-        backend_factory=fake_backend_factory(
-            [("deus", "deus", "NOUN"), ("deus", "deus", "NOUN"), ("angelus", "angelus", "NOUN")]
+        dependencies=runner_dependencies(
+            load_config_fn,
+            fake_backend_factory(
+                [("deus", "deus", "NOUN"), ("deus", "deus", "NOUN"), ("angelus", "angelus", "NOUN")]
+            ),
         ),
-        build_sentence_splitter_fn=None,
-        render_stanza_package_table_fn=lambda *a, **k: [],
     )
     assert rc.exit_code == 0
 
@@ -229,13 +221,12 @@ def test_run_applies_filter_options_in_record_pipeline(tmp_path: Path, monkeypat
     rc = runner_mod.run(
         script_dir=script_dir,
         config_path=config_path,
-        load_config_fn=load_config_fn,
-        clean_mod=object(),
-        backend_factory=fake_backend_factory(
-            [("ab", "ab", "NOUN"), ("xiv", "xiv", "NOUN"), ("rosa", "rosa", "NOUN")]
+        dependencies=runner_dependencies(
+            load_config_fn,
+            fake_backend_factory(
+                [("ab", "ab", "NOUN"), ("xiv", "xiv", "NOUN"), ("rosa", "rosa", "NOUN")]
+            ),
         ),
-        build_sentence_splitter_fn=None,
-        render_stanza_package_table_fn=lambda *a, **k: [],
     )
     
     assert rc.exit_code == 0
@@ -276,11 +267,7 @@ def test_run_group_by_file_writes_one_csv_per_input_file(tmp_path: Path, monkeyp
     rc = runner_mod.run(
         project_root=project_root,
         config_path=config_path,
-        load_config_fn=load_config_fn,
-        clean_mod=object(),
-        backend_factory=fake_backend_factory(),
-        build_sentence_splitter_fn=None,
-        render_stanza_package_table_fn=lambda *a, **k: [],
+        dependencies=runner_dependencies(load_config_fn, fake_backend_factory()),
     )
 
     assert rc.exit_code == 0
@@ -323,11 +310,7 @@ def test_run_group_by_file_cli_override(tmp_path: Path, monkeypatch):
         project_root=project_root,
         config_path=config_path,
         group_by_file=True,
-        load_config_fn=load_config_fn,
-        clean_mod=object(),
-        backend_factory=fake_backend_factory(),
-        build_sentence_splitter_fn=None,
-        render_stanza_package_table_fn=lambda *a, **k: [],
+        dependencies=runner_dependencies(load_config_fn, fake_backend_factory()),
     )
 
     assert rc.exit_code == 0
@@ -356,11 +339,7 @@ def test_run_meta_records_generated_outputs_and_actual_group_files(tmp_path: Pat
     rc = runner_mod.run(
         project_root=project_root,
         config_path=config_path,
-        load_config_fn=load_config_fn,
-        clean_mod=object(),
-        backend_factory=fake_backend_factory(),
-        build_sentence_splitter_fn=None,
-        render_stanza_package_table_fn=lambda *a, **k: [],
+        dependencies=runner_dependencies(load_config_fn, fake_backend_factory()),
     )
 
     assert rc.exit_code == 0
@@ -384,11 +363,7 @@ def test_run_error_on_empty_group(tmp_path: Path, monkeypatch):
         runner_mod.run(
             project_root=project_root,
             config_path=config_path,
-            load_config_fn=load_config_fn,
-            clean_mod=object(),
-            backend_factory=fake_backend_factory(),
-            build_sentence_splitter_fn=None,
-            render_stanza_package_table_fn=lambda *a, **k: [],
+            dependencies=runner_dependencies(load_config_fn, fake_backend_factory()),
             error_on_empty_group=True,
         )
 
@@ -414,11 +389,7 @@ def test_run_auto_single_cleaned_records_selected_file(tmp_path: Path, monkeypat
     rc = runner_mod.run(
         project_root=project_root,
         config_path=config_path,
-        load_config_fn=load_config_fn,
-        clean_mod=object(),
-        backend_factory=fake_backend_factory(),
-        build_sentence_splitter_fn=None,
-        render_stanza_package_table_fn=lambda *a, **k: [],
+        dependencies=runner_dependencies(load_config_fn, fake_backend_factory()),
     )
 
     assert rc.exit_code == 0
@@ -447,11 +418,7 @@ def test_run_auto_single_cleaned_errors_on_zero_files(tmp_path: Path, monkeypatc
         runner_mod.run(
             project_root=project_root,
             config_path=config_path,
-            load_config_fn=load_config_fn,
-            clean_mod=object(),
-            backend_factory=fake_backend_factory(),
-            build_sentence_splitter_fn=None,
-            render_stanza_package_table_fn=lambda *a, **k: [],
+            dependencies=runner_dependencies(load_config_fn, fake_backend_factory()),
         )
 
 
@@ -479,9 +446,5 @@ def test_run_auto_single_cleaned_errors_on_multiple_files(tmp_path: Path, monkey
         runner_mod.run(
             project_root=project_root,
             config_path=config_path,
-            load_config_fn=load_config_fn,
-            clean_mod=object(),
-            backend_factory=fake_backend_factory(),
-            build_sentence_splitter_fn=None,
-            render_stanza_package_table_fn=lambda *a, **k: [],
+            dependencies=runner_dependencies(load_config_fn, fake_backend_factory()),
         )

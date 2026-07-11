@@ -1,13 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable, List, Mapping, Optional, Tuple
-
-from nlpo_toolkit.backends import BuiltNLPBackend
+from typing import Optional
 
 from . import analysis_pipeline, post_analysis, run_reporting, runtime
-from .config import AppConfig
-from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner
 from .runner_types import RunnerDependencies, RunResult
 
 
@@ -17,28 +13,11 @@ def run(
     script_dir: Path | None = None,
     config_path: Path,
     group_by_file: Optional[bool] = None,
-    load_config_fn: Callable[[Path], AppConfig | Mapping[str, object]],
-    clean_mod: CleanerRunner | None = None,
-    cleaner_loader: CleanerLoader = load_default_cleaner,
-    build_pipeline_fn: Callable[[str, str, bool], Tuple[Any, str]] | None = None,
-    backend_factory: Callable[[Any], BuiltNLPBackend] | None = None,
-    build_sentence_splitter_fn: Optional[Callable[..., Any]] = None,
-    render_stanza_package_table_fn: Callable[..., List[str]] | None = None,
+    dependencies: RunnerDependencies,
     error_on_empty_group: bool = False,
     auto_single_cleaned: bool = False,
 ) -> RunResult:
     """Core runner. Dependencies are injectable for CLI and tests."""
-    dependencies = RunnerDependencies(
-        load_config=load_config_fn,
-        cleaner=clean_mod,
-        cleaner_loader=cleaner_loader,
-        build_pipeline=build_pipeline_fn,
-        backend_factory=backend_factory,
-        build_sentence_splitter=build_sentence_splitter_fn,
-        render_stanza_package_table=render_stanza_package_table_fn
-        or (lambda *_args, **_kwargs: []),
-    )
-
     context = runtime.prepare_run_context(
         project_root=project_root,
         script_dir=script_dir,
@@ -62,7 +41,6 @@ def run(
         analysis=analysis,
         partitions=partitions,
         comparisons=comparisons,
-        dependencies=dependencies,
     )
     return run_reporting.build_run_result(
         context=context,

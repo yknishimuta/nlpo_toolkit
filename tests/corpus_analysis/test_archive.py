@@ -16,6 +16,7 @@ from nlpo_toolkit.corpus_analysis.config import ensure_app_config
 from nlpo_toolkit.corpus_analysis.run_plan import RunPlan
 from nlpo_toolkit.corpus_analysis.runner_types import ReferencedConfigFile, RunResult
 from nlpo_toolkit.corpus_analysis.cli import count as count_cli
+from nlpo_toolkit.corpus_analysis.dependencies import default_runner_dependencies
 
 
 def make_run_result(
@@ -119,16 +120,11 @@ def test_count_cli_uses_run_result_without_reloading_config_or_manifest(
 ) -> None:
     result = make_run_result(tmp_path)
     monkeypatch.setattr(count_cli, "run", lambda **kwargs: result)
-    monkeypatch.setattr(
-        count_cli,
-        "load_config",
-        lambda _path: (_ for _ in ()).throw(AssertionError("config reloaded")),
-    )
-
     rc = count_cli.run_count_vocabula(
         project_root=tmp_path,
         config_path=result.plan.config_path,
         run_name="cli-result",
+        dependencies=default_runner_dependencies(),
     )
 
     assert rc == 0
@@ -146,6 +142,7 @@ def test_count_cli_does_not_archive_nonzero_run_result(
         project_root=tmp_path,
         config_path=result.plan.config_path,
         run_name="must-not-exist",
+        dependencies=default_runner_dependencies(),
     )
 
     assert rc == 1

@@ -26,6 +26,7 @@ from nlpo_toolkit.backends.transformers_backend import (
 from nlpo_toolkit.corpus_analysis.config import NLPConfig, load_config
 from nlpo_toolkit.corpus_analysis.features import FeatureOptions, build_feature_rows
 from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
+from tests.corpus_analysis.fake_nlp import runner_dependencies
 
 
 class FakeBackend:
@@ -282,7 +283,10 @@ def test_runner_uses_backend_factory_and_records_metadata(tmp_path: Path, monkey
             "groups": {"group_a": {"files": ["input/a.txt"]}},
         }
 
+    factory_calls: list[NLPConfig] = []
+
     def fake_factory(config: NLPConfig) -> BuiltNLPBackend:
+        factory_calls.append(config)
         return BuiltNLPBackend(
             backend=FakeBackend(),
             info=NLPBackendInfo(name="fake", language=config.language),
@@ -293,18 +297,40 @@ def test_runner_uses_backend_factory_and_records_metadata(tmp_path: Path, monkey
     rc = runner_mod.run(
         project_root=tmp_path,
         config_path=config_path,
-        load_config_fn=load_config_fn,
-        clean_mod=object(),
-        backend_factory=fake_factory,
+        dependencies=runner_dependencies(load_config_fn, fake_factory),
     )
 
     assert rc.exit_code == 0
+    assert len(factory_calls) == 1
+    assert factory_calls[0].language == "la"
     csv_text = (tmp_path / "output" / "frequency_group_a.csv").read_text(
         encoding="utf-8"
     )
     assert "xiv,1" in csv_text
     meta_text = (tmp_path / "output" / "run_meta.json").read_text(encoding="utf-8")
     assert '"backend": "fake"' in meta_text
+
+
+def test_backend_factory_failure_has_no_fallback(tmp_path: Path) -> None:
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input" / "a.txt").write_text("ignored", encoding="utf-8")
+    config_path = tmp_path / "config.yml"
+    config_path.write_text("dummy", encoding="utf-8")
+
+    def load_config_fn(_path: Path):
+        return {
+            "groups": {"group_a": {"files": ["input/a.txt"]}},
+        }
+
+    def failing_factory(_config: NLPConfig) -> BuiltNLPBackend:
+        raise RuntimeError("backend initialization failed")
+
+    with pytest.raises(RuntimeError, match="backend initialization failed"):
+        runner_mod.run(
+            project_root=tmp_path,
+            config_path=config_path,
+            dependencies=runner_dependencies(load_config_fn, failing_factory),
+        )
 
 def test_render_backend_info_is_generic() -> None:
     assert render_backend_info(

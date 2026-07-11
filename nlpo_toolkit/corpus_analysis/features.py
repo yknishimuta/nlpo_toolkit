@@ -7,17 +7,15 @@ import sys
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, Sequence, TextIO
+from typing import Any, Iterable, Sequence, TextIO
 
-from nlpo_toolkit.backends import BuiltNLPBackend
 from nlpo_toolkit.nlp import should_drop_roman_numeral
 
 from .analysis_records import (
     NLPAnalysisRecord,
     iter_nlp_analysis_records_from_text,
 )
-from .config import AppConfig, load_config
-from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner
+from .dependencies import FeatureDependencies
 from .corpus import prepare_corpora, run_preprocess_if_needed
 from .run_plan import build_corpus_plan
 from .runtime import build_nlp_runtime
@@ -324,11 +322,7 @@ def run_features(
     group_by_file: bool = False,
     auto_single_cleaned: bool = False,
     error_on_empty_group: bool = False,
-    build_pipeline_fn: Callable[[str, str, bool], tuple[Any, str]] | None = None,
-    backend_factory: Callable[[Any], BuiltNLPBackend] | None = None,
-    clean_mod: CleanerRunner | None = None,
-    cleaner_loader: CleanerLoader = load_default_cleaner,
-    load_config_fn: Callable[[Path], AppConfig | Mapping[str, object]] = load_config,
+    dependencies: FeatureDependencies,
 ) -> int:
     try:
         plan = build_corpus_plan(
@@ -338,10 +332,10 @@ def run_features(
             group_by_file=group_by_file,
             auto_single_cleaned=auto_single_cleaned,
             error_on_empty_group=error_on_empty_group,
-            load_config_fn=load_config_fn,
+            load_config_fn=dependencies.load_config,
             preprocess_mode="execute",
-            cleaner=clean_mod,
-            cleaner_loader=cleaner_loader,
+            cleaner=dependencies.cleaner,
+            cleaner_loader=dependencies.cleaner_loader,
             preprocess_fn=run_preprocess_if_needed,
         )
     except FileNotFoundError as exc:
@@ -359,8 +353,7 @@ def run_features(
 
     nlp, _backend_info, _package = build_nlp_runtime(
         config=config,
-        backend_factory=backend_factory,
-        build_pipeline_fn=build_pipeline_fn,
+        backend_factory=dependencies.backend_factory,
     )
 
     groups_texts: list[tuple[str, list[Path], str]] = []

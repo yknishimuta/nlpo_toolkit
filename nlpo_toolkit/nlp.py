@@ -1,8 +1,10 @@
-from typing import Collection, Set, Optional, Dict, List, Iterable, Mapping, Union
+from typing import Collection, Set, Optional, Iterable, Mapping, Union
 
 from .interfaces import NLPBackend
 
-import unicodedata, string, re
+import re
+import string
+import unicodedata
 from pathlib import Path
 
 _LIG_MAP = {
@@ -109,43 +111,6 @@ def build_sentence_splitter(language: str, stanza_package: str, cpu_only: bool):
         use_gpu=not cpu_only,
     )
 
-
-def render_stanza_package_table(
-    nlp: NLPBackend,
-    requested_package: Optional[Dict[str, str]] = None,
-    processors: Iterable[str] = ("tokenize", "mwt", "pos", "lemma"),
-) -> List[str]:
-
-    pkg_map: Dict[str, str] = {}
-    if isinstance(requested_package, dict):
-        for p in processors:
-            if p in requested_package:
-                pkg_map[p] = requested_package[p]
-
-    try:
-        cfg = getattr(nlp, "config", {})
-        if isinstance(cfg, dict):
-            inner = cfg.get("processors", {})
-            if isinstance(inner, dict):
-                for p in processors:
-                    if p in inner and isinstance(inner[p], dict):
-                        pkg_val = inner[p].get("package")
-                        if pkg_val:
-                            pkg_map[p] = pkg_val
-    except Exception:
-        pass
-
-    # render table
-    lines: List[str] = []
-    lines.append("=== Stanza model packages ===")
-    lines.append("================================")
-    lines.append("| Processor | Package          |")
-    lines.append("--------------------------------")
-    for p in processors:
-        lines.append(f"| {p:<9} | {pkg_map.get(p, '(default)'):<16} |")
-    lines.append("================================")
-    lines.append("")
-    return lines
 
 def iter_char_chunks(text: str, chunk_chars: int) -> Iterable[str]:
     """Splits the text based on a target character count (adjusted at whitespaces to avoid splitting words)"""

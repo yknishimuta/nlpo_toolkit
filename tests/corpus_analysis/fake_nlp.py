@@ -5,6 +5,8 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
+from nlpo_toolkit.corpus_analysis.config import AppConfig, ensure_app_config
+from nlpo_toolkit.corpus_analysis.runner_types import BackendFactory, RunnerDependencies
 from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
 
 
@@ -69,3 +71,19 @@ def fake_backend_factory(
         )
 
     return factory
+
+
+def runner_dependencies(
+    load_config,
+    backend_factory: BackendFactory,
+    *,
+    cleaner=object(),
+) -> RunnerDependencies:
+    def canonical_loader(path) -> AppConfig:
+        return ensure_app_config(load_config(path))
+
+    return RunnerDependencies(
+        load_config=canonical_loader,
+        backend_factory=backend_factory,
+        cleaner=cleaner,
+    )

@@ -11,7 +11,7 @@ import nlpo_toolkit.corpus_analysis.runner as runner_mod
 import nlpo_toolkit.corpus_analysis.runtime as runtime_mod
 from nlpo_toolkit.corpus_analysis.archive import ArchiveOptions, create_run_archive
 from nlpo_toolkit.corpus_analysis.dry_run import dry_run_count_vocabula
-from tests.corpus_analysis.fake_nlp import FakeNLPBackend, fake_backend_factory
+from tests.corpus_analysis.fake_nlp import FakeNLPBackend, fake_backend_factory, runner_dependencies
 
 
 def _write_inputs(project_root: Path) -> None:
@@ -48,11 +48,10 @@ def _run_with_config(
     return runner_mod.run(
         project_root=project_root,
         config_path=config_path,
-        load_config_fn=lambda _p: cfg,
-        clean_mod=object(),
-        backend_factory=fake_backend_factory(backend=backend),
-        build_sentence_splitter_fn=None,
-        render_stanza_package_table_fn=lambda *a, **k: [],
+        dependencies=runner_dependencies(
+            lambda _p: cfg,
+            fake_backend_factory(backend=backend),
+        ),
     )
 
 
@@ -233,11 +232,10 @@ def test_runner_rejects_group_by_file_with_comparisons(
             project_root=tmp_path,
             config_path=config_path,
             group_by_file=True,
-            load_config_fn=lambda _p: cfg,
-            clean_mod=object(),
-            backend_factory=fake_backend_factory([("item_a", "item_a", "NOUN")]),
-            build_sentence_splitter_fn=None,
-            render_stanza_package_table_fn=lambda *a, **k: [],
+            dependencies=runner_dependencies(
+                lambda _p: cfg,
+                fake_backend_factory([("item_a", "item_a", "NOUN")]),
+            ),
         )
 
 

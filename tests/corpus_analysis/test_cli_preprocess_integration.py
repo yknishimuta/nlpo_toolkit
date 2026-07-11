@@ -5,7 +5,8 @@ import csv
 
 
 from nlpo_toolkit.corpus_analysis.cli import count as mod
-from tests.corpus_analysis.fake_nlp import fake_backend_factory
+from nlpo_toolkit.corpus_analysis.config import load_config
+from tests.corpus_analysis.fake_nlp import fake_backend_factory, runner_dependencies
 
 # Dummy stanza-like objects
 class DummySentence:
@@ -89,21 +90,19 @@ def test_preprocess_cleaner_integration_fixed(tmp_path, monkeypatch):
     class FakeCleaner:
         main = staticmethod(fake_cleaner_main)
 
-    monkeypatch.setattr(mod, "build_sentence_splitter", lambda *a, **k: DummySplitter())
-    monkeypatch.setattr(
-        mod,
-        "create_nlp_backend",
+    dependencies = runner_dependencies(
+        lambda _path: load_config(groups_cfg_path),
         fake_backend_factory(
             [("rosa", "rosa", "NOUN"), ("rosa", "rosa", "NOUN"), ("puella", "puella", "NOUN")]
         ),
+        cleaner=FakeCleaner(),
     )
-    monkeypatch.setattr(mod, "render_stanza_package_table", lambda *a, **k: ["[stanza stub]"])
 
     # --- Act
     rc = mod.run_count_vocabula(
         project_root=script_dir,
         config_path=groups_cfg_path,
-        cleaner=FakeCleaner(),
+        dependencies=dependencies,
     )
     assert rc == 0
     assert cleaner_called["ok"] is True

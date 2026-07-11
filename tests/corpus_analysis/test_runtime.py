@@ -6,6 +6,7 @@ import pytest
 
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.runner_types import RunnerDependencies
+from nlpo_toolkit.corpus_analysis.config import ensure_app_config
 from nlpo_toolkit.corpus_analysis.runtime import prepare_run_context
 
 
@@ -22,16 +23,15 @@ def test_prepare_run_context_validates_plan_before_nlp_initialization(tmp_path: 
         )
 
     deps = RunnerDependencies(
-        load_config=lambda _path: {
+        load_config=lambda _path: ensure_app_config({
             "groups": {
                 "a": {"files": ["input/a.txt"]},
                 "b": {"files": ["input/missing.txt"]},
             },
             "comparisons": [{"name": "ab", "group_a": "a", "group_b": "b"}],
-        },
+        }),
         cleaner=object(),
         backend_factory=backend_factory,
-        render_stanza_package_table=lambda *_args, **_kwargs: [],
     )
 
     with pytest.raises(ValueError, match="comparison ab references empty group: a"):

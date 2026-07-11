@@ -1,45 +1,23 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo, create_nlp_backend
+from nlpo_toolkit.backends import NLPBackendInfo
 from nlpo_toolkit.nlp import load_roman_exceptions
 
 from .config import AppConfig
 from .corpus import resolve_project_path, run_preprocess_if_needed
 from .run_plan import build_run_plan, ensure_out_dir
-from .runner_types import RunContext, RunnerDependencies
+from .runner_types import BackendFactory, RunContext, RunnerDependencies
 
 
 def build_nlp_runtime(
     *,
     config: AppConfig,
-    backend_factory: Callable[[Any], BuiltNLPBackend] | None = None,
-    build_pipeline_fn: Callable[[str, Any, bool], tuple[Any, Any]] | None = None,
+    backend_factory: BackendFactory,
 ) -> tuple[Any, NLPBackendInfo, Any]:
-    language = config.nlp.language
-    stanza_package = config.nlp.stanza_package
-    cpu_only = config.nlp.cpu_only
-
-    if backend_factory is not None:
-        built_backend = backend_factory(config.nlp)
-        return built_backend.backend, built_backend.info, built_backend.info.package
-
-    if build_pipeline_fn is not None:
-        nlp, package = build_pipeline_fn(language, stanza_package, cpu_only)
-        return (
-            nlp,
-            NLPBackendInfo(
-                name="stanza",
-                language=language,
-                package=package,
-                use_gpu=not cpu_only,
-            ),
-            package,
-        )
-
-    built_backend = create_nlp_backend(config.nlp)
+    built_backend = backend_factory(config.nlp)
     return built_backend.backend, built_backend.info, built_backend.info.package
 
 
@@ -51,26 +29,17 @@ def initialize_nlp_runtime(
     return build_nlp_runtime(
         config=config,
         backend_factory=dependencies.backend_factory,
-        build_pipeline_fn=dependencies.build_pipeline,
     )
 
 
 def initialize_sentence_splitter(
     *,
     config: AppConfig,
-    package: Any,
     dependencies: RunnerDependencies,
 ) -> Any | None:
-    if dependencies.build_sentence_splitter is None:
+    if dependencies.sentence_splitter_factory is None:
         return None
-    try:
-        return dependencies.build_sentence_splitter(
-            config.nlp.language,
-            stanza_package=package,
-            cpu_only=config.nlp.cpu_only,
-        )
-    except Exception:
-        return None
+    return dependencies.sentence_splitter_factory(config.nlp)
 
 
 def load_roman_exceptions_for_run(
@@ -115,7 +84,6 @@ def prepare_run_context(
     )
     splitter_nlp = initialize_sentence_splitter(
         config=plan.config,
-        package=package,
         dependencies=dependencies,
     )
     roman_exceptions = load_roman_exceptions_for_run(
@@ -126,7 +94,6 @@ def prepare_run_context(
         plan=plan,
         nlp=nlp,
         backend_info=backend_info,
-        stanza_package=package,
         splitter_nlp=splitter_nlp,
         roman_exceptions=roman_exceptions,
     )

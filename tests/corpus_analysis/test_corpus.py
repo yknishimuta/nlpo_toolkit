@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.config import ensure_app_config
 from nlpo_toolkit.corpus_analysis.corpus import (
     CorpusPreparationError,
@@ -19,6 +20,8 @@ from nlpo_toolkit.corpus_analysis.corpus import (
     resolve_group_files,
 )
 from nlpo_toolkit.corpus_analysis.config import load_config
+from nlpo_toolkit.corpus_analysis.dependencies import FeatureDependencies
+from nlpo_toolkit.corpus_analysis.runner_types import RunnerDependencies
 from tests.corpus_analysis.fake_nlp import FakeNLPBackend, fake_backend_factory
 
 
@@ -224,11 +227,13 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
     runner_mod.run(
         project_root=tmp_path,
         config_path=config_path,
-        load_config_fn=load_config,
-        clean_mod=object(),
-        backend_factory=fake_backend_factory(backend=CaptureCountNLP(tokens=(("item_a", "item_a", "NOUN"),))),
-        build_sentence_splitter_fn=None,
-        render_stanza_package_table_fn=lambda *a, **k: [],
+        dependencies=RunnerDependencies(
+            load_config=load_config,
+            cleaner=object(),
+            backend_factory=fake_backend_factory(
+                backend=CaptureCountNLP(tokens=(("item_a", "item_a", "NOUN"),))
+            ),
+        ),
     )
 
     class CaptureNLP:
@@ -240,9 +245,14 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
         project_root=tmp_path,
         config_path=config_path,
         out=tmp_path / "features.csv",
-        build_pipeline_fn=lambda *a, **k: (CaptureNLP(), "package_a"),
-        clean_mod=object(),
-        load_config_fn=load_config,
+        dependencies=FeatureDependencies(
+            load_config=load_config,
+            cleaner=object(),
+            backend_factory=lambda _config: BuiltNLPBackend(
+                backend=CaptureNLP(),
+                info=NLPBackendInfo(name="fake", language="la", package="package_a"),
+            ),
+        ),
     )
 
     def capture_rows_from_text(text: str, group: str):

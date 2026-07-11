@@ -3,24 +3,27 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, List, Mapping, Tuple
+from typing import Any, Callable, Iterable, Mapping
 
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 
-from .config import AppConfig
+from .config import AppConfig, NLPConfig
 from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner
 from .run_plan import RunPlan
 
 
+ConfigLoader = Callable[[Path], AppConfig]
+BackendFactory = Callable[[NLPConfig], BuiltNLPBackend]
+SentenceSplitterFactory = Callable[[NLPConfig], Any]
+
+
 @dataclass(frozen=True)
 class RunnerDependencies:
-    load_config: Callable[[Path], AppConfig | Mapping[str, object]]
-    render_stanza_package_table: Callable[..., List[str]]
+    load_config: ConfigLoader
+    backend_factory: BackendFactory
     cleaner: CleanerRunner | None = None
     cleaner_loader: CleanerLoader = load_default_cleaner
-    build_pipeline: Callable[[str, str, bool], Tuple[Any, str]] | None = None
-    backend_factory: Callable[[Any], BuiltNLPBackend] | None = None
-    build_sentence_splitter: Callable[..., Any] | None = None
+    sentence_splitter_factory: SentenceSplitterFactory | None = None
 
 
 @dataclass(frozen=True)
@@ -28,7 +31,6 @@ class RunContext:
     plan: RunPlan
     nlp: Any
     backend_info: NLPBackendInfo
-    stanza_package: Any
     splitter_nlp: Any | None
     roman_exceptions: frozenset[str]
 

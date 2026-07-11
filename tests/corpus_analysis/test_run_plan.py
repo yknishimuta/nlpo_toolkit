@@ -446,7 +446,6 @@ def test_prepare_run_context_validates_plan_before_nlp_initialization(tmp_path: 
         ),
         cleaner=object(),
         backend_factory=backend_factory,
-        render_stanza_package_table=lambda *_args, **_kwargs: [],
     )
 
     with pytest.raises(ValueError, match="comparison ab references empty group: a"):

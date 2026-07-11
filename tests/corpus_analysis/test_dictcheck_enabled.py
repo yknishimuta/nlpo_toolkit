@@ -5,7 +5,7 @@ import csv
 
 from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.cli import count as mod
-from tests.corpus_analysis.fake_nlp import fake_backend_factory
+from tests.corpus_analysis.fake_nlp import fake_backend_factory, runner_dependencies
 
 
 def test_dictcheck_enabled_creates_known_unknown(tmp_path, monkeypatch):
@@ -54,7 +54,6 @@ def test_dictcheck_enabled_creates_known_unknown(tmp_path, monkeypatch):
         assert path.name == "groups.config.yml"
         return cfg
 
-    monkeypatch.setattr(mod, "load_config", fake_load_config)
 
     # Make main() think config exists
     real_exists = Path.exists
@@ -67,14 +66,13 @@ def test_dictcheck_enabled_creates_known_unknown(tmp_path, monkeypatch):
     monkeypatch.setattr(mod.Path, "exists", fake_exists)
 
     
-    monkeypatch.setattr(
-        mod,
-        "create_nlp_backend",
+    dependencies = runner_dependencies(
+        fake_load_config,
         fake_backend_factory(
             [("rosa", "rosa", "NOUN"), ("rosa", "rosa", "NOUN"), ("puella", "puella", "NOUN")]
         ),
     )
-    monkeypatch.setattr(mod, "render_stanza_package_table", lambda nlp, pkg: ["[stanza stub]"])
+    monkeypatch.setattr(mod, "default_runner_dependencies", lambda: dependencies)
 
     # --- Act ---
     rc = cli.main(["count-vocabula", "--project-root", str(script_dir)])
@@ -129,7 +127,6 @@ def test_dictcheck_enabled_requires_wordlist(tmp_path, monkeypatch):
         assert path.name == "groups.config.yml"
         return cfg
 
-    monkeypatch.setattr(mod, "load_config", fake_load_config)
 
     real_exists = Path.exists
 
@@ -140,8 +137,11 @@ def test_dictcheck_enabled_requires_wordlist(tmp_path, monkeypatch):
 
     monkeypatch.setattr(mod.Path, "exists", fake_exists)
     
-    monkeypatch.setattr(mod, "create_nlp_backend", fake_backend_factory([("rosa", "rosa", "NOUN")]))
-    monkeypatch.setattr(mod, "render_stanza_package_table", lambda nlp, pkg: ["[stanza stub]"])
+    dependencies = runner_dependencies(
+        fake_load_config,
+        fake_backend_factory([("rosa", "rosa", "NOUN")]),
+    )
+    monkeypatch.setattr(mod, "default_runner_dependencies", lambda: dependencies)
 
     import pytest
     with pytest.raises(ValueError, match=r"dictcheck\.wordlist"):

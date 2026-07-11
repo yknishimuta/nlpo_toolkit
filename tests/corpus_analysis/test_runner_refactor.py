@@ -10,6 +10,7 @@ from nlpo_toolkit.corpus_analysis.analysis_pipeline import (
     split_known_unknown,
 )
 from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
+from nlpo_toolkit.corpus_analysis.config import ensure_app_config
 from nlpo_toolkit.corpus_analysis.run_reporting import (
     build_final_run_metadata,
     build_summary_lines,
@@ -50,10 +51,11 @@ def _backend_factory(config):
 
 def _base_dependencies():
     return RunnerDependencies(
-        load_config=lambda _path: {},
+        load_config=lambda _path: ensure_app_config(
+            {"groups": {"text": {"files": ["input/*.txt"]}}}
+        ),
         cleaner=object(),
         backend_factory=_backend_factory,
-        render_stanza_package_table=lambda *_args, **_kwargs: [],
     )
 
 
@@ -86,16 +88,15 @@ def test_prepare_run_context_resolves_per_file_work_items(tmp_path: Path) -> Non
     config_path.write_text("dummy", encoding="utf-8")
 
     def load_config(_path: Path):
-        return {
+        return ensure_app_config({
             "out_dir": "output",
             "groups": {"group_a": {"files": ["input/*.txt"]}},
-        }
+        })
 
     deps = RunnerDependencies(
         load_config=load_config,
         cleaner=object(),
         backend_factory=_backend_factory,
-        render_stanza_package_table=lambda *_args, **_kwargs: [],
     )
 
     context = prepare_run_context(
@@ -125,7 +126,7 @@ def test_analyze_one_corpus_writes_expected_outputs_from_record_pipeline(tmp_pat
     config_path.write_text("dummy", encoding="utf-8")
 
     def load_config(_path: Path):
-        return {
+        return ensure_app_config({
             "out_dir": "output",
             "groups": {"group_a": {"files": ["input/a.txt"]}},
             "filters": {
@@ -143,13 +144,12 @@ def test_analyze_one_corpus_writes_expected_outputs_from_record_pipeline(tmp_pat
                 "path": "output/trace.tsv",
                 "max_rows": 2,
             },
-        }
+        })
 
     deps = RunnerDependencies(
         load_config=load_config,
         cleaner=object(),
         backend_factory=_backend_factory,
-        render_stanza_package_table=lambda *_args, **_kwargs: [],
     )
     context = prepare_run_context(
         project_root=tmp_path,
@@ -193,16 +193,15 @@ def test_summary_lines_and_metadata_include_existing_fields(tmp_path: Path) -> N
     config_path.write_text("dummy", encoding="utf-8")
 
     def load_config(_path: Path):
-        return {
+        return ensure_app_config({
             "out_dir": "output",
             "groups": {"group_a": {"files": ["input/a.txt"]}},
-        }
+        })
 
     deps = RunnerDependencies(
         load_config=load_config,
         cleaner=object(),
         backend_factory=_backend_factory,
-        render_stanza_package_table=lambda *_args, **_kwargs: [],
     )
     context = prepare_run_context(
         project_root=tmp_path,
@@ -229,7 +228,6 @@ def test_summary_lines_and_metadata_include_existing_fields(tmp_path: Path) -> N
         analysis=analysis,
         partitions=partitions,
         comparisons=comparisons,
-        dependencies=deps,
     )
     meta = build_final_run_metadata(
         context=context,

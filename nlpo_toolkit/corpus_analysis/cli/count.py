@@ -4,18 +4,12 @@ import argparse
 import sys
 from pathlib import Path
 
-from nlpo_toolkit.backends import create_nlp_backend
-from nlpo_toolkit.nlp import (
-    build_sentence_splitter as _build_sentence_splitter,
-    build_stanza_pipeline,
-    render_stanza_package_table,
-)
-
 from ..archive import ArchiveOptions, RunArchiveError, create_run_archive
-from ..config import load_config
-from ..cleaner_runtime import CleanerError, CleanerLoader, CleanerRunner, load_default_cleaner
+from ..cleaner_runtime import CleanerError
+from ..dependencies import default_runner_dependencies
 from ..dry_run import dry_run_count_vocabula
 from ..runner import run
+from ..runner_types import RunnerDependencies
 from .common import (
     CLIContext,
     add_project_config_arguments,
@@ -23,23 +17,6 @@ from .common import (
     resolve_project_root,
     set_handler,
 )
-
-def build_pipeline(language: str, stanza_package: str, cpu_only: bool):
-    backend = build_stanza_pipeline(
-        lang=language,
-        package=stanza_package,
-        use_gpu=not cpu_only,
-    )
-    return backend, stanza_package
-
-
-def build_sentence_splitter(language: str, stanza_package: str, cpu_only: bool):
-    return _build_sentence_splitter(language, stanza_package, cpu_only)
-
-
-_DEFAULT_BUILD_PIPELINE = build_pipeline
-_DEFAULT_BUILD_SENTENCE_SPLITTER = build_sentence_splitter
-
 
 def run_count_vocabula(
     *,
@@ -54,27 +31,14 @@ def run_count_vocabula(
     error_on_empty_group: bool = False,
     auto_single_cleaned: bool = False,
     command_line: list[str] | None = None,
-    cleaner: CleanerRunner | None = None,
-    cleaner_loader: CleanerLoader = load_default_cleaner,
+    dependencies: RunnerDependencies,
 ) -> int:
     try:
-        legacy_build_pipeline = build_pipeline if build_pipeline is not _DEFAULT_BUILD_PIPELINE else None
-        legacy_sentence_splitter = (
-            build_sentence_splitter
-            if build_sentence_splitter is not _DEFAULT_BUILD_SENTENCE_SPLITTER
-            else None
-        )
         result = run(
             project_root=project_root,
             config_path=config_path,
             group_by_file=group_by_file,
-            load_config_fn=load_config,
-            clean_mod=cleaner,
-            cleaner_loader=cleaner_loader,
-            build_pipeline_fn=legacy_build_pipeline,
-            backend_factory=None if legacy_build_pipeline is not None else create_nlp_backend,
-            build_sentence_splitter_fn=legacy_sentence_splitter,
-            render_stanza_package_table_fn=render_stanza_package_table,
+            dependencies=dependencies,
             error_on_empty_group=error_on_empty_group,
             auto_single_cleaned=auto_single_cleaned,
         )
@@ -209,4 +173,5 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
         error_on_empty_group=bool(args.error_on_empty_group),
         auto_single_cleaned=bool(args.auto_single_cleaned),
         command_line=list(context.argv),
+        dependencies=default_runner_dependencies(),
     )

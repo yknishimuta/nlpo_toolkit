@@ -3,6 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
+from nlpo_toolkit.corpus_analysis.config import ensure_app_config
+from nlpo_toolkit.corpus_analysis.runner_types import RunnerDependencies
+
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
 
 
@@ -47,8 +51,15 @@ def test_run_orchestrates_steps_in_order(monkeypatch, tmp_path: Path) -> None:
     rc = runner_mod.run(
         project_root=tmp_path,
         config_path=tmp_path / "config.yml",
-        load_config_fn=lambda path: {},
-        clean_mod=object(),
+        dependencies=RunnerDependencies(
+            load_config=lambda _path: ensure_app_config(
+                {"groups": {"text": {"files": ["input/*.txt"]}}}
+            ),
+            backend_factory=lambda _config: BuiltNLPBackend(
+                backend=object(),
+                info=NLPBackendInfo(name="fake", language="la"),
+            ),
+        ),
     )
 
     assert calls == ["prepare", "analyze", "partitions", "comparisons", "report"]

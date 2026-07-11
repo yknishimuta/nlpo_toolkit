@@ -9,7 +9,7 @@ import pytest
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
 from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis.token_artifact import read_token_records
-from tests.corpus_analysis.fake_nlp import FakeNLPBackend, fake_backend_factory
+from tests.corpus_analysis.fake_nlp import FakeNLPBackend, fake_backend_factory, runner_dependencies
 
 
 TOKENS = (
@@ -62,11 +62,10 @@ def _run(project_root: Path, config_path: Path, backend: FakeNLPBackend) -> None
     rc = runner_mod.run(
         project_root=project_root,
         config_path=config_path,
-        load_config_fn=load_config,
-        clean_mod=object(),
-        backend_factory=fake_backend_factory(backend=backend),
-        build_sentence_splitter_fn=None,
-        render_stanza_package_table_fn=lambda *a, **k: [],
+        dependencies=runner_dependencies(
+            load_config,
+            fake_backend_factory(backend=backend),
+        ),
     )
     assert rc.exit_code == 0
 

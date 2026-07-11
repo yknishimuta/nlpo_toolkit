@@ -75,7 +75,6 @@ def test_run_context_contains_plan_and_runtime_state_only() -> None:
         "plan",
         "nlp",
         "backend_info",
-        "stanza_package",
         "splitter_nlp",
         "roman_exceptions",
     }

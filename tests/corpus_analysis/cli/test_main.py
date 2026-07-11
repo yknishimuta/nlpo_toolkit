@@ -57,7 +57,7 @@ def test_parser_build_does_not_initialize_count_backend(monkeypatch) -> None:
     def fail_backend_init(*_args: object, **_kwargs: object) -> object:
         raise AssertionError("backend should not be initialized while building parser")
 
-    monkeypatch.setattr(count_cli, "create_nlp_backend", fail_backend_init)
+    monkeypatch.setattr(count_cli, "default_runner_dependencies", fail_backend_init)
 
     build_parser()
 

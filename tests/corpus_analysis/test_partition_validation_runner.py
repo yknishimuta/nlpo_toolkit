@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
-from tests.corpus_analysis.fake_nlp import FakeNLPBackend, fake_backend_factory
+from tests.corpus_analysis.fake_nlp import FakeNLPBackend, fake_backend_factory, runner_dependencies
 
 
 def _backend_for_counters(counter_by_text: dict[str, Counter]) -> FakeNLPBackend:
@@ -33,11 +33,10 @@ def _run(
     return runner_mod.run(
         project_root=tmp_path,
         config_path=config_path,
-        load_config_fn=lambda _p: cfg,
-        clean_mod=object(),
-        backend_factory=fake_backend_factory(backend=_backend_for_counters(counter_by_text)),
-        build_sentence_splitter_fn=None,
-        render_stanza_package_table_fn=lambda *a, **k: [],
+        dependencies=runner_dependencies(
+            lambda _p: cfg,
+            fake_backend_factory(backend=_backend_for_counters(counter_by_text)),
+        ),
     )
 
 
@@ -204,9 +203,8 @@ def test_runner_rejects_empty_partition_reference_even_without_empty_group_flag(
         runner_mod.run(
             project_root=tmp_path,
             config_path=config_path,
-            load_config_fn=lambda _p: _base_cfg(),
-            clean_mod=object(),
-            backend_factory=fake_backend_factory(),
-            build_sentence_splitter_fn=None,
-            render_stanza_package_table_fn=lambda *a, **k: [],
+            dependencies=runner_dependencies(
+                lambda _p: _base_cfg(),
+                fake_backend_factory(),
+            ),
         )

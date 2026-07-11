@@ -4,11 +4,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from nlpo_toolkit.backends import create_nlp_backend
-from nlpo_toolkit.nlp import build_stanza_pipeline
-
-from ..config import load_config
 from ..cleaner_runtime import CleanerError
+from ..dependencies import default_feature_dependencies
 from ..features import FeatureError, run_features
 from .common import (
     CLIContext,
@@ -17,18 +14,6 @@ from .common import (
     resolve_project_root,
     set_handler,
 )
-
-
-def build_pipeline(language: str, stanza_package: str, cpu_only: bool):
-    backend = build_stanza_pipeline(
-        lang=language,
-        package=stanza_package,
-        use_gpu=not cpu_only,
-    )
-    return backend, stanza_package
-
-
-_DEFAULT_BUILD_PIPELINE = build_pipeline
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:
@@ -110,7 +95,6 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
     project_root = resolve_project_root(args.project_root)
     config_path = resolve_config_path(project_root=project_root, config_path=args.config)
     try:
-        legacy_build_pipeline = build_pipeline if build_pipeline is not _DEFAULT_BUILD_PIPELINE else None
         return run_features(
             project_root=project_root,
             config_path=config_path,
@@ -123,9 +107,7 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
             group_by_file=bool(args.group_by_file),
             auto_single_cleaned=bool(args.auto_single_cleaned),
             error_on_empty_group=bool(args.error_on_empty_group),
-            build_pipeline_fn=legacy_build_pipeline,
-            backend_factory=None if legacy_build_pipeline is not None else create_nlp_backend,
-            load_config_fn=load_config,
+            dependencies=default_feature_dependencies(),
         )
     except (CleanerError, FeatureError, ValueError, FileNotFoundError) as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)

@@ -11,7 +11,7 @@ from nlpo_toolkit.nlp import (
     RomanExceptionsError,
     load_roman_exceptions,
 )
-from tests.corpus_analysis.fake_nlp import fake_backend_factory
+from tests.corpus_analysis.fake_nlp import fake_backend_factory, runner_dependencies
 
 
 def test_load_roman_exceptions_ignores_blank_lines_comments_and_duplicates(tmp_path: Path):
@@ -55,13 +55,12 @@ def test_runner_integration_uses_roman_exception_file_in_final_csv(tmp_path: Pat
     rc = runner_mod.run(
         project_root=tmp_path,
         config_path=config_path,
-        load_config_fn=load_config_fn,
-        clean_mod=object(),
-        backend_factory=fake_backend_factory(
-            [("xiv", "xiv", "NOUN"), ("iv", "iv", "NOUN"), ("rosa", "rosa", "NOUN")]
+        dependencies=runner_dependencies(
+            load_config_fn,
+            fake_backend_factory(
+                [("xiv", "xiv", "NOUN"), ("iv", "iv", "NOUN"), ("rosa", "rosa", "NOUN")]
+            ),
         ),
-        build_sentence_splitter_fn=None,
-        render_stanza_package_table_fn=lambda *args, **kwargs: [],
     )
 
     assert rc.exit_code == 0
@@ -110,13 +109,10 @@ def test_runner_loads_roman_exceptions_once_for_multiple_groups(tmp_path: Path, 
     rc = runner_mod.run(
         project_root=tmp_path,
         config_path=config_path,
-        load_config_fn=load_config_fn,
-        clean_mod=object(),
-        backend_factory=fake_backend_factory(
-            [("xiv", "xiv", "NOUN"), ("iv", "iv", "NOUN")]
+        dependencies=runner_dependencies(
+            load_config_fn,
+            fake_backend_factory([("xiv", "xiv", "NOUN"), ("iv", "iv", "NOUN")]),
         ),
-        build_sentence_splitter_fn=None,
-        render_stanza_package_table_fn=lambda *args, **kwargs: [],
     )
 
     assert rc.exit_code == 0

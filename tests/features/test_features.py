@@ -23,6 +23,7 @@ from nlpo_toolkit.corpus_analysis.analysis_records import NLPAnalysisRecord
 from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.config import NLPConfig
+from nlpo_toolkit.corpus_analysis.dependencies import FeatureDependencies
 
 
 def _doc_for_text(text: str) -> NLPDocument:
@@ -46,14 +47,20 @@ class DummyNLP:
         return _doc_for_text(text)
 
 
-def _build_pipeline(*_args, **_kwargs):
-    return DummyNLP(), "dummy"
-
-
 def _backend_factory(config: NLPConfig) -> BuiltNLPBackend:
     return BuiltNLPBackend(
         backend=DummyNLP(),
         info=NLPBackendInfo(name="fake", language=config.language),
+    )
+
+
+def _dependencies(cleaner=object()) -> FeatureDependencies:
+    from nlpo_toolkit.corpus_analysis.config import load_config
+
+    return FeatureDependencies(
+        load_config=load_config,
+        backend_factory=_backend_factory,
+        cleaner=cleaner,
     )
 
 
@@ -283,8 +290,7 @@ def test_run_features_one_group_writes_csv(tmp_path: Path) -> None:
         project_root=tmp_path,
         config_path=config_path,
         out=out,
-        build_pipeline_fn=_build_pipeline,
-        clean_mod=object(),
+        dependencies=_dependencies(),
     )
 
     assert rc == 0
@@ -299,16 +305,28 @@ def test_run_features_accepts_backend_factory(tmp_path: Path) -> None:
     (tmp_path / "input" / "a.txt").write_text("Rosa amat et puella.", encoding="utf-8")
     config_path = _write_config(tmp_path)
     out = tmp_path / "output" / "features.csv"
+    calls: list[NLPConfig] = []
+
+    def recording_factory(config: NLPConfig) -> BuiltNLPBackend:
+        calls.append(config)
+        return _backend_factory(config)
+
+    base = _dependencies()
 
     rc = run_features(
         project_root=tmp_path,
         config_path=config_path,
         out=out,
-        backend_factory=_backend_factory,
-        clean_mod=object(),
+        dependencies=FeatureDependencies(
+            load_config=base.load_config,
+            backend_factory=recording_factory,
+            cleaner=base.cleaner,
+        ),
     )
 
     assert rc == 0
+    assert len(calls) == 1
+    assert calls[0].language == "la"
     rows = list(csv.DictReader(out.open(encoding="utf-8")))
     assert rows[0]["group"] == "text"
     assert rows[0]["word_token_count"] == "4"
@@ -338,8 +356,7 @@ def test_run_features_two_groups_two_rows(tmp_path: Path) -> None:
         project_root=tmp_path,
         config_path=config_path,
         out=out,
-        build_pipeline_fn=_build_pipeline,
-        clean_mod=object(),
+        dependencies=_dependencies(),
     )
 
     rows = list(csv.DictReader(out.open(encoding="utf-8")))
@@ -358,8 +375,7 @@ def test_run_features_group_by_file(tmp_path: Path) -> None:
         config_path=config_path,
         out=out,
         group_by_file=True,
-        build_pipeline_fn=_build_pipeline,
-        clean_mod=object(),
+        dependencies=_dependencies(),
     )
 
     rows = list(csv.DictReader(out.open(encoding="utf-8")))
@@ -395,8 +411,9 @@ def test_run_features_auto_single_cleaned(tmp_path: Path) -> None:
         project_root=tmp_path,
         config_path=config_path,
         out=out,
-        build_pipeline_fn=_build_pipeline,
-        clean_mod=type("Clean", (), {"main": staticmethod(lambda _argv: 0)}),
+        dependencies=_dependencies(
+            type("Clean", (), {"main": staticmethod(lambda _argv: 0)})
+        ),
     )
 
     rows = list(csv.DictReader(out.open(encoding="utf-8")))
@@ -431,8 +448,9 @@ def test_run_features_auto_single_cleaned_errors_on_multiple(tmp_path: Path) -> 
         run_features(
             project_root=tmp_path,
             config_path=config_path,
-            build_pipeline_fn=_build_pipeline,
-            clean_mod=type("Clean", (), {"main": staticmethod(lambda _argv: 0)}),
+            dependencies=_dependencies(
+                type("Clean", (), {"main": staticmethod(lambda _argv: 0)})
+            ),
         )
 
 
