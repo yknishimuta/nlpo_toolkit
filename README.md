@@ -609,6 +609,9 @@ groups:
 out_dir: output
 ```
 
+When `preprocess.kind` is `cleaner`, failure to load or run the cleaner stops
+the command. Configured cleaner preprocessing is never silently skipped.
+
 `groups.files: "{cleaned_dir}/*.txt"` counts every `.txt` file currently in the
 cleaned directory. If you want to safely run one cleaned file at a time without
 editing `groups`, use `--auto-single-cleaned`:

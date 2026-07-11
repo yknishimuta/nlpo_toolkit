@@ -8,14 +8,16 @@ from typing import Any, Callable, Iterable, List, Mapping, Tuple
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 
 from .config import AppConfig
+from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner
 from .run_plan import RunPlan
 
 
 @dataclass(frozen=True)
 class RunnerDependencies:
     load_config: Callable[[Path], AppConfig | Mapping[str, object]]
-    clean_module: Any
     render_stanza_package_table: Callable[..., List[str]]
+    cleaner: CleanerRunner | None = None
+    cleaner_loader: CleanerLoader = load_default_cleaner
     build_pipeline: Callable[[str, str, bool], Tuple[Any, str]] | None = None
     backend_factory: Callable[[Any], BuiltNLPBackend] | None = None
     build_sentence_splitter: Callable[..., Any] | None = None

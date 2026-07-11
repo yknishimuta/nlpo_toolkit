@@ -6,6 +6,7 @@ from typing import Any, Dict, Mapping, Optional
 import yaml
 
 from .config import AppConfig, ensure_app_config
+from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner
 
 
 def _load_yaml(path: Path) -> Dict[str, Any]:
@@ -38,10 +39,11 @@ def run_preprocess_if_needed(
     *,
     cfg: AppConfig | Mapping[str, object],
     project_root: Path,
-    clean_mod: Any,
+    cleaner: CleanerRunner | None = None,
+    cleaner_loader: CleanerLoader = load_default_cleaner,
 ) -> Optional[Path]:
     """
-    If cfg.preprocess.kind == 'cleaner', run clean_mod.main([...]) and return cleaned_dir.
+    If cfg.preprocess.kind == 'cleaner', run its main entry point and return cleaned_dir.
     Otherwise return None.
     """
     from . import corpus
@@ -49,5 +51,6 @@ def run_preprocess_if_needed(
     return corpus.run_preprocess_if_needed(
         config=ensure_app_config(cfg),
         project_root=project_root,
-        clean_mod=clean_mod,
+        cleaner=cleaner,
+        cleaner_loader=cleaner_loader,
     )

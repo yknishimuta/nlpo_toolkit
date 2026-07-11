@@ -7,6 +7,7 @@ from nlpo_toolkit.backends import BuiltNLPBackend
 
 from . import analysis_pipeline, post_analysis, run_reporting, runtime
 from .config import AppConfig
+from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner
 from .runner_types import RunnerDependencies, RunResult
 
 
@@ -17,7 +18,8 @@ def run(
     config_path: Path,
     group_by_file: Optional[bool] = None,
     load_config_fn: Callable[[Path], AppConfig | Mapping[str, object]],
-    clean_mod: Any,
+    clean_mod: CleanerRunner | None = None,
+    cleaner_loader: CleanerLoader = load_default_cleaner,
     build_pipeline_fn: Callable[[str, str, bool], Tuple[Any, str]] | None = None,
     backend_factory: Callable[[Any], BuiltNLPBackend] | None = None,
     build_sentence_splitter_fn: Optional[Callable[..., Any]] = None,
@@ -28,7 +30,8 @@ def run(
     """Core runner. Dependencies are injectable for CLI and tests."""
     dependencies = RunnerDependencies(
         load_config=load_config_fn,
-        clean_module=clean_mod,
+        cleaner=clean_mod,
+        cleaner_loader=cleaner_loader,
         build_pipeline=build_pipeline_fn,
         backend_factory=backend_factory,
         build_sentence_splitter=build_sentence_splitter_fn,

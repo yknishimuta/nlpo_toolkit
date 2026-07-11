@@ -8,6 +8,7 @@ from types import MappingProxyType
 from typing import Iterable, Mapping, Sequence
 
 from .config import AppConfig, GroupConfig
+from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner, run_cleaner
 from .io_utils import expand_globs, read_concat
 from .normalizer import normalize_text
 from .preprocess import expand_cleaned_dir_placeholders, resolve_cleaner_output_dir
@@ -84,13 +85,21 @@ def resolve_cleaner_plan(config: AppConfig, project_root: Path) -> CleanerPlan |
     return CleanerPlan(config_path=resolve_project_path(project_root, config.preprocess.config))
 
 
-def execute_preprocess(plan: CleanerPlan | None, clean_mod: object) -> Path | None:
+def execute_preprocess(
+    plan: CleanerPlan | None,
+    *,
+    cleaner: CleanerRunner | None = None,
+    cleaner_loader: CleanerLoader = load_default_cleaner,
+) -> Path | None:
     if plan is None:
         return None
     if not plan.config_path.exists():
         raise FileNotFoundError(f"Cleaner config file not found: {plan.config_path}")
-    main = getattr(clean_mod, "main")
-    main([str(plan.config_path)])
+    run_cleaner(
+        config_path=plan.config_path,
+        cleaner=cleaner,
+        cleaner_loader=cleaner_loader,
+    )
     return resolve_cleaner_output_dir(plan.config_path)
 
 
@@ -106,9 +115,14 @@ def run_preprocess_if_needed(
     *,
     config: AppConfig,
     project_root: Path,
-    clean_mod: object,
+    cleaner: CleanerRunner | None = None,
+    cleaner_loader: CleanerLoader = load_default_cleaner,
 ) -> Path | None:
-    return execute_preprocess(resolve_cleaner_plan(config, project_root), clean_mod)
+    return execute_preprocess(
+        resolve_cleaner_plan(config, project_root),
+        cleaner=cleaner,
+        cleaner_loader=cleaner_loader,
+    )
 
 
 def resolve_group_files(

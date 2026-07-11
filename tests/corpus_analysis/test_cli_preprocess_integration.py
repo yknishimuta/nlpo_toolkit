@@ -4,7 +4,6 @@ from pathlib import Path
 import csv
 
 
-from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.cli import count as mod
 from tests.corpus_analysis.fake_nlp import fake_backend_factory
 
@@ -87,7 +86,8 @@ def test_preprocess_cleaner_integration_fixed(tmp_path, monkeypatch):
         (cleaned_dir / "c2.txt").write_text("Rosa pulchra est.\n", encoding="utf-8")
         return 0
 
-    monkeypatch.setattr(mod.clean_mod, "main", fake_cleaner_main)
+    class FakeCleaner:
+        main = staticmethod(fake_cleaner_main)
 
     monkeypatch.setattr(mod, "build_sentence_splitter", lambda *a, **k: DummySplitter())
     monkeypatch.setattr(
@@ -100,7 +100,11 @@ def test_preprocess_cleaner_integration_fixed(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "render_stanza_package_table", lambda *a, **k: ["[stanza stub]"])
 
     # --- Act
-    rc = cli.main(["count-vocabula", "--project-root", str(script_dir)])
+    rc = mod.run_count_vocabula(
+        project_root=script_dir,
+        config_path=groups_cfg_path,
+        cleaner=FakeCleaner(),
+    )
     assert rc == 0
     assert cleaner_called["ok"] is True
 

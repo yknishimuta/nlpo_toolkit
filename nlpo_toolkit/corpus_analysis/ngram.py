@@ -7,10 +7,10 @@ import re
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Iterable, TextIO
 
 from .config import load_config
+from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner
 from .corpus import prepare_corpora, resolve_corpus_work_items, run_preprocess_if_needed
 from .analysis_records import TokenRecord
 from .token_artifact import TokenArtifactError, read_token_records
@@ -222,14 +222,20 @@ def _rows_from_text(text: str, group: str) -> list[dict[str, str]]:
     ]
 
 
-def read_config_text_rows(project_root: Path, config_path: Path, *, clean_mod: object | None = None) -> list[dict[str, str]]:
+def read_config_text_rows(
+    project_root: Path,
+    config_path: Path,
+    *,
+    clean_mod: CleanerRunner | None = None,
+    cleaner_loader: CleanerLoader = load_default_cleaner,
+) -> list[dict[str, str]]:
     cfg = load_config(config_path)
     rows: list[dict[str, str]] = []
-    effective_clean_mod = clean_mod if clean_mod is not None else SimpleNamespace(main=lambda argv: 0)
     cleaned_dir = run_preprocess_if_needed(
         config=cfg,
         project_root=project_root,
-        clean_mod=effective_clean_mod,
+        cleaner=clean_mod,
+        cleaner_loader=cleaner_loader,
     )
     resolved = resolve_corpus_work_items(
         config=cfg,
@@ -307,7 +313,8 @@ def write_ngrams_from_config(
     top: int | None,
     output_format: str,
     out_path: Path | None,
-    clean_mod: object | None = None,
+    clean_mod: CleanerRunner | None = None,
+    cleaner_loader: CleanerLoader = load_default_cleaner,
 ) -> int:
     if field != "token":
         raise NgramError(
@@ -315,7 +322,12 @@ def write_ngrams_from_config(
             "Use --tokens with a token artifact for lemma n-grams."
         )
     rows = build_ngrams_from_rows(
-        read_config_text_rows(project_root, config_path, clean_mod=clean_mod),
+        read_config_text_rows(
+            project_root,
+            config_path,
+            clean_mod=clean_mod,
+            cleaner_loader=cleaner_loader,
+        ),
         n=n,
         field=field,
         by_group=by_group,

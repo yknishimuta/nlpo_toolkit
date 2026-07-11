@@ -13,6 +13,7 @@ from .corpus import (
     resolve_cleaner_plan,
     resolve_corpus_work_items,
 )
+from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner
 from .partition_validation import PartitionSpec, parse_partition_specs
 
 
@@ -147,7 +148,8 @@ def _resolve_cleaned_dir(
     config: AppConfig,
     project_root: Path,
     preprocess_mode: Literal["inspect", "execute"],
-    clean_mod: object | None,
+    cleaner: CleanerRunner | None,
+    cleaner_loader: CleanerLoader,
     preprocess_fn: Callable[..., Path | None] | None,
 ) -> Path | None:
     plan = resolve_cleaner_plan(config, project_root)
@@ -158,13 +160,16 @@ def _resolve_cleaned_dir(
             return preprocess_fn(
                 config=config,
                 project_root=project_root,
-                clean_mod=clean_mod,
+                cleaner=cleaner,
+                cleaner_loader=cleaner_loader,
             )
         if plan is None:
             return None
-        if clean_mod is None:
-            raise TypeError("clean_mod is required when preprocess_mode='execute'")
-        return execute_preprocess(plan, clean_mod)
+        return execute_preprocess(
+            plan,
+            cleaner=cleaner,
+            cleaner_loader=cleaner_loader,
+        )
     raise ValueError("preprocess_mode must be 'inspect' or 'execute'")
 
 
@@ -178,7 +183,8 @@ def build_run_plan(
     error_on_empty_group: bool,
     load_config_fn: Callable[[Path], AppConfig | Mapping[str, object]],
     preprocess_mode: Literal["inspect", "execute"],
-    clean_mod: object | None = None,
+    cleaner: CleanerRunner | None = None,
+    cleaner_loader: CleanerLoader = load_default_cleaner,
     preprocess_fn: Callable[..., Path | None] | None = None,
     validate_references: bool = True,
 ) -> RunPlan:
@@ -191,7 +197,8 @@ def build_run_plan(
         error_on_empty_group=error_on_empty_group,
         load_config_fn=load_config_fn,
         preprocess_mode=preprocess_mode,
-        clean_mod=clean_mod,
+        cleaner=cleaner,
+        cleaner_loader=cleaner_loader,
         preprocess_fn=preprocess_fn,
     )
     config = corpus_plan.config
@@ -243,7 +250,8 @@ def build_corpus_plan(
     error_on_empty_group: bool,
     load_config_fn: Callable[[Path], AppConfig | Mapping[str, object]],
     preprocess_mode: Literal["inspect", "execute"],
-    clean_mod: object | None = None,
+    cleaner: CleanerRunner | None = None,
+    cleaner_loader: CleanerLoader = load_default_cleaner,
     preprocess_fn: Callable[..., Path | None] | None = None,
 ) -> CorpusPlan:
     resolved_root, resolved_config = resolve_run_paths(
@@ -264,7 +272,8 @@ def build_corpus_plan(
         config=config,
         project_root=resolved_root,
         preprocess_mode=preprocess_mode,
-        clean_mod=clean_mod,
+        cleaner=cleaner,
+        cleaner_loader=cleaner_loader,
         preprocess_fn=preprocess_fn,
     )
     resolved = resolve_corpus_work_items(

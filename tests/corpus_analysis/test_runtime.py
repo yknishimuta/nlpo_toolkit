@@ -29,7 +29,7 @@ def test_prepare_run_context_validates_plan_before_nlp_initialization(tmp_path: 
             },
             "comparisons": [{"name": "ab", "group_a": "a", "group_b": "b"}],
         },
-        clean_module=object(),
+        cleaner=object(),
         backend_factory=backend_factory,
         render_stanza_package_table=lambda *_args, **_kwargs: [],
     )

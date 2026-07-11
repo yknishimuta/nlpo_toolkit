@@ -3,12 +3,12 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 from nlpo_toolkit.backends import create_nlp_backend
 from nlpo_toolkit.nlp import build_stanza_pipeline
 
 from ..config import load_config
+from ..cleaner_runtime import CleanerError
 from ..features import FeatureError, run_features
 from .common import (
     CLIContext,
@@ -17,12 +17,6 @@ from .common import (
     resolve_project_root,
     set_handler,
 )
-
-
-try:
-    from nlpo_toolkit.latin.cleaners import run_clean_corpus as clean_mod
-except Exception:
-    clean_mod = SimpleNamespace(main=lambda argv: 0)
 
 
 def build_pipeline(language: str, stanza_package: str, cpu_only: bool):
@@ -131,9 +125,8 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
             error_on_empty_group=bool(args.error_on_empty_group),
             build_pipeline_fn=legacy_build_pipeline,
             backend_factory=None if legacy_build_pipeline is not None else create_nlp_backend,
-            clean_mod=clean_mod,
             load_config_fn=load_config,
         )
-    except (FeatureError, ValueError, FileNotFoundError) as exc:
+    except (CleanerError, FeatureError, ValueError, FileNotFoundError) as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
         return 1

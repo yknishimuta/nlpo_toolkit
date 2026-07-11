@@ -17,6 +17,7 @@ from .analysis_records import (
     iter_nlp_analysis_records_from_text,
 )
 from .config import AppConfig, load_config
+from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner
 from .corpus import prepare_corpora, run_preprocess_if_needed
 from .run_plan import build_corpus_plan
 from .runtime import build_nlp_runtime
@@ -325,11 +326,10 @@ def run_features(
     error_on_empty_group: bool = False,
     build_pipeline_fn: Callable[[str, str, bool], tuple[Any, str]] | None = None,
     backend_factory: Callable[[Any], BuiltNLPBackend] | None = None,
-    clean_mod: Any = None,
+    clean_mod: CleanerRunner | None = None,
+    cleaner_loader: CleanerLoader = load_default_cleaner,
     load_config_fn: Callable[[Path], AppConfig | Mapping[str, object]] = load_config,
 ) -> int:
-    if clean_mod is None:
-        raise TypeError("clean_mod is required")
     try:
         plan = build_corpus_plan(
             project_root=project_root,
@@ -340,7 +340,8 @@ def run_features(
             error_on_empty_group=error_on_empty_group,
             load_config_fn=load_config_fn,
             preprocess_mode="execute",
-            clean_mod=clean_mod,
+            cleaner=clean_mod,
+            cleaner_loader=cleaner_loader,
             preprocess_fn=run_preprocess_if_needed,
         )
     except FileNotFoundError as exc:

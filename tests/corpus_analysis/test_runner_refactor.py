@@ -51,7 +51,7 @@ def _backend_factory(config):
 def _base_dependencies():
     return RunnerDependencies(
         load_config=lambda _path: {},
-        clean_module=object(),
+        cleaner=object(),
         backend_factory=_backend_factory,
         render_stanza_package_table=lambda *_args, **_kwargs: [],
     )
@@ -93,7 +93,7 @@ def test_prepare_run_context_resolves_per_file_work_items(tmp_path: Path) -> Non
 
     deps = RunnerDependencies(
         load_config=load_config,
-        clean_module=object(),
+        cleaner=object(),
         backend_factory=_backend_factory,
         render_stanza_package_table=lambda *_args, **_kwargs: [],
     )
@@ -147,7 +147,7 @@ def test_analyze_one_corpus_writes_expected_outputs_from_record_pipeline(tmp_pat
 
     deps = RunnerDependencies(
         load_config=load_config,
-        clean_module=object(),
+        cleaner=object(),
         backend_factory=_backend_factory,
         render_stanza_package_table=lambda *_args, **_kwargs: [],
     )
@@ -200,7 +200,7 @@ def test_summary_lines_and_metadata_include_existing_fields(tmp_path: Path) -> N
 
     deps = RunnerDependencies(
         load_config=load_config,
-        clean_module=object(),
+        cleaner=object(),
         backend_factory=_backend_factory,
         render_stanza_package_table=lambda *_args, **_kwargs: [],
     )

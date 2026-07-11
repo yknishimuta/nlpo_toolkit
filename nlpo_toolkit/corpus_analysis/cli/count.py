@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 from nlpo_toolkit.backends import create_nlp_backend
 from nlpo_toolkit.nlp import (
@@ -14,6 +13,7 @@ from nlpo_toolkit.nlp import (
 
 from ..archive import ArchiveOptions, RunArchiveError, create_run_archive
 from ..config import load_config
+from ..cleaner_runtime import CleanerError, CleanerLoader, CleanerRunner, load_default_cleaner
 from ..dry_run import dry_run_count_vocabula
 from ..runner import run
 from .common import (
@@ -23,12 +23,6 @@ from .common import (
     resolve_project_root,
     set_handler,
 )
-
-try:
-    from nlpo_toolkit.latin.cleaners import run_clean_corpus as clean_mod
-except Exception:
-    clean_mod = SimpleNamespace(main=lambda argv: 0)
-
 
 def build_pipeline(language: str, stanza_package: str, cpu_only: bool):
     backend = build_stanza_pipeline(
@@ -60,6 +54,8 @@ def run_count_vocabula(
     error_on_empty_group: bool = False,
     auto_single_cleaned: bool = False,
     command_line: list[str] | None = None,
+    cleaner: CleanerRunner | None = None,
+    cleaner_loader: CleanerLoader = load_default_cleaner,
 ) -> int:
     try:
         legacy_build_pipeline = build_pipeline if build_pipeline is not _DEFAULT_BUILD_PIPELINE else None
@@ -73,7 +69,8 @@ def run_count_vocabula(
             config_path=config_path,
             group_by_file=group_by_file,
             load_config_fn=load_config,
-            clean_mod=clean_mod,
+            clean_mod=cleaner,
+            cleaner_loader=cleaner_loader,
             build_pipeline_fn=legacy_build_pipeline,
             backend_factory=None if legacy_build_pipeline is not None else create_nlp_backend,
             build_sentence_splitter_fn=legacy_sentence_splitter,
@@ -81,6 +78,9 @@ def run_count_vocabula(
             error_on_empty_group=error_on_empty_group,
             auto_single_cleaned=auto_single_cleaned,
         )
+    except (CleanerError, FileNotFoundError) as exc:
+        print(f"[ERROR] {exc}", file=sys.stderr)
+        return 1
     except ValueError as exc:
         if auto_single_cleaned and "--auto-single-cleaned" in str(exc):
             print(f"[ERROR] {exc}", file=sys.stderr)

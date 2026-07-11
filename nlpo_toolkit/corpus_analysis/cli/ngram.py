@@ -3,16 +3,10 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
+from ..cleaner_runtime import CleanerError
 from ..ngram import NgramError, write_ngrams_from_config, write_ngrams_from_tokens
 from .common import CLIContext, resolve_config_path, resolve_project_root, set_handler
-
-
-try:
-    from nlpo_toolkit.latin.cleaners import run_clean_corpus as clean_mod
-except Exception:
-    clean_mod = SimpleNamespace(main=lambda argv: 0)
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:
@@ -86,8 +80,7 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
             top=args.top,
             output_format=args.format,
             out_path=args.out,
-            clean_mod=clean_mod,
         )
-    except NgramError as exc:
+    except (CleanerError, NgramError, ValueError, FileNotFoundError) as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
         return 1

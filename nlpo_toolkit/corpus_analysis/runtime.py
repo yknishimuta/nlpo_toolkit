@@ -104,7 +104,8 @@ def prepare_run_context(
         error_on_empty_group=error_on_empty_group,
         load_config_fn=dependencies.load_config,
         preprocess_mode="execute",
-        clean_mod=dependencies.clean_module,
+        cleaner=dependencies.cleaner,
+        cleaner_loader=dependencies.cleaner_loader,
         preprocess_fn=run_preprocess_if_needed,
     )
     ensure_out_dir(plan.out_dir)

@@ -81,7 +81,7 @@ def test_inspect_mode_does_not_run_cleaner(tmp_path: Path) -> None:
             }
         ),
         preprocess_mode="inspect",
-        clean_mod=FailingCleaner,
+        cleaner=FailingCleaner,
     )
 
     assert plan.cleaned_dir == (tmp_path / "cleaned").resolve()
@@ -116,7 +116,7 @@ def test_execute_mode_runs_cleaner_before_resolving_groups(tmp_path: Path) -> No
             }
         ),
         preprocess_mode="execute",
-        clean_mod=FakeCleaner,
+        cleaner=FakeCleaner,
     )
 
     assert plan.group_files["text"] == ((tmp_path / "cleaned" / "made.txt").resolve(),)
@@ -173,7 +173,7 @@ def test_inspect_and_execute_match_when_cleaned_files_already_exist(tmp_path: Pa
         error_on_empty_group=False,
         load_config_fn=_loader(data),
         preprocess_mode="execute",
-        clean_mod=NoopCleaner,
+        cleaner=NoopCleaner,
     )
 
     assert inspect_plan.grouping_mode == execute_plan.grouping_mode
@@ -444,7 +444,7 @@ def test_prepare_run_context_validates_plan_before_nlp_initialization(tmp_path: 
                 "comparisons": [{"name": "ab", "group_a": "a", "group_b": "b"}],
             }
         ),
-        clean_module=object(),
+        cleaner=object(),
         backend_factory=backend_factory,
         render_stanza_package_table=lambda *_args, **_kwargs: [],
     )
