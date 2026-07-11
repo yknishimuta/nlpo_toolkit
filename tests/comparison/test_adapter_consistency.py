@@ -6,14 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from nlpo_toolkit.compare import load_frequency_table
+from nlpo_toolkit.comparison.frequency_io import load_frequency_table
 from nlpo_toolkit.comparison import (
     PairwiseComparisonOptions,
     ZeroHandling,
     ZeroHandlingMode,
     compare_pair,
 )
-from nlpo_toolkit.corpus_analysis.comparison import ComparisonSpec, compare_counters
+from nlpo_toolkit.comparison.configured import ComparisonSpec, compare_counters
 
 
 def _write_frequency(path: Path, rows: list[tuple[str, int]]) -> Path:

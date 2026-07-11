@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from nlpo_toolkit.compare import CompareError, run_compare
+from nlpo_toolkit.comparison.cli_service import CompareError, run_compare
 
 from .common import CLIContext, set_handler
 

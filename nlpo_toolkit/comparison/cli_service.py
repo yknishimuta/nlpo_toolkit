@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import csv
 import io
-import math
 import sys
 from pathlib import Path
-from typing import Any, Iterable, TextIO
+from typing import Any, TextIO
 
 from nlpo_toolkit.comparison import (
     ComparisonEngineError,
@@ -17,123 +16,11 @@ from nlpo_toolkit.comparison import (
     compare_pair,
 )
 
-KEY_COLUMN_CANDIDATES = ("lemma", "term", "key", "ngram", "token")
-COUNT_COLUMN_CANDIDATES = ("count", "freq", "frequency")
+from .frequency_io import CompareError, labels_from_paths, load_frequency_table
 METRICS = {"relative", "difference", "ratio", "log-ratio"}
 SORT_KEYS = {"abs-log-ratio", "log-ratio", "difference", "range-relative", "total", "term"}
 
 
-class CompareError(RuntimeError):
-    pass
-
-
-def detect_columns(
-    fieldnames: Iterable[str],
-    key_column: str | None = None,
-    count_column: str | None = None,
-) -> tuple[str, str]:
-    fields = [str(f) for f in fieldnames]
-    field_lookup = {f.lower(): f for f in fields}
-
-    if key_column is not None:
-        if key_column not in fields:
-            raise CompareError(f"Key column not found: {key_column}")
-        key = key_column
-    else:
-        key = ""
-        for candidate in KEY_COLUMN_CANDIDATES:
-            if candidate in field_lookup:
-                key = field_lookup[candidate]
-                break
-        if not key:
-            raise CompareError(
-                "Could not detect key column. Tried: "
-                + ", ".join(KEY_COLUMN_CANDIDATES)
-            )
-
-    if count_column is not None:
-        if count_column not in fields:
-            raise CompareError(f"Count column not found: {count_column}")
-        count = count_column
-    else:
-        count = ""
-        for candidate in COUNT_COLUMN_CANDIDATES:
-            if candidate in field_lookup:
-                count = field_lookup[candidate]
-                break
-        if not count:
-            raise CompareError(
-                "Could not detect count column. Tried: "
-                + ", ".join(COUNT_COLUMN_CANDIDATES)
-            )
-
-    return key, count
-
-
-def _read_count(raw: str, *, path: Path, row_number: int, column: str) -> float:
-    try:
-        value = float(str(raw).strip())
-    except ValueError as exc:
-        raise CompareError(
-            f"Invalid numeric count in {path} row {row_number}, column {column}: {raw!r}"
-        ) from exc
-    if not math.isfinite(value):
-        raise CompareError(
-            f"Invalid numeric count in {path} row {row_number}, column {column}: {raw!r}"
-        )
-    return value
-
-
-def load_frequency_csv(
-    path: Path,
-    key_column: str | None = None,
-    count_column: str | None = None,
-) -> dict[str, float]:
-    path = Path(path)
-    if not path.exists():
-        raise CompareError(f"Input file not found: {path}")
-    if not path.is_file():
-        raise CompareError(f"Input path is not a file: {path}")
-
-    with path.open("r", encoding="utf-8", newline="") as f:
-        reader = csv.DictReader(f)
-        if reader.fieldnames is None:
-            raise CompareError(f"Input CSV has no header: {path}")
-        key_col, count_col = detect_columns(
-            reader.fieldnames,
-            key_column=key_column,
-            count_column=count_column,
-        )
-
-        table: dict[str, float] = {}
-        for row_number, row in enumerate(reader, start=2):
-            key = str(row.get(key_col) or "").strip()
-            if not key:
-                continue
-            count = _read_count(
-                str(row.get(count_col) or ""),
-                path=path,
-                row_number=row_number,
-                column=count_col,
-            )
-            table[key] = table.get(key, 0.0) + count
-    return table
-
-
-def load_frequency_table(
-    path: Path,
-    *,
-    label: str,
-    key_column: str | None = None,
-    count_column: str | None = None,
-) -> FrequencyTable:
-    try:
-        return FrequencyTable.from_counts(
-            label,
-            load_frequency_csv(path, key_column=key_column, count_column=count_column),
-        )
-    except ComparisonEngineError as exc:
-        raise CompareError(str(exc)) from exc
 
 
 def _frequency_table_from_mapping(label: str, table: dict[str, float]) -> FrequencyTable:
@@ -221,25 +108,6 @@ def compare_frequency_tables(
         return _render_many_rows(result)
     except ComparisonEngineError as exc:
         raise CompareError(str(exc)) from exc
-
-
-def labels_from_paths(paths: list[Path]) -> list[str]:
-    labels: list[str] = []
-    used: set[str] = set()
-    for path in paths:
-        label = Path(path).stem
-        for prefix in ("frequency_", "noun_frequency_"):
-            if label.startswith(prefix):
-                label = label[len(prefix):]
-        label = label or "input"
-        base = label
-        i = 2
-        while label in used:
-            label = f"{base}_{i}"
-            i += 1
-        used.add(label)
-        labels.append(label)
-    return labels
 
 
 def sort_compare_rows(

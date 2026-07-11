@@ -4,11 +4,13 @@ import sys
 from pathlib import Path
 from typing import Mapping
 
-from .comparison import (
+from nlpo_toolkit.comparison.configured import (
+    run_comparisons,
+)
+from nlpo_toolkit.comparison.writers import (
     comparison_csv_name,
     comparison_result_meta,
-    run_comparisons,
-    write_comparison_csv,
+    write_group_comparison_csv,
     write_group_comparisons_json,
 )
 from .partition_validation import (
@@ -87,7 +89,7 @@ def execute_group_comparisons(
     for result in comparison_results:
         csv_name = comparison_csv_name(result.spec)
         csv_path = plan.out_dir / csv_name
-        write_comparison_csv(csv_path, result)
+        write_group_comparison_csv(csv_path, result)
         generated_outputs.append(csv_path)
         metadata.append(comparison_result_meta(result, csv_name=csv_name))
 

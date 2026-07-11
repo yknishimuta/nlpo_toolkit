@@ -5,7 +5,7 @@ from collections import Counter
 
 import pytest
 
-from nlpo_toolkit.corpus_analysis.comparison import (
+from nlpo_toolkit.comparison.configured import (
     ComparisonSpec,
     calculate_log_likelihood,
     calculate_log_ratio,

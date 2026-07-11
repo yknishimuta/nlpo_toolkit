@@ -7,7 +7,7 @@ from typing import Literal, Mapping
 
 import yaml
 
-from .comparison import ComparisonSpec
+from nlpo_toolkit.comparison.configured import ComparisonSpec
 from .partition_validation import PartitionSpec
 
 
@@ -594,7 +594,7 @@ def _parse_partition_specs(raw: Mapping[str, object]) -> tuple[PartitionSpec, ..
 
 
 def _parse_comparison_specs(raw: Mapping[str, object]) -> tuple[ComparisonSpec, ...]:
-    from .comparison import parse_comparison_specs
+    from nlpo_toolkit.comparison.configured import parse_comparison_specs
 
     return tuple(parse_comparison_specs(raw))
 

@@ -5,14 +5,13 @@ import io
 import math
 from pathlib import Path
 
-from nlpo_toolkit.compare import (
+from nlpo_toolkit.comparison.cli_service import (
     CompareError,
     compare_frequency_tables,
-    detect_columns,
-    load_frequency_csv,
     run_compare,
     write_compare_output,
 )
+from nlpo_toolkit.comparison.frequency_io import detect_columns, load_frequency_csv
 
 
 def _write_csv(path: Path, header: str, rows: list[str]) -> Path:

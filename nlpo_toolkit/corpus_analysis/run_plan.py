@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Literal, Mapping, Sequence
 
-from .comparison import ComparisonSpec, parse_comparison_specs
+from nlpo_toolkit.comparison.configured import ComparisonSpec, parse_comparison_specs
 from .config import AppConfig, ensure_app_config
 from .corpus import (
     CorpusWorkItem,

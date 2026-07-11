@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from nlpo_toolkit.corpus_analysis.config import load_config
-from nlpo_toolkit.corpus_analysis.comparison import parse_comparison_specs
+from nlpo_toolkit.comparison.configured import parse_comparison_specs
 
 
 def _write_cfg(tmp_path: Path, body: str) -> Path:
