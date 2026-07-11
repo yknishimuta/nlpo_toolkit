@@ -33,20 +33,23 @@ def _format_normalization_kv(norm: object) -> str:
     else:
         return "(none)"
 
-    keys_first = ["enabled", "casefold", "uv", "ij", "diacritics"]
+    keys_first = [
+        "enabled",
+        "unicode_nf",
+        "normalize_ligatures",
+        "strip_diacritics",
+        "map_u_v",
+        "map_i_j",
+        "casefold",
+    ]
     parts: list[str] = []
 
     for k in keys_first:
         if k in norm_dict:
             parts.append(f"{k}={norm_dict[k]}")
 
-    lig = norm_dict.get("ligatures")
-    if isinstance(lig, dict) and lig:
-        lig_s = ",".join(f"{a}→{b}" for a, b in sorted(lig.items(), key=lambda x: x[0]))
-        parts.append(f"ligatures={lig_s}")
-
     for k in sorted(norm_dict.keys()):
-        if k in keys_first or k == "ligatures":
+        if k in keys_first:
             continue
         parts.append(f"{k}={norm_dict[k]}")
 

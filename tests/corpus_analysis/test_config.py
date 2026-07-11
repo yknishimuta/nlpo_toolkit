@@ -281,11 +281,6 @@ def test_config_to_dict_round_trips_cleaner_and_full_sections():
                 "manifest_key_mode": "relative",
                 "lock_timeout_sec": 45.5,
             },
-            "prune": {
-                "keep_days": 7,
-                "keep_files": 20,
-                "lock_ttl_sec": 60,
-            },
             "analysis_unit": "surface",
             "csv_header": ["form", "count"],
             "out_dir": "custom-output",
@@ -441,6 +436,7 @@ def test_config_to_dict_output_is_yaml_safe():
         "stanza_pkg",
         "upos_targets",
         "vocab_path",
+        "prune",
     ],
 )
 def test_removed_top_level_keys_are_rejected(removed_key: str):
@@ -490,6 +486,7 @@ def test_app_config_has_no_unused_vocab_path():
     names = {field.name for field in fields(AppConfig)}
 
     assert "vocab_path" not in names
+    assert "prune" not in names
 
 
 def test_normalization_config_has_only_active_fields():
@@ -528,6 +525,11 @@ def test_config_to_dict_uses_only_canonical_schema():
 
     assert "nlp" in serialized
     assert "filters" in serialized
+    assert "exclude_lemmas" not in serialized["filters"]
+    assert "prune" not in serialized
+
+    normalization = serialized["normalization"]
+    assert {"uv", "ij", "diacritics", "ligatures"}.isdisjoint(normalization)
 
     for removed in {
         "group",

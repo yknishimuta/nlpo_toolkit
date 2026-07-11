@@ -31,7 +31,6 @@ KNOWN_TOP_LEVEL_KEYS = frozenset(
         "normalization",
         "out_dir",
         "preprocess",
-        "prune",
         "ref_tags",
         "trace",
         "validations",
@@ -76,7 +75,6 @@ KNOWN_ARCHIVE_KEYS = frozenset(
 KNOWN_ANALYSIS_CACHE_KEYS = frozenset(
     {"enabled", "dir", "use_manifest", "manifest_key_mode", "lock_timeout_sec"}
 )
-KNOWN_PRUNE_KEYS = frozenset({"keep_days", "keep_files", "lock_ttl_sec"})
 KNOWN_VALIDATIONS_KEYS = frozenset({"partitions"})
 
 
@@ -176,13 +174,6 @@ class AnalysisCacheConfig:
 
 
 @dataclass(frozen=True)
-class PruneConfig:
-    keep_days: int | None = None
-    keep_files: int | None = None
-    lock_ttl_sec: int | None = None
-
-
-@dataclass(frozen=True)
 class AppConfig:
     groups: Mapping[str, GroupConfig]
     preprocess: PreprocessConfig = PreprocessConfig()
@@ -196,7 +187,6 @@ class AppConfig:
     artifacts: ArtifactsConfig = field(default_factory=ArtifactsConfig)
     archive: ArchiveConfig = ArchiveConfig()
     analysis_cache: AnalysisCacheConfig = AnalysisCacheConfig()
-    prune: PruneConfig = PruneConfig()
     analysis_unit: AnalysisUnit = "lemma"
     out_dir: str = "output"
     csv_header: tuple[str, str] | None = None
@@ -581,16 +571,6 @@ def _parse_analysis_cache_config(value: object) -> AnalysisCacheConfig:
     )
 
 
-def _parse_prune_config(value: object) -> PruneConfig:
-    prune = _optional_mapping(value, context="prune")
-    _reject_unknown_keys(prune, allowed=KNOWN_PRUNE_KEYS, context="prune")
-    return PruneConfig(
-        keep_days=_optional_int(prune.get("keep_days"), context="prune.keep_days", minimum=0),
-        keep_files=_optional_int(prune.get("keep_files"), context="prune.keep_files", minimum=0),
-        lock_ttl_sec=_optional_int(prune.get("lock_ttl_sec"), context="prune.lock_ttl_sec", minimum=0),
-    )
-
-
 def _parse_analysis_unit(value: object) -> AnalysisUnit:
     unit = value if value is not None else "lemma"
     if unit not in {"lemma", "surface"}:
@@ -647,7 +627,6 @@ def _build_app_config(raw: Mapping[str, object]) -> AppConfig:
         artifacts=_parse_artifacts_config(raw.get("artifacts")),
         archive=_parse_archive_config(raw.get("archive")),
         analysis_cache=_parse_analysis_cache_config(raw.get("analysis_cache")),
-        prune=_parse_prune_config(raw.get("prune")),
         analysis_unit=_parse_analysis_unit(raw.get("analysis_unit")),
         out_dir=_str_value(raw.get("out_dir", "output"), context="out_dir"),
         csv_header=_parse_csv_header(raw.get("csv_header")),
@@ -794,11 +773,6 @@ def config_to_dict(config: AppConfig) -> dict[str, object]:
             "runs_dir": config.archive.runs_dir,
             "include_input": config.archive.include_input,
             "include_cleaned": config.archive.include_cleaned,
-        },
-        "prune": {
-            "keep_days": config.prune.keep_days,
-            "keep_files": config.prune.keep_files,
-            "lock_ttl_sec": config.prune.lock_ttl_sec,
         },
         "analysis_unit": config.analysis_unit,
         "out_dir": config.out_dir,
