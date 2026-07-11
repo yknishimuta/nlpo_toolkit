@@ -72,7 +72,7 @@ artifacts:
     path: output/tokens.tsv
 """
 
-    assert _run(tmp_path, config, backend) == 0
+    assert _run(tmp_path, config, backend).exit_code == 0
     assert len(backend.calls) == 1
 
     token_path = tmp_path / "output" / "tokens.tsv"
@@ -109,7 +109,7 @@ artifacts:
     path: output/tokens.tsv
 """
 
-    assert _run(tmp_path, config, backend) == 0
+    assert _run(tmp_path, config, backend).exit_code == 0
     assert len(backend.calls) == 1
     assert len(list(read_token_records(tmp_path / "output" / "tokens.tsv"))) == 4
 

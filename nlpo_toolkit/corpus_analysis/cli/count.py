@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,8 +12,8 @@ from nlpo_toolkit.nlp import (
     render_stanza_package_table,
 )
 
-from ..archive import RunArchiveError, create_run_archive
-from ..config import ensure_app_config, load_config
+from ..archive import ArchiveOptions, RunArchiveError, create_run_archive
+from ..config import load_config
 from ..dry_run import dry_run_count_vocabula
 from ..runner import run
 from .common import (
@@ -69,7 +68,7 @@ def run_count_vocabula(
             if build_sentence_splitter is not _DEFAULT_BUILD_SENTENCE_SPLITTER
             else None
         )
-        rc = run(
+        result = run(
             project_root=project_root,
             config_path=config_path,
             group_by_file=group_by_file,
@@ -88,41 +87,40 @@ def run_count_vocabula(
             return 1
         raise
 
-    cfg = ensure_app_config(load_config(config_path))
+    cfg = result.plan.config
     archive_enabled = cfg.archive.enabled
     should_archive = archive_run or bool(run_name) or archive_enabled
-    if rc != 0 or not should_archive:
-        return rc
+    if result.exit_code != 0 or not should_archive:
+        return result.exit_code
 
     effective_runs_dir = runs_dir if runs_dir is not None else Path(cfg.archive.runs_dir)
     effective_include_input = include_input or cfg.archive.include_input
     effective_include_cleaned = include_cleaned or cfg.archive.include_cleaned
 
     try:
-        run_dir = create_run_archive(
-            project_root=project_root,
-            config_path=config_path,
-            config=cfg,
-            run_name=run_name,
-            runs_dir=effective_runs_dir,
-            include_cleaned=effective_include_cleaned,
-            include_input=effective_include_input,
-            command_line=command_line,
+        archive_result = create_run_archive(
+            result=result,
+            options=ArchiveOptions(
+                run_name=run_name,
+                runs_dir=effective_runs_dir,
+                include_cleaned=effective_include_cleaned,
+                include_input=effective_include_input,
+                command_line=tuple(command_line or ()),
+            ),
         )
     except (RunArchiveError, ValueError) as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
         return 1
 
     try:
-        display_run_dir = run_dir.relative_to(project_root)
+        display_run_dir = archive_result.run_dir.relative_to(project_root)
     except ValueError:
-        display_run_dir = run_dir
+        display_run_dir = archive_result.run_dir
 
-    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
     print(f"[ARCHIVE] saved run archive: {display_run_dir}")
-    print(f"[ARCHIVE] included input files: {len(manifest.get('copied_input_files', []))}")
-    print(f"[ARCHIVE] included cleaned files: {len(manifest.get('copied_cleaned_files', []))}")
-    return rc
+    print(f"[ARCHIVE] included input files: {archive_result.copied_input_count}")
+    print(f"[ARCHIVE] included cleaned files: {archive_result.copied_cleaned_count}")
+    return result.exit_code
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:

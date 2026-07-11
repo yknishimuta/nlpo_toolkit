@@ -65,7 +65,7 @@ def test_run_minimal_success(tmp_path: Path, monkeypatch):
         build_sentence_splitter_fn=None,
         render_stanza_package_table_fn=render_stanza_package_table_fn,
     )
-    assert rc == 0
+    assert rc.exit_code == 0
 
     out_dir = tmp_path / "output"
     assert (out_dir / "summary.txt").exists()
@@ -117,7 +117,7 @@ def test_run_analysis_unit_surface_uses_surface_form(tmp_path: Path, monkeypatch
         build_sentence_splitter_fn=None,
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
-    assert rc == 0
+    assert rc.exit_code == 0
     assert calls == [{"x": 1}]
 
 def test_run_dictcheck_requires_wordlist(tmp_path: Path, monkeypatch):
@@ -186,7 +186,7 @@ def test_run_dictcheck_writes_known_unknown(tmp_path: Path, monkeypatch):
         build_sentence_splitter_fn=None,
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
-    assert rc == 0
+    assert rc.exit_code == 0
 
     assert calls == [
         "frequency_g.csv",
@@ -239,7 +239,7 @@ def test_run_applies_filter_options_in_record_pipeline(tmp_path: Path, monkeypat
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
     
-    assert rc == 0
+    assert rc.exit_code == 0
     assert counters == [{"xiv": 1, "rosa": 1}]
 
 
@@ -284,7 +284,7 @@ def test_run_group_by_file_writes_one_csv_per_input_file(tmp_path: Path, monkeyp
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
 
-    assert rc == 0
+    assert rc.exit_code == 0
     assert [name for name, _counter in csv_calls] == [
         "frequency_file2.csv",
         "frequency_virgil_aeneis.csv",
@@ -331,7 +331,7 @@ def test_run_group_by_file_cli_override(tmp_path: Path, monkeypatch):
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
 
-    assert rc == 0
+    assert rc.exit_code == 0
     assert csv_names == ["frequency_file3.csv"]
 
 
@@ -364,7 +364,7 @@ def test_run_meta_records_generated_outputs_and_actual_group_files(tmp_path: Pat
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
 
-    assert rc == 0
+    assert rc.exit_code == 0
     meta = json.loads((project_root / "output" / "run_meta.json").read_text(encoding="utf-8"))
     assert meta["groups_files"] == {"text": [str(used.resolve())]}
     generated_names = {Path(p).name for p in meta["generated_outputs"]}
@@ -422,7 +422,7 @@ def test_run_auto_single_cleaned_records_selected_file(tmp_path: Path, monkeypat
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
 
-    assert rc == 0
+    assert rc.exit_code == 0
     meta = json.loads((project_root / "output" / "run_meta.json").read_text(encoding="utf-8"))
     assert meta["grouping"] == {"mode": "auto_single_cleaned", "auto_group_name": "text"}
     assert meta["groups_files"] == {"text": [str(selected.resolve())]}

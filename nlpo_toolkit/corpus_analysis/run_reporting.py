@@ -15,7 +15,10 @@ from .runner_types import (
     PartitionRunResult,
     RunContext,
     RunnerDependencies,
+    RunResult,
+    deduplicate_resolved_paths,
 )
+from .config_references import build_config_file_inventory, cleaner_input_files
 
 
 @dataclass(frozen=True)
@@ -255,4 +258,53 @@ def write_run_report(
         summary_path=summary_path,
         metadata_path=run_meta_path,
         generated_outputs=generated_outputs,
+    )
+
+
+def build_run_result(
+    *,
+    context: RunContext,
+    analysis: AnalysisResults,
+    partitions: PartitionRunResult,
+    report: RunReport,
+) -> RunResult:
+    plan = context.plan
+    groups_files = {
+        label: deduplicate_resolved_paths(files)
+        for label, files in analysis.files_by_group.items()
+    }
+    used_files = deduplicate_resolved_paths(
+        path for files in groups_files.values() for path in files
+    )
+    if plan.cleaned_dir is None:
+        input_files = used_files
+        cleaned_files: tuple[Path, ...] = ()
+    else:
+        input_files = deduplicate_resolved_paths(
+            cleaner_input_files(plan.config, plan.project_root)
+        )
+        cleaned_root = plan.cleaned_dir.resolve()
+        cleaned_files = tuple(
+            path for path in used_files if path.is_relative_to(cleaned_root)
+        )
+    trace_files = deduplicate_resolved_paths(analysis.trace_paths.values())
+    trace_set = set(trace_files)
+    output_files = deduplicate_resolved_paths(
+        path for path in report.generated_outputs if Path(path).resolve() not in trace_set
+    )
+    return RunResult(
+        exit_code=partitions.exit_code,
+        plan=plan,
+        groups_files=groups_files,
+        input_files=input_files,
+        cleaned_files=cleaned_files,
+        output_files=output_files,
+        trace_files=trace_files,
+        config_files=build_config_file_inventory(
+            config=plan.config,
+            config_path=plan.config_path,
+            project_root=plan.project_root,
+        ),
+        summary_path=report.summary_path.resolve(),
+        metadata_path=report.metadata_path.resolve(),
     )

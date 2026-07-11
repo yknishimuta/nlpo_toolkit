@@ -68,7 +68,7 @@ def _run(project_root: Path, config_path: Path, backend: FakeNLPBackend) -> None
         build_sentence_splitter_fn=None,
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
-    assert rc == 0
+    assert rc.exit_code == 0
 
 
 def _frequency(project_root: Path) -> dict[str, int]:

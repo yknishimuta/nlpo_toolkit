@@ -184,7 +184,7 @@ def test_runner_integration_uses_roman_exception_file_in_final_csv(tmp_path: Pat
         render_stanza_package_table_fn=lambda *args, **kwargs: [],
     )
 
-    assert rc == 0
+    assert rc.exit_code == 0
     rows = list(
         csv.DictReader(
             (tmp_path / "output" / "frequency_group_a.csv").open(
@@ -239,7 +239,7 @@ def test_runner_loads_roman_exceptions_once_for_multiple_groups(tmp_path: Path, 
         render_stanza_package_table_fn=lambda *args, **kwargs: [],
     )
 
-    assert rc == 0
+    assert rc.exit_code == 0
     assert calls == [(tmp_path / "config" / "roman.txt").resolve()]
     for label in ("group_a", "group_b"):
         rows = list(

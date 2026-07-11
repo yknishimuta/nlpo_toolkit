@@ -127,7 +127,7 @@ def _run(tmp_path: Path, config_text: str, backend: FakeBackend) -> dict[str, in
         build_sentence_splitter_fn=None,
         render_stanza_package_table_fn=lambda *a, **k: [],
     )
-    assert rc == 0
+    assert rc.exit_code == 0
     with (tmp_path / "output" / "frequency_text.csv").open("r", encoding="utf-8", newline="") as f:
         rows = list(csv.DictReader(f))
     return {row["lemma"]: int(row["count"]) for row in rows}

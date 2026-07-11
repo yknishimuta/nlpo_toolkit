@@ -7,7 +7,7 @@ from nlpo_toolkit.backends import BuiltNLPBackend
 
 from . import analysis_pipeline, post_analysis, run_reporting, runtime
 from .config import AppConfig
-from .runner_types import RunnerDependencies
+from .runner_types import RunnerDependencies, RunResult
 
 
 def run(
@@ -24,7 +24,7 @@ def run(
     render_stanza_package_table_fn: Callable[..., List[str]] | None = None,
     error_on_empty_group: bool = False,
     auto_single_cleaned: bool = False,
-) -> int:
+) -> RunResult:
     """Core runner. Dependencies are injectable for CLI and tests."""
     dependencies = RunnerDependencies(
         load_config=load_config_fn,
@@ -54,11 +54,16 @@ def run(
         context=context,
         analysis=analysis,
     )
-    run_reporting.write_run_report(
+    report = run_reporting.write_run_report(
         context=context,
         analysis=analysis,
         partitions=partitions,
         comparisons=comparisons,
         dependencies=dependencies,
     )
-    return partitions.exit_code
+    return run_reporting.build_run_result(
+        context=context,
+        analysis=analysis,
+        partitions=partitions,
+        report=report,
+    )

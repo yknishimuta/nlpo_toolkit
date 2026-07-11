@@ -82,7 +82,7 @@ def test_runner_validates_final_group_counters_and_writes_outputs(tmp_path: Path
         },
     )
 
-    assert rc == 0
+    assert rc.exit_code == 0
     out_dir = tmp_path / "output"
     csv_path = out_dir / "partition_validation_full_split.csv"
     json_path = out_dir / "partition_validation.json"
@@ -146,7 +146,7 @@ def test_runner_compares_after_lemma_normalize(tmp_path: Path) -> None:
         },
     )
 
-    assert rc == 0
+    assert rc.exit_code == 0
     meta = json.loads((tmp_path / "output" / "run_meta.json").read_text(encoding="utf-8"))
     assert meta["partition_validations"][0]["exact_match"] is True
 
@@ -165,7 +165,7 @@ def test_runner_warn_mismatch_returns_zero_and_writes_stderr(tmp_path: Path, cap
     )
 
     err = capsys.readouterr().err
-    assert rc == 0
+    assert rc.exit_code == 0
     assert "[WARN] partition full_split mismatch: token_delta=1 mismatched_items=1" in err
 
 
@@ -183,7 +183,7 @@ def test_runner_error_mismatch_returns_one_but_keeps_outputs(tmp_path: Path, cap
     )
 
     err = capsys.readouterr().err
-    assert rc == 1
+    assert rc.exit_code == 1
     assert "[ERROR] partition full_split mismatch: token_delta=1 mismatched_items=1" in err
     assert (tmp_path / "output" / "partition_validation_full_split.csv").exists()
     assert (tmp_path / "output" / "partition_validation.json").exists()

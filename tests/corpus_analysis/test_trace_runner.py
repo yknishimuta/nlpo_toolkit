@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from nlpo_toolkit.corpus_analysis.config import load_config
-from nlpo_toolkit.corpus_analysis.archive import create_run_archive
+from nlpo_toolkit.corpus_analysis.archive import ArchiveOptions, create_run_archive
 from nlpo_toolkit.corpus_analysis import runner as runner_mod
 from tests.corpus_analysis.fake_nlp import fake_backend_factory
 
@@ -48,7 +48,8 @@ def test_multiple_groups_get_separate_trace_files_and_labels(tmp_path: Path) -> 
         encoding="utf-8",
     )
 
-    assert _run(tmp_path, config_path) == 0
+    result = _run(tmp_path, config_path)
+    assert result.exit_code == 0
     trace_a = tmp_path / "output" / "trace_group_a.tsv"
     trace_b = tmp_path / "output" / "trace_group_b.tsv"
 
@@ -74,7 +75,7 @@ def test_single_group_uses_base_trace_path(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    assert _run(tmp_path, config_path) == 0
+    assert _run(tmp_path, config_path).exit_code == 0
     assert (tmp_path / "output" / "trace.tsv").exists()
     assert not (tmp_path / "output" / "trace_only_group.tsv").exists()
     assert _rows(tmp_path / "output" / "trace.tsv")[0]["label"] == "only_group"
@@ -91,7 +92,7 @@ def test_group_by_file_uses_unique_file_labels_for_trace(tmp_path: Path) -> None
         encoding="utf-8",
     )
 
-    assert _run(tmp_path, config_path, group_by_file=True) == 0
+    assert _run(tmp_path, config_path, group_by_file=True).exit_code == 0
     assert (tmp_path / "output" / "trace_text.tsv").exists()
     assert (tmp_path / "output" / "trace_text_2.tsv").exists()
     assert _rows(tmp_path / "output" / "trace_text.tsv")[0]["label"] == "text"
@@ -118,7 +119,7 @@ def test_custom_trace_path_parent_and_suffix_are_preserved(tmp_path: Path) -> No
         encoding="utf-8",
     )
 
-    assert _run(tmp_path, config_path) == 0
+    assert _run(tmp_path, config_path).exit_code == 0
     assert (tmp_path / "artifacts" / "custom-trace_group_a.tsv").exists()
     assert (tmp_path / "artifacts" / "custom-trace_group_b.tsv").exists()
     assert not (tmp_path / "output" / "custom-trace_group_a.tsv").exists()
@@ -133,7 +134,7 @@ def test_trace_disabled_writes_no_trace_files(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    assert _run(tmp_path, config_path) == 0
+    assert _run(tmp_path, config_path).exit_code == 0
     assert not list((tmp_path / "output").glob("trace*.tsv"))
 
 
@@ -158,7 +159,7 @@ def test_trace_max_rows_applies_per_trace_file(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    assert _run(tmp_path, config_path) == 0
+    assert _run(tmp_path, config_path).exit_code == 0
     assert len(_rows(tmp_path / "output" / "trace_group_a.tsv")) == 1
     assert len(_rows(tmp_path / "output" / "trace_group_b.tsv")) == 1
     assert _rows(tmp_path / "output" / "trace_group_b.tsv")[0]["label"] == "group_b"
@@ -183,14 +184,11 @@ def test_archive_includes_all_trace_files_from_run_meta(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
-    assert _run(tmp_path, config_path) == 0
+    result = _run(tmp_path, config_path)
+    assert result.exit_code == 0
 
-    run_dir = create_run_archive(
-        project_root=tmp_path,
-        config_path=config_path,
-        config=load_config(config_path),
-        run_name="trace_run",
-    )
+    archive = create_run_archive(result=result, options=ArchiveOptions(run_name="trace_run"))
+    run_dir = archive.run_dir
 
     copied = {p.name for p in (run_dir / "trace").iterdir()}
     assert copied == {"trace_group_a.tsv", "trace_group_b.tsv"}

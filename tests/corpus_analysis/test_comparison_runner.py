@@ -9,7 +9,7 @@ import pytest
 
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
 import nlpo_toolkit.corpus_analysis.runtime as runtime_mod
-from nlpo_toolkit.corpus_analysis.archive import create_run_archive
+from nlpo_toolkit.corpus_analysis.archive import ArchiveOptions, create_run_archive
 from nlpo_toolkit.corpus_analysis.dry_run import dry_run_count_vocabula
 from tests.corpus_analysis.fake_nlp import FakeNLPBackend, fake_backend_factory
 
@@ -96,7 +96,7 @@ def test_runner_generates_comparison_outputs_summary_meta_and_uses_final_counter
         },
     )
 
-    assert rc == 0
+    assert rc.exit_code == 0
     out_dir = project_root / "output"
     csv_path = out_dir / "group_comparison_comparison_1.csv"
     json_path = out_dir / "group_comparisons.json"
@@ -157,7 +157,7 @@ def test_runner_surface_mode_generates_generic_item_column(
         },
     )
 
-    assert rc == 0
+    assert rc.exit_code == 0
     with (tmp_path / "output" / "group_comparison_comparison_1.csv").open(encoding="utf-8") as f:
         header = f.readline().strip().split(",")
     assert "item" in header
@@ -179,7 +179,7 @@ def test_runner_without_comparisons_does_not_generate_comparison_files(
 
     rc = _run_with_config(tmp_path, monkeypatch, cfg)
 
-    assert rc == 0
+    assert rc.exit_code == 0
     out_dir = tmp_path / "output"
     assert not (out_dir / "group_comparisons.json").exists()
     assert not list(out_dir.glob("group_comparison_*.csv"))
@@ -307,14 +307,10 @@ def test_archive_includes_current_comparison_outputs_from_generated_outputs(
             "sample_text_b": Counter({"item_b": 1}),
         },
     )
-    assert rc == 0
+    assert rc.exit_code == 0
 
-    run_dir = create_run_archive(
-        project_root=tmp_path,
-        config_path=config_path,
-        config=cfg,
-        run_name="comparison_1",
-    )
+    archive = create_run_archive(result=rc, options=ArchiveOptions(run_name="comparison_1"))
+    run_dir = archive.run_dir
 
     copied = {path.name for path in (run_dir / "outputs").iterdir()}
     assert "group_comparison_comparison_1.csv" in copied

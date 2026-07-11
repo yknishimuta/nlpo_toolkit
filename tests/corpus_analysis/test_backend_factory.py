@@ -303,7 +303,7 @@ def test_runner_uses_backend_factory_and_records_metadata(tmp_path: Path, monkey
         backend_factory=fake_factory,
     )
 
-    assert rc == 0
+    assert rc.exit_code == 0
     csv_text = (tmp_path / "output" / "frequency_group_a.csv").read_text(
         encoding="utf-8"
     )

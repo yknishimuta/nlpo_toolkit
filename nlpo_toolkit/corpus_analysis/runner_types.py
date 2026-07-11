@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, List, Mapping, Tuple
+from typing import Any, Callable, Iterable, List, Mapping, Tuple
 
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 
@@ -29,6 +29,43 @@ class RunContext:
     stanza_package: Any
     splitter_nlp: Any | None
     roman_exceptions: frozenset[str]
+
+
+@dataclass(frozen=True)
+class ReferencedConfigFile:
+    kind: str
+    path: Path
+    copy_to_snapshot: bool
+    snapshot_path: Path | None = None
+
+
+def deduplicate_resolved_paths(paths: Iterable[Path]) -> tuple[Path, ...]:
+    seen: set[Path] = set()
+    result: list[Path] = []
+    for raw_path in paths:
+        path = Path(raw_path).resolve()
+        if path not in seen:
+            seen.add(path)
+            result.append(path)
+    return tuple(result)
+
+
+@dataclass(frozen=True)
+class RunResult:
+    exit_code: int
+    plan: RunPlan
+    groups_files: Mapping[str, tuple[Path, ...]]
+    input_files: tuple[Path, ...]
+    cleaned_files: tuple[Path, ...]
+    output_files: tuple[Path, ...]
+    trace_files: tuple[Path, ...]
+    config_files: tuple[ReferencedConfigFile, ...]
+    summary_path: Path
+    metadata_path: Path
+
+    @property
+    def generated_outputs(self) -> tuple[Path, ...]:
+        return deduplicate_resolved_paths((*self.output_files, *self.trace_files))
 
 
 @dataclass(frozen=True)

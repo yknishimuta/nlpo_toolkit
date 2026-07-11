@@ -38,6 +38,11 @@ def test_run_orchestrates_steps_in_order(monkeypatch, tmp_path: Path) -> None:
         "write_run_report",
         lambda **kwargs: calls.append("report"),
     )
+    monkeypatch.setattr(
+        runner_mod.run_reporting,
+        "build_run_result",
+        lambda **kwargs: SimpleNamespace(exit_code=partitions.exit_code),
+    )
 
     rc = runner_mod.run(
         project_root=tmp_path,
@@ -47,4 +52,4 @@ def test_run_orchestrates_steps_in_order(monkeypatch, tmp_path: Path) -> None:
     )
 
     assert calls == ["prepare", "analyze", "partitions", "comparisons", "report"]
-    assert rc == 7
+    assert rc.exit_code == 7
