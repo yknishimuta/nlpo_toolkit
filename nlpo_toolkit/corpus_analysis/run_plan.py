@@ -17,6 +17,19 @@ from .partition_validation import PartitionSpec, parse_partition_specs
 
 
 @dataclass(frozen=True)
+class CorpusPlan:
+    project_root: Path
+    config_path: Path
+    config: AppConfig
+    cleaned_dir: Path | None
+    grouping_mode: str
+    per_file: bool
+    auto_mode: bool
+    work_items: tuple[CorpusWorkItem, ...]
+    group_files: Mapping[str, tuple[Path, ...]]
+
+
+@dataclass(frozen=True)
 class RunPlan:
     project_root: Path
     config_path: Path
@@ -169,6 +182,70 @@ def build_run_plan(
     preprocess_fn: Callable[..., Path | None] | None = None,
     validate_references: bool = True,
 ) -> RunPlan:
+    corpus_plan = build_corpus_plan(
+        project_root=project_root,
+        script_dir=script_dir,
+        config_path=config_path,
+        group_by_file=group_by_file,
+        auto_single_cleaned=auto_single_cleaned,
+        error_on_empty_group=error_on_empty_group,
+        load_config_fn=load_config_fn,
+        preprocess_mode=preprocess_mode,
+        clean_mod=clean_mod,
+        preprocess_fn=preprocess_fn,
+    )
+    config = corpus_plan.config
+    partition_specs = tuple(parse_partition_specs(config))
+    comparison_specs = tuple(parse_comparison_specs(config))
+    validate_specs_against_grouping(
+        partition_specs=partition_specs,
+        comparison_specs=comparison_specs,
+        per_file=corpus_plan.per_file,
+    )
+    if validate_references:
+        validate_partition_group_references(
+            partition_specs=partition_specs,
+            group_files=corpus_plan.group_files,
+        )
+        validate_comparison_group_references(
+            comparison_specs=comparison_specs,
+            group_files=corpus_plan.group_files,
+        )
+    analysis_unit, use_lemma, csv_header = resolve_analysis_unit(config)
+
+    return RunPlan(
+        project_root=corpus_plan.project_root,
+        config_path=corpus_plan.config_path,
+        config=config,
+        out_dir=resolve_out_dir(config, corpus_plan.project_root),
+        cleaned_dir=corpus_plan.cleaned_dir,
+        grouping_mode=corpus_plan.grouping_mode,
+        per_file=corpus_plan.per_file,
+        auto_mode=corpus_plan.auto_mode,
+        auto_group_name=config.grouping.auto_group_name,
+        work_items=corpus_plan.work_items,
+        group_files=corpus_plan.group_files,
+        partition_specs=partition_specs,
+        comparison_specs=comparison_specs,
+        analysis_unit=analysis_unit,
+        use_lemma=use_lemma,
+        csv_header=csv_header,
+    )
+
+
+def build_corpus_plan(
+    *,
+    project_root: Path | None,
+    script_dir: Path | None,
+    config_path: Path,
+    group_by_file: bool | None,
+    auto_single_cleaned: bool,
+    error_on_empty_group: bool,
+    load_config_fn: Callable[[Path], AppConfig | Mapping[str, object]],
+    preprocess_mode: Literal["inspect", "execute"],
+    clean_mod: object | None = None,
+    preprocess_fn: Callable[..., Path | None] | None = None,
+) -> CorpusPlan:
     resolved_root, resolved_config = resolve_run_paths(
         project_root=project_root,
         script_dir=script_dir,
@@ -183,14 +260,6 @@ def build_run_plan(
         group_by_file=group_by_file,
         auto_single_cleaned=auto_single_cleaned,
     )
-    partition_specs = tuple(parse_partition_specs(config))
-    comparison_specs = tuple(parse_comparison_specs(config))
-    validate_specs_against_grouping(
-        partition_specs=partition_specs,
-        comparison_specs=comparison_specs,
-        per_file=per_file,
-    )
-
     cleaned_dir = _resolve_cleaned_dir(
         config=config,
         project_root=resolved_root,
@@ -206,32 +275,14 @@ def build_run_plan(
         auto_single_cleaned=auto_mode,
         error_on_empty_group=error_on_empty_group,
     )
-    if validate_references:
-        validate_partition_group_references(
-            partition_specs=partition_specs,
-            group_files=resolved.group_files,
-        )
-        validate_comparison_group_references(
-            comparison_specs=comparison_specs,
-            group_files=resolved.group_files,
-        )
-    analysis_unit, use_lemma, csv_header = resolve_analysis_unit(config)
-
-    return RunPlan(
+    return CorpusPlan(
         project_root=resolved_root,
         config_path=resolved_config,
         config=config,
-        out_dir=resolve_out_dir(config, resolved_root),
         cleaned_dir=cleaned_dir,
         grouping_mode=grouping_mode,
         per_file=per_file,
         auto_mode=auto_mode,
-        auto_group_name=config.grouping.auto_group_name,
         work_items=tuple(resolved.work_items),
         group_files=resolved.group_files,
-        partition_specs=partition_specs,
-        comparison_specs=comparison_specs,
-        analysis_unit=analysis_unit,
-        use_lemma=use_lemma,
-        csv_header=csv_header,
     )

@@ -10,14 +10,16 @@ from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.features import (
     FeatureError,
     FeatureOptions,
-    TokenRecord,
     build_feature_rows,
     compute_basic_features,
+    compute_mfw_features,
     compute_upos_features,
+    select_mfw,
     run_features,
     safe_feature_name,
     write_feature_matrix,
 )
+from nlpo_toolkit.corpus_analysis.analysis_records import NLPAnalysisRecord
 from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.config import NLPConfig
@@ -55,6 +57,32 @@ def _backend_factory(config: NLPConfig) -> BuiltNLPBackend:
     )
 
 
+def _record(
+    token: str,
+    lemma: str | None,
+    upos: str | None,
+    sentence_index: int,
+    *,
+    chunk_index: int = 0,
+    token_index: int = 0,
+    global_token_index: int = 0,
+) -> NLPAnalysisRecord:
+    return NLPAnalysisRecord(
+        chunk_index=chunk_index,
+        sentence_index=sentence_index,
+        token_index=token_index,
+        global_token_index=global_token_index,
+        char_start_in_chunk=None,
+        char_end_in_chunk=None,
+        char_start_in_text=None,
+        char_end_in_text=None,
+        sentence="",
+        token=token,
+        lemma=lemma,
+        upos=upos,
+    )
+
+
 def _write_config(project_root: Path, *, group_files: str = "input/*.txt", extra: str = "") -> Path:
     (project_root / "config").mkdir(exist_ok=True)
     config_path = project_root / "config" / "groups.config.yml"
@@ -81,10 +109,10 @@ def _write_config(project_root: Path, *, group_files: str = "input/*.txt", extra
 
 def test_compute_basic_features_values() -> None:
     records = [
-        TokenRecord("Rosa", "rosa", "NOUN", 0),
-        TokenRecord("amat", "amo", "VERB", 0),
-        TokenRecord(".", ".", "PUNCT", 0),
-        TokenRecord("Rosa", "rosa", "NOUN", 1),
+        _record("Rosa", "rosa", "NOUN", 0),
+        _record("amat", "amo", "VERB", 0),
+        _record(".", ".", "PUNCT", 0),
+        _record("Rosa", "rosa", "NOUN", 1),
     ]
 
     row = compute_basic_features(records, "Rosa amat. Rosa", "g", 1)
@@ -98,10 +126,10 @@ def test_compute_basic_features_values() -> None:
 
 def test_compute_upos_features_values() -> None:
     records = [
-        TokenRecord("Rosa", "rosa", "NOUN", 0),
-        TokenRecord("amat", "amo", "VERB", 0),
-        TokenRecord("et", "et", "CCONJ", 0),
-        TokenRecord(".", ".", "PUNCT", 0),
+        _record("Rosa", "rosa", "NOUN", 0),
+        _record("amat", "amo", "VERB", 0),
+        _record("et", "et", "CCONJ", 0),
+        _record(".", ".", "PUNCT", 0),
     ]
 
     row = compute_upos_features(records)
@@ -112,6 +140,110 @@ def test_compute_upos_features_values() -> None:
     assert row["content_word_ratio"] == pytest.approx(2 / 3)
     assert row["function_word_count"] == 1
     assert row["function_word_ratio"] == pytest.approx(1 / 3)
+
+
+def test_missing_lemma_falls_back_to_surface_for_basic_and_mfw() -> None:
+    records = [_record("Rosa", None, "NOUN", 0)]
+
+    row = compute_basic_features(records, "Rosa", "g", 1)
+
+    assert row["lemma_type_count"] == 1
+    assert select_mfw([records], 1, "lemma") == ["rosa"]
+    assert compute_mfw_features(records, ["rosa"], "lemma")["mfw_rosa"] == 1.0
+
+
+def test_sentence_count_uses_chunk_and_sentence_index() -> None:
+    records = [
+        _record("a", "a", "NOUN", 0, chunk_index=0),
+        _record("b", "b", "NOUN", 0, chunk_index=1),
+    ]
+
+    row = compute_basic_features(records, "a b", "g", 1)
+
+    assert row["sentence_count"] == 2
+
+
+def test_missing_upos_and_punctuation_preserve_feature_denominators() -> None:
+    records = [
+        _record("Rosa", "rosa", None, 0),
+        _record(".", ".", "PUNCT", 0),
+    ]
+
+    basic = compute_basic_features(records, "Rosa.", "g", 1)
+    upos = compute_upos_features(records)
+
+    assert basic["token_count"] == 2
+    assert basic["word_token_count"] == 1
+    assert upos["upos_NOUN_count"] == 0
+    assert upos["content_word_ratio"] == 0.0
+    assert select_mfw([records], 5, "token") == ["rosa"]
+
+
+def test_basic_filters_do_not_change_upos_or_mfw_semantics() -> None:
+    records = [
+        _record("xiv", "xiv", "NUM", 0),
+        _record("a", "a", "NOUN", 0),
+        _record("rosa", "rosa", "NOUN", 0),
+    ]
+
+    filtered_basic = compute_basic_features(
+        records,
+        "xiv a rosa",
+        "g",
+        1,
+        min_token_length=2,
+        drop_roman_numerals=True,
+    )
+    unfiltered_basic = compute_basic_features(records, "xiv a rosa", "g", 1)
+
+    assert filtered_basic["word_token_count"] == 1
+    assert unfiltered_basic["word_token_count"] == 3
+    assert compute_upos_features(records)["upos_NUM_count"] == 1
+    assert select_mfw([records], 3, "token") == ["a", "rosa", "xiv"]
+
+
+def test_features_roman_policy_has_no_count_surface_exceptions() -> None:
+    records = [_record("vi", "vi", "NUM", 0)]
+
+    dropped = compute_basic_features(
+        records,
+        "vi",
+        "g",
+        1,
+        drop_roman_numerals=True,
+    )
+    kept = compute_basic_features(records, "vi", "g", 1)
+
+    assert dropped["word_token_count"] == 0
+    assert kept["word_token_count"] == 1
+
+
+def test_build_feature_rows_chunks_through_shared_extractor() -> None:
+    calls: list[str] = []
+
+    class ChunkNLP:
+        def __call__(self, text: str) -> NLPDocument:
+            calls.append(text)
+            token = text.strip()
+            return NLPDocument(
+                sentences=[
+                    NLPSentence(
+                        tokens=[NLPToken(token, token.lower(), "NOUN")],
+                        text=text,
+                    )
+                ],
+                text=text,
+            )
+
+    rows = build_feature_rows(
+        [("g", [Path("a.txt")], "Rosa amat")],
+        ChunkNLP(),
+        FeatureOptions(chunk_chars=5),
+    )
+
+    assert len(calls) == 2
+    assert rows[0]["token_count"] == 2
+    assert rows[0]["sentence_count"] == 2
 
 
 def test_build_feature_rows_mfw_lemma_and_token() -> None:

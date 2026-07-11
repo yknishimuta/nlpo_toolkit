@@ -7,27 +7,23 @@ import sys
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, TextIO
+from typing import Any, Callable, Iterable, Mapping, Sequence, TextIO
 
-from nlpo_toolkit.backends import BuiltNLPBackend, create_nlp_backend
-from .config import AppConfig, ensure_app_config, load_config
-from .corpus import (
-    prepare_corpora,
-    resolve_corpus_work_items,
-    run_preprocess_if_needed,
+from nlpo_toolkit.backends import BuiltNLPBackend
+from nlpo_toolkit.nlp import should_drop_roman_numeral
+
+from .analysis_records import (
+    NLPAnalysisRecord,
+    iter_nlp_analysis_records_from_text,
 )
+from .config import AppConfig, load_config
+from .corpus import prepare_corpora, run_preprocess_if_needed
+from .run_plan import build_corpus_plan
+from .runtime import build_nlp_runtime
 
 
 class FeatureError(RuntimeError):
     pass
-
-
-@dataclass(frozen=True)
-class TokenRecord:
-    token: str
-    lemma: str
-    upos: str
-    sentence_index: int
 
 
 UPOS_FEATURES = (
@@ -48,12 +44,24 @@ UPOS_FEATURES = (
 CONTENT_UPOS = {"NOUN", "PROPN", "VERB", "ADJ", "ADV"}
 FUNCTION_UPOS = {"PRON", "ADP", "AUX", "CCONJ", "SCONJ", "PART", "DET"}
 _PUNCT_CHARS = set(string.punctuation + "“”‘’«»…—–-­")
-_ROMAN_RE = re.compile(r"^(m{0,4}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|v?i{0,3}))$", re.I)
 _FEATURE_SAFE_RE = re.compile(r"[^0-9A-Za-z_]+")
 
 
-def is_word_token(token: Any, word: Any = None) -> bool:
-    text = str(getattr(word, "text", token) or "").strip()
+def feature_token_value(record: NLPAnalysisRecord) -> str:
+    return record.token.strip().lower()
+
+
+def feature_lemma_value(record: NLPAnalysisRecord) -> str:
+    selected = record.lemma or record.token
+    return str(selected).strip().lower()
+
+
+def feature_upos_value(record: NLPAnalysisRecord) -> str:
+    return record.upos or "X"
+
+
+def is_word_token_text(value: str) -> bool:
+    text = str(value or "").strip()
     if not text:
         return False
     return any(ch.isalnum() for ch in text) and not all(ch in _PUNCT_CHARS for ch in text)
@@ -64,54 +72,31 @@ def safe_feature_name(value: str) -> str:
     return name or "empty"
 
 
-def extract_token_records(doc) -> list[TokenRecord]:
-    records: list[TokenRecord] = []
-    for sent_idx, sent in enumerate(getattr(doc, "sentences", []) or []):
-        words = getattr(sent, "tokens", None)
-        if words is None:
-            words = getattr(sent, "words", None)
-        if words is None:
-            words = []
-        for token in words:
-            # Common model stores tokens directly. Stanza tokens may contain words.
-            nested_words = getattr(token, "words", None)
-            iter_words = nested_words if nested_words else [token]
-            for word in iter_words:
-                text = str(getattr(word, "text", "") or "")
-                lemma = str(getattr(word, "lemma", None) or text).strip().lower()
-                upos = str(getattr(word, "upos", "X") or "X")
-                records.append(
-                    TokenRecord(
-                        token=text,
-                        lemma=lemma,
-                        upos=upos,
-                        sentence_index=sent_idx,
-                    )
-                )
-    return records
-
-
 def _filtered_word_records(
-    records: Iterable[TokenRecord],
+    records: Iterable[NLPAnalysisRecord],
     *,
     min_token_length: int = 0,
     drop_roman_numerals: bool = False,
-) -> list[TokenRecord]:
-    out: list[TokenRecord] = []
+) -> list[NLPAnalysisRecord]:
+    out: list[NLPAnalysisRecord] = []
     for record in records:
-        if not is_word_token(record.token, record):
+        key = feature_token_value(record)
+        if not is_word_token_text(key):
             continue
-        key = record.token.strip().lower()
         if len(key) < min_token_length:
             continue
-        if drop_roman_numerals and _ROMAN_RE.fullmatch(key):
+        if should_drop_roman_numeral(
+            key,
+            drop_roman_numerals=drop_roman_numerals,
+            effective_exceptions=frozenset(),
+        ):
             continue
         out.append(record)
     return out
 
 
 def compute_basic_features(
-    records: list[TokenRecord],
+    records: Sequence[NLPAnalysisRecord],
     text: str,
     group: str,
     file_count: int,
@@ -124,10 +109,10 @@ def compute_basic_features(
         min_token_length=min_token_length,
         drop_roman_numerals=drop_roman_numerals,
     )
-    sentence_count = len({r.sentence_index for r in records}) if records else 0
+    sentence_count = len({(r.chunk_index, r.sentence_index) for r in records})
     word_token_count = len(word_records)
-    lemmas = [r.lemma for r in word_records if r.lemma]
-    tokens = [r.token.strip().lower() for r in word_records if r.token.strip()]
+    lemmas = [feature_lemma_value(r) for r in word_records]
+    tokens = [feature_token_value(r) for r in word_records]
     lemma_counts = Counter(lemmas)
     lemma_type_count = len(lemma_counts)
     token_type_count = len(set(tokens))
@@ -152,10 +137,10 @@ def compute_basic_features(
     }
 
 
-def compute_upos_features(records: list[TokenRecord]) -> dict[str, Any]:
+def compute_upos_features(records: Sequence[NLPAnalysisRecord]) -> dict[str, Any]:
     word_records = _filtered_word_records(records)
     denom = len(word_records)
-    counts = Counter(r.upos for r in word_records)
+    counts = Counter(feature_upos_value(r) for r in word_records)
     features: dict[str, Any] = {}
     for upos in UPOS_FEATURES:
         count = counts.get(upos, 0)
@@ -171,7 +156,11 @@ def compute_upos_features(records: list[TokenRecord]) -> dict[str, Any]:
     return features
 
 
-def select_mfw(all_group_records: list[list[TokenRecord]], n: int, field: str) -> list[str]:
+def select_mfw(
+    all_group_records: Sequence[Sequence[NLPAnalysisRecord]],
+    n: int,
+    field: str,
+) -> list[str]:
     if n <= 0:
         return []
     if field not in {"lemma", "token"}:
@@ -179,18 +168,22 @@ def select_mfw(all_group_records: list[list[TokenRecord]], n: int, field: str) -
     counter: Counter[str] = Counter()
     for records in all_group_records:
         for record in _filtered_word_records(records):
-            value = record.lemma if field == "lemma" else record.token.strip().lower()
-            if value and is_word_token(value, record):
+            value = feature_lemma_value(record) if field == "lemma" else feature_token_value(record)
+            if value and is_word_token_text(value):
                 counter[value] += 1
     return [term for term, _count in sorted(counter.items(), key=lambda kv: (-kv[1], kv[0]))[:n]]
 
 
-def compute_mfw_features(records: list[TokenRecord], mfw_terms: list[str], field: str) -> dict[str, Any]:
+def compute_mfw_features(
+    records: Sequence[NLPAnalysisRecord],
+    mfw_terms: Sequence[str],
+    field: str,
+) -> dict[str, Any]:
     word_records = _filtered_word_records(records)
     denom = len(word_records)
     counter: Counter[str] = Counter()
     for record in word_records:
-        value = record.lemma if field == "lemma" else record.token.strip().lower()
+        value = feature_lemma_value(record) if field == "lemma" else feature_token_value(record)
         if value:
             counter[value] += 1
     return {
@@ -207,6 +200,15 @@ class FeatureOptions:
     include_basic: bool = True
     min_token_length: int = 0
     drop_roman_numerals: bool = False
+    chunk_chars: int = 200_000
+
+
+@dataclass(frozen=True)
+class PreparedFeatureCorpus:
+    group: str
+    files: tuple[Path, ...]
+    text: str
+    records: tuple[NLPAnalysisRecord, ...]
 
 
 def build_feature_rows(
@@ -219,14 +221,32 @@ def build_feature_rows(
     if options.field not in {"lemma", "token"}:
         raise FeatureError("--field must be 'lemma' or 'token'")
 
-    prepared: list[tuple[str, list[Path], str, list[TokenRecord]]] = []
+    prepared: list[PreparedFeatureCorpus] = []
     for group, files, text in groups_texts:
-        doc = nlp(text)
-        prepared.append((group, files, text, extract_token_records(doc)))
+        prepared.append(
+            PreparedFeatureCorpus(
+                group=group,
+                files=tuple(files),
+                text=text,
+                records=tuple(
+                    iter_nlp_analysis_records_from_text(
+                        text=text,
+                        nlp=nlp,
+                        chunk_chars=options.chunk_chars,
+                    )
+                ),
+            )
+        )
 
-    mfw_terms = select_mfw([records for *_rest, records in prepared], options.mfw, options.field)
+    mfw_terms = select_mfw([corpus.records for corpus in prepared], options.mfw, options.field)
     rows: list[dict[str, Any]] = []
-    for group, files, text, records in prepared:
+    for corpus in prepared:
+        group, files, text, records = (
+            corpus.group,
+            corpus.files,
+            corpus.text,
+            corpus.records,
+        )
         row: dict[str, Any] = {"group": group}
         if options.include_basic:
             row.update(
@@ -308,25 +328,24 @@ def run_features(
     clean_mod: Any = None,
     load_config_fn: Callable[[Path], AppConfig | Mapping[str, object]] = load_config,
 ) -> int:
-    project_root = Path(project_root).resolve()
     if clean_mod is None:
         raise TypeError("clean_mod is required")
-    config_path = Path(config_path)
-    if not config_path.is_absolute():
-        config_path = (project_root / config_path).resolve()
-    if not config_path.exists():
-        raise FeatureError(f"Config file not found: {config_path}")
-
-    config = ensure_app_config(load_config_fn(config_path))
-    cleaned_dir = run_preprocess_if_needed(config=config, project_root=project_root, clean_mod=clean_mod)
-    resolved = resolve_corpus_work_items(
-        config=config,
-        project_root=project_root,
-        cleaned_dir=cleaned_dir,
-        group_by_file=group_by_file,
-        auto_single_cleaned=auto_single_cleaned,
-        error_on_empty_group=error_on_empty_group,
-    )
+    try:
+        plan = build_corpus_plan(
+            project_root=project_root,
+            script_dir=None,
+            config_path=config_path,
+            group_by_file=group_by_file,
+            auto_single_cleaned=auto_single_cleaned,
+            error_on_empty_group=error_on_empty_group,
+            load_config_fn=load_config_fn,
+            preprocess_mode="execute",
+            clean_mod=clean_mod,
+            preprocess_fn=run_preprocess_if_needed,
+        )
+    except FileNotFoundError as exc:
+        raise FeatureError(str(exc)) from exc
+    config = plan.config
 
     options = FeatureOptions(
         field=field,
@@ -337,22 +356,17 @@ def run_features(
         drop_roman_numerals=config.filters.drop_roman_numerals,
     )
 
-    if backend_factory is not None:
-        nlp = backend_factory(config.nlp).backend
-    elif build_pipeline_fn is not None:
-        nlp, _package = build_pipeline_fn(
-            config.nlp.language,
-            config.nlp.stanza_package,
-            config.nlp.cpu_only,
-        )
-    else:
-        nlp = create_nlp_backend(config.nlp).backend
+    nlp, _backend_info, _package = build_nlp_runtime(
+        config=config,
+        backend_factory=backend_factory,
+        build_pipeline_fn=build_pipeline_fn,
+    )
 
     groups_texts: list[tuple[str, list[Path], str]] = []
     for corpus in prepare_corpora(
-        work_items=resolved.work_items,
+        work_items=plan.work_items,
         config=config,
-        project_root=project_root,
+        project_root=plan.project_root,
     ):
         groups_texts.append((corpus.label, list(corpus.files), corpus.prepared_text))
 

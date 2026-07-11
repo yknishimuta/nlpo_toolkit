@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-from nlpo_toolkit.backends import NLPBackendInfo, create_nlp_backend
+from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo, create_nlp_backend
 from nlpo_toolkit.nlp import load_roman_exceptions
 
 from .config import AppConfig
@@ -12,21 +12,22 @@ from .run_plan import build_run_plan, ensure_out_dir
 from .runner_types import RunContext, RunnerDependencies
 
 
-def initialize_nlp_runtime(
+def build_nlp_runtime(
     *,
     config: AppConfig,
-    dependencies: RunnerDependencies,
+    backend_factory: Callable[[Any], BuiltNLPBackend] | None = None,
+    build_pipeline_fn: Callable[[str, Any, bool], tuple[Any, Any]] | None = None,
 ) -> tuple[Any, NLPBackendInfo, Any]:
     language = config.nlp.language
     stanza_package = config.nlp.stanza_package
     cpu_only = config.nlp.cpu_only
 
-    if dependencies.backend_factory is not None:
-        built_backend = dependencies.backend_factory(config.nlp)
+    if backend_factory is not None:
+        built_backend = backend_factory(config.nlp)
         return built_backend.backend, built_backend.info, built_backend.info.package
 
-    if dependencies.build_pipeline is not None:
-        nlp, package = dependencies.build_pipeline(language, stanza_package, cpu_only)
+    if build_pipeline_fn is not None:
+        nlp, package = build_pipeline_fn(language, stanza_package, cpu_only)
         return (
             nlp,
             NLPBackendInfo(
@@ -40,6 +41,18 @@ def initialize_nlp_runtime(
 
     built_backend = create_nlp_backend(config.nlp)
     return built_backend.backend, built_backend.info, built_backend.info.package
+
+
+def initialize_nlp_runtime(
+    *,
+    config: AppConfig,
+    dependencies: RunnerDependencies,
+) -> tuple[Any, NLPBackendInfo, Any]:
+    return build_nlp_runtime(
+        config=config,
+        backend_factory=dependencies.backend_factory,
+        build_pipeline_fn=dependencies.build_pipeline,
+    )
 
 
 def initialize_sentence_splitter(

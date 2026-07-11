@@ -513,6 +513,11 @@ concatenated, configured text normalization is applied, and reference tags are
 removed before NLP. If `ref_tags.enabled=true`, the pattern file must exist; a
 missing pattern file is a configuration error.
 
+Features and counting use the same chunked, pre-filter NLP analysis-record
+extraction layer. Feature statistics are computed directly from those raw
+records: they do not apply count-specific UPOS selection, require token
+artifacts, or imply use of the analysis cache.
+
 ## N-Gram CLI
 
 Use `nlpo ngram` to build n-gram frequency tables from a token artifact,
