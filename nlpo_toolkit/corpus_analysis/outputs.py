@@ -99,14 +99,12 @@ def collect_runtime_environment(project_root: Path) -> Dict[str, Any]:
 def build_run_meta(
     *,
     groups_files: Dict[str, Iterable[Path] | Iterable[str]],
-    hash_inputs: bool = False,
 ) -> Dict[str, Any]:
     """
     Build a minimal run metadata dict.
 
     Args:
       groups_files: mapping group -> iterable of paths or strings
-      hash_inputs: reserved for future; kept for API compatibility
     """
     normalized: Dict[str, list[str]] = {}
     for g, files in (groups_files or {}).items():
@@ -117,7 +115,6 @@ def build_run_meta(
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "hash_inputs": bool(hash_inputs),
         "groups_files": normalized,
     }
 

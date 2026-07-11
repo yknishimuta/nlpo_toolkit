@@ -1,5 +1,4 @@
-from collections import Counter
-from typing import Collection, Set, Optional, Dict, List, Iterable, Mapping, Union, Callable, Any
+from typing import Collection, Set, Optional, Dict, List, Iterable, Mapping, Union, Any
 
 from .interfaces import NLPBackend
 
@@ -16,9 +15,6 @@ _DIACRITICS_RE = re.compile(r"[\u0300-\u036f]")
 
 # stanza's package can accept a str as well as a dict specifying per-processor packages
 PackageType = Union[str, Mapping[str, str], None]
-
-# Simple tokenizer
-TOKEN_RE = re.compile(r"[A-Za-zĀāĒēĪīŌōŪūÆæŒœ]+")
 
 _STRIP_PUNCT = string.punctuation + "“”‘’«»…—–-­"
 _ROMAN_RE = re.compile(r"^(m{0,4}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|v?i{0,3}))$", re.I)
@@ -96,10 +92,7 @@ def build_stanza_pipeline(
     package: str = "perseus",
     use_gpu: bool = False,
 ) -> NLPBackend:
-    """
-    Function to maintain compatibility.
-    Initializes and returns a StanzaBackend internally.
-    """
+    """Initialize the configured Stanza backend."""
     from .backends.stanza_backend import StanzaBackend
     return StanzaBackend(
         lang=lang,
@@ -115,63 +108,6 @@ def build_sentence_splitter(language: str, stanza_package: str, cpu_only: bool):
         package=stanza_package,
         use_gpu=not cpu_only,
     )
-
-
-def tokenize_all_pos(text: str) -> List[str]:
-    return TOKEN_RE.findall(text.lower())
-
-
-def count_nouns(
-    text: str,
-    nlp: NLPBackend,
-    use_lemma: bool = True,
-    upos_targets: Set[str] = frozenset({"NOUN"}),
-    *,
-    ref_tag_detector: Optional[Callable[[str], str]] = None,
-    ref_tag_counter: Optional[Counter] = None,
-    min_token_length: int = 0,
-    drop_roman_numerals: bool = False,
-    drop_roman: Optional[bool] = None,
-    roman_exceptions_file: Optional[Path] = None,
-    roman_exceptions: Optional[Collection[str]] = None,
-) -> Counter:
-    if not text or not text.strip():
-        return Counter()
-
-    if drop_roman is not None:
-        drop_roman_numerals = drop_roman
-
-    from nlpo_toolkit.corpus_analysis.analysis_records import (
-        AnalysisOptions,
-        counter_from_token_records,
-        evaluate_analysis_record,
-        iter_nlp_analysis_records_from_text,
-    )
-
-    configured_exceptions = resolve_roman_exceptions(
-        roman_exceptions=roman_exceptions,
-        roman_exceptions_file=roman_exceptions_file,
-    )
-    options = AnalysisOptions(
-        group="",
-        source_files=(),
-        use_lemma=use_lemma,
-        upos_targets=frozenset(upos_targets),
-        min_token_length=min_token_length,
-        drop_roman_numerals=drop_roman_numerals,
-        roman_exceptions=configured_exceptions,
-        ref_tag_detector=ref_tag_detector,
-        ref_tag_counter=ref_tag_counter,
-    )
-    token_records = (
-        evaluate_analysis_record(record, options=options)
-        for record in iter_nlp_analysis_records_from_text(
-            text=text,
-            nlp=nlp,
-            chunk_chars=200_000,
-        )
-    )
-    return counter_from_token_records(token_records)
 
 
 def render_stanza_package_table(

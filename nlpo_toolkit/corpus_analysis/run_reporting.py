@@ -187,7 +187,6 @@ def build_final_run_metadata(
             label: [str(path) for path in files]
             for label, files in analysis.files_by_group.items()
         },
-        hash_inputs=False,
     )
     meta["analysis_unit"] = plan.analysis_unit
     meta["nlp"] = context.backend_info.to_dict()

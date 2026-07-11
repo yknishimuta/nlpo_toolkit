@@ -29,10 +29,9 @@ def test_write_frequency_csv_writes_header_and_sorts(tmp_path: Path) -> None:
 
 
 def test_build_run_meta_shape_and_groups_files() -> None:
-    meta = build_run_meta(groups_files={"g1": ["x.txt", "y.txt"], "g2": []}, hash_inputs=False)
+    meta = build_run_meta(groups_files={"g1": ["x.txt", "y.txt"], "g2": []})
 
     assert "generated_at" in meta
-    assert meta["hash_inputs"] is False
     assert meta["groups_files"] == {"g1": ["x.txt", "y.txt"], "g2": []}
 
 

@@ -74,12 +74,9 @@ def test_backend_package_imports_without_legacy_adapter() -> None:
     assert hasattr(backends, "create_nlp_backend")
 
 
-def test_fake_backend_works_for_count_and_features() -> None:
-    from nlpo_toolkit.nlp import count_nouns
-
+def test_fake_backend_works_for_features() -> None:
     backend = FakeBackend()
 
-    assert count_nouns("ignored", backend, use_lemma=True) == Counter({"xiv": 1})
     rows = build_feature_rows(
         [("group_a", [Path("a.txt")], "ignored")],
         backend,
