@@ -8,8 +8,6 @@ import yaml
 from .config import (
     AppConfig,
     load_config,
-    unknown_filter_keys,
-    unknown_top_level_keys,
 )
 from .corpus import (
     inspect_preprocess,
@@ -63,18 +61,6 @@ def _display_path(path: Path, project_root: Path) -> str:
         return str(path.resolve().relative_to(project_root))
     except ValueError:
         return str(path)
-
-
-def _warn_unknown_keys(raw_cfg: dict[str, Any], lines: list[str]) -> None:
-    for key in unknown_top_level_keys(raw_cfg):
-        lines.append(f"[WARN] unknown config key: {key}")
-    for key in unknown_filter_keys(raw_cfg):
-        lines.append(f"[WARN] unknown config key: {key}")
-    filters = raw_cfg.get("filter") or raw_cfg.get("filters") or {}
-    if isinstance(filters, dict) and "roman_exception_files" in filters:
-        lines.append(
-            "[WARN] filters.roman_exception_files is deprecated; use filters.roman_exceptions_file"
-        )
 
 
 def _count_cleaner_input_files(cleaner_config_path: Path) -> int:
@@ -168,7 +154,7 @@ def dry_run_count_vocabula(
     exit_code = 0
 
     try:
-        raw_cfg, duplicate_keys = _load_yaml_with_duplicate_keys(config_path)
+        _raw_cfg, duplicate_keys = _load_yaml_with_duplicate_keys(config_path)
         cfg = load_config(config_path)
         lines.append("[OK] config loaded")
     except Exception as exc:
@@ -228,7 +214,6 @@ def dry_run_count_vocabula(
 
     for key in duplicate_keys:
         lines.append(f"[WARN] duplicate YAML key: {key}")
-    _warn_unknown_keys(raw_cfg, lines)
 
     if cfg.dictcheck.enabled:
         wordlist = cfg.dictcheck.wordlist

@@ -233,9 +233,7 @@ def resolve_ref_tag_patterns(config: AppConfig, project_root: Path) -> tuple[Ref
     if not config.ref_tags.enabled:
         return ()
     if not config.ref_tags.patterns:
-        raise CorpusPreparationError(
-            "ref_tags.patterns (or ref_tags.ref_tags_file) is required when ref_tags.enabled=true"
-        )
+        raise CorpusPreparationError("ref_tags.patterns is required when ref_tags.enabled=true")
     path = resolve_project_path(project_root, config.ref_tags.patterns)
     if not path.exists():
         raise CorpusPreparationError(f"ref_tags.enabled=true, but pattern file was not found: {path}")

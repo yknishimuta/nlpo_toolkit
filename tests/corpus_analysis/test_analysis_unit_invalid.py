@@ -21,9 +21,11 @@ def test_analysis_unit_invalid_raises_value_error(tmp_path, monkeypatch):
         "groups": {"text": {"files": [str(data_dir / "*.txt")]}},
         "out_dir": str(out_dir),
         "analysis_unit": "LEMMAAAA",  # invalid on purpose
-        "language": "la",
-        "stanza_package": "perseus",
-        "cpu_only": True,
+        "nlp": {
+            "language": "la",
+            "stanza_package": "perseus",
+            "cpu_only": True,
+        },
         "dictcheck": {"enabled": False},
     }
 

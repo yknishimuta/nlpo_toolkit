@@ -286,6 +286,7 @@ def test_auto_single_cleaned_selects_one_and_ignores_dotfiles(tmp_path: Path) ->
         error_on_empty_group=False,
         load_config_fn=_loader(
             {
+                "groups": {"text": {"files": ["{cleaned_dir}/*.txt"]}},
                 "preprocess": {"kind": "cleaner", "config": "config/cleaner.yml"},
                 "grouping": {"mode": "auto_single_cleaned", "auto_group_name": "text"},
             }
@@ -306,6 +307,7 @@ def test_auto_single_cleaned_rejects_zero_and_multiple_files(tmp_path: Path) -> 
     config_path = tmp_path / "config.yml"
     _write_config(config_path)
     data = {
+        "groups": {"text": {"files": ["{cleaned_dir}/*.txt"]}},
         "preprocess": {"kind": "cleaner", "config": "config/cleaner.yml"},
         "grouping": {"mode": "auto_single_cleaned"},
     }

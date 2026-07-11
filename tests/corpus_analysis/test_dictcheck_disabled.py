@@ -25,9 +25,11 @@ def test_dictcheck_disabled_does_not_create_known_unknown(tmp_path, monkeypatch)
             "text": {"files": [str(data_dir / "*.txt")]}
         },
         "out_dir": str(out_dir),
-        "language": "la",
-        "stanza_package": "perseus",
-        "cpu_only": True,
+        "nlp": {
+            "language": "la",
+            "stanza_package": "perseus",
+            "cpu_only": True,
+        },
         "dictcheck": {
             "enabled": False,
             # even if present, must not be used when enabled=False

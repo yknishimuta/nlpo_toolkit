@@ -64,9 +64,10 @@ def test_preprocess_cleaner_integration_fixed(tmp_path, monkeypatch):
                 "  text:",
                 '    files: ["{cleaned_dir}/*.txt"]',
                 f"out_dir: {out_dir}",
-                "language: la",
-                "stanza_package: perseus",
-                "cpu_only: true",
+                "nlp:",
+                "  language: la",
+                "  stanza_package: perseus",
+                "  cpu_only: true",
                 "",
             ]
         ),

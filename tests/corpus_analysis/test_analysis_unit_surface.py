@@ -22,9 +22,11 @@ def test_analysis_unit_surface_writes_word_frequency_and_passes_use_lemma_false(
         "groups": {"text": {"files": [str(data_dir / "*.txt")]}},
         "out_dir": str(out_dir),
         "analysis_unit": "surface",
-        "language": "la",
-        "stanza_package": "perseus",
-        "cpu_only": True,
+        "nlp": {
+            "language": "la",
+            "stanza_package": "perseus",
+            "cpu_only": True,
+        },
         "dictcheck": {"enabled": False},
     }
 

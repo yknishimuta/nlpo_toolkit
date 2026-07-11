@@ -23,9 +23,11 @@ def test_run_minimal_success(tmp_path: Path, monkeypatch):
     def load_config_fn(_p: Path):
         return {
             "out_dir": "output",
-            "language": "la",
-            "stanza_package": "perseus",
-            "cpu_only": True,
+            "nlp": {
+                "language": "la",
+                "stanza_package": "perseus",
+                "cpu_only": True,
+            },
             "groups": {
                 "g1": {"files": ["a.txt"]},
                 "g2": {"files": ["b.txt"]},
@@ -206,7 +208,7 @@ def test_run_applies_filter_options_in_record_pipeline(tmp_path: Path, monkeypat
             "out_dir": "output",
             "analysis_unit": "lemma",
             "groups": {"g": {"files": ["a.txt"]}},
-            "filter": {
+            "filters": {
                 "min_token_length": 3,
                 "drop_roman_numerals": True,
                 "roman_exceptions_file": "rom.txt"

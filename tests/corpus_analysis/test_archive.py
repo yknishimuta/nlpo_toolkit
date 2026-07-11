@@ -44,7 +44,6 @@ def _write_project(tmp_path: Path) -> tuple[Path, Path, dict]:
     (project_root / "config" / "lemma_normalize.tsv").write_text("rosae\trosa\n", encoding="utf-8")
     (project_root / "config" / "ref_tags.txt").write_text("REF\n", encoding="utf-8")
     (project_root / "config" / "roman_numeral_exceptions.txt").write_text("vi\n", encoding="utf-8")
-    (project_root / "config" / "exclude_lemmas.txt").write_text("sum\n", encoding="utf-8")
     (project_root / "config" / "latin_cleaners" / "subst_patterns.yml").write_text(
         "substitute_patterns: []\n",
         encoding="utf-8",
@@ -80,7 +79,6 @@ def _write_project(tmp_path: Path) -> tuple[Path, Path, dict]:
         "trace": {"enabled": True, "path": "output/trace.tsv"},
         "filters": {
             "roman_exceptions_file": "config/roman_numeral_exceptions.txt",
-            "exclude_lemmas": "config/exclude_lemmas.txt",
         },
     }
     config_path = project_root / "config" / "groups.config.yml"
@@ -107,7 +105,6 @@ def _write_project(tmp_path: Path) -> tuple[Path, Path, dict]:
                 "  path: output/trace.tsv",
                 "filters:",
                 "  roman_exceptions_file: config/roman_numeral_exceptions.txt",
-                "  exclude_lemmas: config/exclude_lemmas.txt",
                 "",
             ]
         ),

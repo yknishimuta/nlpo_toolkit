@@ -132,18 +132,15 @@ def collect_referenced_config_files(
 
     ref_tags = config.get("ref_tags") or {}
     if isinstance(ref_tags, dict):
-        ref_file = ref_tags.get("patterns") or ref_tags.get("ref_tags_file")
+        ref_file = ref_tags.get("patterns")
         if ref_file:
             _append_existing(paths, resolve_project_path(project_root, ref_file))
 
-    filters = config.get("filter") or config.get("filters") or {}
+    filters = config.get("filters") or {}
     if isinstance(filters, dict):
-        roman = filters.get("roman_exceptions_file") or filters.get("roman_exception_files")
+        roman = filters.get("roman_exceptions_file")
         if roman:
             _append_existing(paths, resolve_project_path(project_root, roman))
-        exclude = filters.get("exclude_lemmas") or filters.get("exclude_lemmas_file")
-        if exclude:
-            _append_existing(paths, resolve_project_path(project_root, exclude))
 
     return paths, external_refs
 

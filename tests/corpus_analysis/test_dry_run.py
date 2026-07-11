@@ -41,9 +41,10 @@ def test_dry_run_reports_config_paths_matches_and_warnings(tmp_path: Path, capsy
                 "  text:",
                 '    files: ["{cleaned_dir}/*.txt"]',
                 "out_dir: output",
-                "language: la",
-                "stanza_package: perseus",
-                "cpu_only: true",
+                "nlp:",
+                "  language: la",
+                "  stanza_package: perseus",
+                "  cpu_only: true",
                 "trace:",
                 "  enabled: true",
                 "  max_rows: 20000",
@@ -53,7 +54,7 @@ def test_dry_run_reports_config_paths_matches_and_warnings(tmp_path: Path, capsy
                 "filters:",
                 "  min_token_length: 2",
                 "  drop_roman_numerals: true",
-                "  roman_exception_files: config/roman_numeral_exceptions.txt",
+                "  roman_exceptions_file: config/roman_numeral_exceptions.txt",
                 "dictcheck:",
                 "  enabled: true",
                 "  wordlist: data/wordlist/latin_words.txt",
@@ -79,7 +80,6 @@ def test_dry_run_reports_config_paths_matches_and_warnings(tmp_path: Path, capsy
     assert "  - cleaned/b.txt" in out
     assert "  - cleaned/c.txt" in out
     assert "[WARN] duplicate YAML key: trace" in out
-    assert "[WARN] filters.roman_exception_files is deprecated; use filters.roman_exceptions_file" in out
     assert "[OK] dictcheck wordlist found" in out
     assert "[OK] ref_tags patterns found" in out
     assert "[OK] output dir: output" in out
@@ -133,6 +133,9 @@ def test_dry_run_auto_single_cleaned_reports_selected_file(tmp_path: Path, capsy
                 "preprocess:",
                 "  kind: cleaner",
                 "  config: config/cleaner.yml",
+                "groups:",
+                "  text:",
+                '    files: ["{cleaned_dir}/*.txt"]',
                 "grouping:",
                 "  mode: auto_single_cleaned",
                 "  auto_group_name: text",

@@ -17,44 +17,67 @@ NLPBackend = Literal["stanza", "transformers"]
 
 KNOWN_TOP_LEVEL_KEYS = frozenset(
     {
+        "analysis_cache",
         "analysis_unit",
         "archive",
-        "analysis_cache",
         "artifacts",
-        "cleaner_config",
         "comparisons",
-        "cpu_only",
         "csv_header",
         "dictcheck",
-        "filter",
         "filters",
-        "group",
         "grouping",
         "groups",
-        "language",
         "nlp",
         "normalization",
         "out_dir",
         "preprocess",
         "prune",
         "ref_tags",
-        "stanza_package",
-        "stanza_pkg",
         "trace",
-        "upos_targets",
         "validations",
-        "vocab_path",
     }
 )
 
+KNOWN_PREPROCESS_KEYS = frozenset({"kind", "config"})
+KNOWN_GROUPING_KEYS = frozenset({"mode", "auto_group_name"})
+KNOWN_GROUP_KEYS = frozenset({"files"})
+KNOWN_NLP_KEYS = frozenset(
+    {"backend", "language", "stanza_package", "model_name", "cpu_only"}
+)
 KNOWN_FILTER_KEYS = frozenset(
     {
         "drop_roman_numerals",
         "min_token_length",
-        "roman_exception_files",
         "roman_exceptions_file",
+        "upos_targets",
     }
 )
+KNOWN_NORMALIZATION_KEYS = frozenset(
+    {
+        "casefold",
+        "enabled",
+        "map_i_j",
+        "map_u_v",
+        "normalize_ligatures",
+        "strip_diacritics",
+        "unicode_nf",
+    }
+)
+KNOWN_DICTCHECK_KEYS = frozenset({"enabled", "wordlist", "lemma_normalize"})
+KNOWN_REF_TAGS_KEYS = frozenset({"enabled", "patterns"})
+KNOWN_TRACE_KEYS = frozenset(
+    {"enabled", "path", "max_rows", "only_keys", "write_truncation_marker"}
+)
+KNOWN_ARTIFACTS_KEYS = frozenset({"tokens"})
+KNOWN_TOKEN_ARTIFACT_KEYS = frozenset({"enabled", "path"})
+KNOWN_ARCHIVE_KEYS = frozenset(
+    {"enabled", "runs_dir", "include_input", "include_cleaned"}
+)
+KNOWN_ANALYSIS_CACHE_KEYS = frozenset(
+    {"enabled", "dir", "use_manifest", "manifest_key_mode", "lock_timeout_sec"}
+)
+KNOWN_PRUNE_KEYS = frozenset({"keep_days", "keep_files", "lock_ttl_sec"})
+KNOWN_VALIDATIONS_KEYS = frozenset({"partitions"})
 
 
 @dataclass(frozen=True)
@@ -89,17 +112,12 @@ class FilterConfig:
     drop_roman_numerals: bool = False
     roman_exceptions_file: str | None = None
     upos_targets: frozenset[str] = frozenset({"NOUN"})
-    exclude_lemmas: str | None = None
 
 
 @dataclass(frozen=True)
 class NormalizationConfig:
     enabled: bool = True
     casefold: bool = False
-    uv: str | None = None
-    ij: str | None = None
-    diacritics: str | None = None
-    ligatures: Mapping[str, str] | None = None
     map_u_v: bool = False
     map_i_j: bool = False
     strip_diacritics: bool = False
@@ -182,9 +200,21 @@ class AppConfig:
     analysis_unit: AnalysisUnit = "lemma"
     out_dir: str = "output"
     csv_header: tuple[str, str] | None = None
-    vocab_path: str | None = None
     comparisons: tuple[ComparisonSpec, ...] = ()
     partition_validations: tuple[PartitionSpec, ...] = ()
+
+
+def _reject_unknown_keys(
+    mapping: Mapping[str, object],
+    *,
+    allowed: frozenset[str],
+    context: str,
+) -> None:
+    unknown = sorted(str(key) for key in mapping if key not in allowed)
+    if not unknown:
+        return
+    joined = ", ".join(unknown)
+    raise ValueError(f"Unknown {context} key(s): {joined}")
 
 
 def _as_mapping(value: object, *, context: str) -> Mapping[str, object]:
@@ -292,33 +322,9 @@ def _optional_string_set(value: object, *, context: str, default: frozenset[str]
     return frozenset(out)
 
 
-def _normalize_groups(raw: Mapping[str, object]) -> dict[str, object]:
-    cfg = dict(raw)
-    if "groups" in cfg and cfg["groups"] is not None:
-        return cfg
-
-    if "group" in cfg and cfg["group"]:
-        group = _as_mapping(cfg["group"], context="group")
-        name = group.get("name", "text")
-        if not isinstance(name, str) or not name.strip():
-            raise ValueError("group.name must be a non-empty string")
-        files = group.get("files")
-        if not files:
-            raise ValueError("'group.files' is required.")
-        cfg["groups"] = {name: {"files": _string_tuple(files, context="group.files")}}
-        return cfg
-
-    grouping = cfg.get("grouping")
-    if isinstance(grouping, Mapping) and grouping.get("mode") == "auto_single_cleaned":
-        name = str(grouping.get("auto_group_name") or "text")
-        cfg["groups"] = {name: {"files": []}}
-        return cfg
-
-    raise ValueError("Config must define 'groups' or 'group'.")
-
-
 def _parse_group_config(value: object, *, context: str) -> GroupConfig:
     group = _as_mapping(value, context=context)
+    _reject_unknown_keys(group, allowed=KNOWN_GROUP_KEYS, context=context)
     if "files" not in group:
         raise ValueError(f"{context}.files is required")
     return GroupConfig(files=_string_tuple(group.get("files"), context=f"{context}.files"))
@@ -336,6 +342,7 @@ def _parse_groups(value: object) -> Mapping[str, GroupConfig]:
 
 def _parse_preprocess_config(value: object) -> PreprocessConfig:
     pp = _optional_mapping(value, context="preprocess")
+    _reject_unknown_keys(pp, allowed=KNOWN_PREPROCESS_KEYS, context="preprocess")
     if not pp:
         return PreprocessConfig()
     kind = pp.get("kind")
@@ -351,6 +358,7 @@ def _parse_preprocess_config(value: object) -> PreprocessConfig:
 
 def _parse_grouping_config(value: object) -> GroupingConfig:
     grouping = _optional_mapping(value, context="grouping")
+    _reject_unknown_keys(grouping, allowed=KNOWN_GROUPING_KEYS, context="grouping")
     raw_mode = grouping.get("mode", "groups")
     if raw_mode not in {"groups", "per_file", "auto_single_cleaned"}:
         raise ValueError("grouping.mode must be one of: groups, per_file, auto_single_cleaned")
@@ -367,19 +375,20 @@ def _parse_grouping_config(value: object) -> GroupingConfig:
     )
 
 
-def _parse_nlp_config(raw: Mapping[str, object]) -> NLPConfig:
-    nlp = _optional_mapping(raw.get("nlp"), context="nlp")
+def _parse_nlp_config(value: object) -> NLPConfig:
+    nlp = _optional_mapping(value, context="nlp")
+    _reject_unknown_keys(nlp, allowed=KNOWN_NLP_KEYS, context="nlp")
     backend_raw = nlp.get("backend", "stanza")
     if backend_raw not in {"stanza", "transformers"}:
         raise ValueError("nlp.backend must be one of: stanza, transformers")
     backend: NLPBackend = "transformers" if backend_raw == "transformers" else "stanza"
 
-    language_raw = raw.get("language", nlp.get("language", "la"))
-    package_raw = raw.get("stanza_package", nlp.get("stanza_package", nlp.get("package", "perseus")))
-    cpu_only_raw = raw.get("cpu_only", nlp.get("cpu_only", True))
+    language_raw = nlp.get("language", "la")
+    package_raw = nlp.get("stanza_package", "perseus")
+    cpu_only_raw = nlp.get("cpu_only", True)
 
     if package_raw is not None and not isinstance(package_raw, (str, dict)):
-        raise ValueError("stanza_package must be a string, mapping, or null")
+        raise ValueError("nlp.stanza_package must be a string, mapping, or null")
     if package_raw is None:
         package: str | dict[str, str] | None = "perseus"
     elif isinstance(package_raw, dict):
@@ -397,27 +406,16 @@ def _parse_nlp_config(raw: Mapping[str, object]) -> NLPConfig:
 
     return NLPConfig(
         backend=backend,
-        language=_str_value(language_raw, context="language"),
+        language=_str_value(language_raw, context="nlp.language"),
         stanza_package=package,
         model_name=model_name,
-        cpu_only=_bool_value(cpu_only_raw, context="cpu_only", default=True),
+        cpu_only=_bool_value(cpu_only_raw, context="nlp.cpu_only", default=True),
     )
 
 
-def _parse_filter_config(raw: Mapping[str, object]) -> FilterConfig:
-    filters = raw.get("filter") or raw.get("filters") or {}
-    filters_map = _optional_mapping(filters, context="filters")
-    has_roman_singular = "roman_exceptions_file" in filters_map
-    has_roman_plural = "roman_exception_files" in filters_map
-    if has_roman_singular and has_roman_plural:
-        raise ValueError(
-            "Specify only one of filters.roman_exceptions_file and filters.roman_exception_files"
-        )
-    roman = (
-        filters_map.get("roman_exceptions_file")
-        if has_roman_singular
-        else filters_map.get("roman_exception_files")
-    )
+def _parse_filter_config(value: object) -> FilterConfig:
+    filters_map = _optional_mapping(value, context="filters")
+    _reject_unknown_keys(filters_map, allowed=KNOWN_FILTER_KEYS, context="filters")
     return FilterConfig(
         min_token_length=_int_value(
             filters_map.get("min_token_length"),
@@ -430,38 +428,24 @@ def _parse_filter_config(raw: Mapping[str, object]) -> FilterConfig:
             context="filters.drop_roman_numerals",
             default=False,
         ),
-        roman_exceptions_file=_optional_str(roman, context="filters.roman_exceptions_file"),
-        upos_targets=_optional_string_set(
-            raw.get("upos_targets"),
-            context="upos_targets",
-            default=frozenset({"NOUN"}),
+        roman_exceptions_file=_optional_str(
+            filters_map.get("roman_exceptions_file"),
+            context="filters.roman_exceptions_file",
         ),
-        exclude_lemmas=_optional_str(
-            filters_map.get("exclude_lemmas") or filters_map.get("exclude_lemmas_file"),
-            context="filters.exclude_lemmas",
+        upos_targets=_optional_string_set(
+            filters_map.get("upos_targets"),
+            context="filters.upos_targets",
+            default=frozenset({"NOUN"}),
         ),
     )
 
 
 def _parse_normalization_config(value: object) -> NormalizationConfig:
     norm = _optional_mapping(value, context="normalization")
-    ligatures_raw = norm.get("ligatures")
-    ligatures: Mapping[str, str] | None = None
-    if ligatures_raw is not None:
-        ligature_map = _as_mapping(ligatures_raw, context="normalization.ligatures")
-        parsed: dict[str, str] = {}
-        for key, item in ligature_map.items():
-            if not isinstance(key, str) or not isinstance(item, str):
-                raise ValueError("normalization.ligatures keys and values must be strings")
-            parsed[key] = item
-        ligatures = parsed
+    _reject_unknown_keys(norm, allowed=KNOWN_NORMALIZATION_KEYS, context="normalization")
     return NormalizationConfig(
         enabled=_bool_value(norm.get("enabled"), context="normalization.enabled", default=True),
         casefold=_bool_value(norm.get("casefold"), context="normalization.casefold", default=False),
-        uv=_optional_str(norm.get("uv"), context="normalization.uv"),
-        ij=_optional_str(norm.get("ij"), context="normalization.ij"),
-        diacritics=_optional_str(norm.get("diacritics"), context="normalization.diacritics"),
-        ligatures=ligatures,
         map_u_v=_bool_value(norm.get("map_u_v"), context="normalization.map_u_v", default=False),
         map_i_j=_bool_value(norm.get("map_i_j"), context="normalization.map_i_j", default=False),
         strip_diacritics=_bool_value(
@@ -480,6 +464,7 @@ def _parse_normalization_config(value: object) -> NormalizationConfig:
 
 def _parse_dictcheck_config(value: object) -> DictCheckConfig:
     dc = _optional_mapping(value, context="dictcheck")
+    _reject_unknown_keys(dc, allowed=KNOWN_DICTCHECK_KEYS, context="dictcheck")
     return DictCheckConfig(
         enabled=_bool_value(dc.get("enabled"), context="dictcheck.enabled", default=False),
         wordlist=_optional_str(dc.get("wordlist"), context="dictcheck.wordlist"),
@@ -489,15 +474,20 @@ def _parse_dictcheck_config(value: object) -> DictCheckConfig:
 
 def _parse_ref_tags_config(value: object) -> RefTagsConfig:
     ref = _optional_mapping(value, context="ref_tags")
-    patterns = ref.get("patterns") or ref.get("ref_tags_file")
+    _reject_unknown_keys(ref, allowed=KNOWN_REF_TAGS_KEYS, context="ref_tags")
+    enabled = _bool_value(ref.get("enabled"), context="ref_tags.enabled", default=False)
+    patterns = _optional_str(ref.get("patterns"), context="ref_tags.patterns")
+    if enabled and not patterns:
+        raise ValueError("ref_tags.patterns is required when ref_tags.enabled=true")
     return RefTagsConfig(
-        enabled=_bool_value(ref.get("enabled"), context="ref_tags.enabled", default=False),
-        patterns=_optional_str(patterns, context="ref_tags.patterns"),
+        enabled=enabled,
+        patterns=patterns,
     )
 
 
 def _parse_trace_config(value: object) -> TraceConfig:
     trace = _optional_mapping(value, context="trace")
+    _reject_unknown_keys(trace, allowed=KNOWN_TRACE_KEYS, context="trace")
     only_keys = _optional_string_set(
         trace.get("only_keys"),
         context="trace.only_keys",
@@ -523,7 +513,13 @@ def _parse_trace_config(value: object) -> TraceConfig:
 
 def _parse_artifacts_config(value: object) -> ArtifactsConfig:
     artifacts = _optional_mapping(value, context="artifacts")
+    _reject_unknown_keys(artifacts, allowed=KNOWN_ARTIFACTS_KEYS, context="artifacts")
     tokens = _optional_mapping(artifacts.get("tokens"), context="artifacts.tokens")
+    _reject_unknown_keys(
+        tokens,
+        allowed=KNOWN_TOKEN_ARTIFACT_KEYS,
+        context="artifacts.tokens",
+    )
     return ArtifactsConfig(
         tokens=TokenArtifactConfig(
             enabled=_bool_value(
@@ -541,6 +537,7 @@ def _parse_artifacts_config(value: object) -> ArtifactsConfig:
 
 def _parse_archive_config(value: object) -> ArchiveConfig:
     archive = _optional_mapping(value, context="archive")
+    _reject_unknown_keys(archive, allowed=KNOWN_ARCHIVE_KEYS, context="archive")
     return ArchiveConfig(
         enabled=_bool_value(archive.get("enabled"), context="archive.enabled", default=False),
         runs_dir=_str_value(archive.get("runs_dir", "runs"), context="archive.runs_dir"),
@@ -559,6 +556,7 @@ def _parse_archive_config(value: object) -> ArchiveConfig:
 
 def _parse_analysis_cache_config(value: object) -> AnalysisCacheConfig:
     cache = _optional_mapping(value, context="analysis_cache")
+    _reject_unknown_keys(cache, allowed=KNOWN_ANALYSIS_CACHE_KEYS, context="analysis_cache")
     return AnalysisCacheConfig(
         enabled=_bool_value(cache.get("enabled"), context="analysis_cache.enabled", default=False),
         directory=_str_value(
@@ -585,6 +583,7 @@ def _parse_analysis_cache_config(value: object) -> AnalysisCacheConfig:
 
 def _parse_prune_config(value: object) -> PruneConfig:
     prune = _optional_mapping(value, context="prune")
+    _reject_unknown_keys(prune, allowed=KNOWN_PRUNE_KEYS, context="prune")
     return PruneConfig(
         keep_days=_optional_int(prune.get("keep_days"), context="prune.keep_days", minimum=0),
         keep_files=_optional_int(prune.get("keep_files"), context="prune.keep_files", minimum=0),
@@ -620,48 +619,38 @@ def _parse_comparison_specs(raw: Mapping[str, object]) -> tuple[ComparisonSpec, 
     return tuple(parse_comparison_specs(raw))
 
 
-def _reject_deprecated_keys(raw: Mapping[str, object]) -> None:
-    if "cleaner_config" in raw:
-        raise ValueError(
-            "Deprecated key 'cleaner_config' is not supported. Use preprocess: {kind: cleaner, config: ...}."
-        )
-    if "stanza_pkg" in raw:
-        raise ValueError("Deprecated key 'stanza_pkg' is not supported. Use 'stanza_package'.")
-
-
 def _build_app_config(raw: Mapping[str, object]) -> AppConfig:
-    unknown = unknown_top_level_keys(raw)
-    if unknown:
-        formatted = ", ".join(sorted(unknown))
-        raise ValueError(f"Unknown top-level config keys: {formatted}")
-    _reject_deprecated_keys(raw)
-    normalized = _normalize_groups(raw)
+    _reject_unknown_keys(raw, allowed=KNOWN_TOP_LEVEL_KEYS, context="top-level config")
+    if "groups" not in raw:
+        raise ValueError("groups is required")
 
-    groups = _parse_groups(normalized["groups"])
-    grouping = _parse_grouping_config(normalized.get("grouping"))
-    partition_validations = _parse_partition_specs(normalized)
+    validations = _optional_mapping(raw.get("validations"), context="validations")
+    _reject_unknown_keys(validations, allowed=KNOWN_VALIDATIONS_KEYS, context="validations")
+
+    groups = _parse_groups(raw["groups"])
+    grouping = _parse_grouping_config(raw.get("grouping"))
+    partition_validations = _parse_partition_specs(raw)
     if partition_validations and grouping.mode == "per_file":
         raise ValueError("validations.partitions cannot be used with grouping.mode: per_file")
-    comparisons = _parse_comparison_specs(normalized)
+    comparisons = _parse_comparison_specs(raw)
 
     return AppConfig(
         groups=groups,
-        preprocess=_parse_preprocess_config(normalized.get("preprocess")),
+        preprocess=_parse_preprocess_config(raw.get("preprocess")),
         grouping=grouping,
-        nlp=_parse_nlp_config(normalized),
-        filters=_parse_filter_config(normalized),
-        normalization=_parse_normalization_config(normalized.get("normalization")),
-        dictcheck=_parse_dictcheck_config(normalized.get("dictcheck")),
-        ref_tags=_parse_ref_tags_config(normalized.get("ref_tags")),
-        trace=_parse_trace_config(normalized.get("trace")),
-        artifacts=_parse_artifacts_config(normalized.get("artifacts")),
-        archive=_parse_archive_config(normalized.get("archive")),
-        analysis_cache=_parse_analysis_cache_config(normalized.get("analysis_cache")),
-        prune=_parse_prune_config(normalized.get("prune")),
-        analysis_unit=_parse_analysis_unit(normalized.get("analysis_unit")),
-        out_dir=_str_value(normalized.get("out_dir", "output"), context="out_dir"),
-        csv_header=_parse_csv_header(normalized.get("csv_header")),
-        vocab_path=_optional_str(normalized.get("vocab_path"), context="vocab_path"),
+        nlp=_parse_nlp_config(raw.get("nlp")),
+        filters=_parse_filter_config(raw.get("filters")),
+        normalization=_parse_normalization_config(raw.get("normalization")),
+        dictcheck=_parse_dictcheck_config(raw.get("dictcheck")),
+        ref_tags=_parse_ref_tags_config(raw.get("ref_tags")),
+        trace=_parse_trace_config(raw.get("trace")),
+        artifacts=_parse_artifacts_config(raw.get("artifacts")),
+        archive=_parse_archive_config(raw.get("archive")),
+        analysis_cache=_parse_analysis_cache_config(raw.get("analysis_cache")),
+        prune=_parse_prune_config(raw.get("prune")),
+        analysis_unit=_parse_analysis_unit(raw.get("analysis_unit")),
+        out_dir=_str_value(raw.get("out_dir", "output"), context="out_dir"),
+        csv_header=_parse_csv_header(raw.get("csv_header")),
         comparisons=comparisons,
         partition_validations=partition_validations,
     )
@@ -704,10 +693,6 @@ def _normalization_to_dict(config: NormalizationConfig) -> dict[str, object]:
     return {
         "enabled": config.enabled,
         "casefold": config.casefold,
-        "uv": config.uv,
-        "ij": config.ij,
-        "diacritics": config.diacritics,
-        "ligatures": dict(config.ligatures) if config.ligatures is not None else None,
         "map_u_v": config.map_u_v,
         "map_i_j": config.map_i_j,
         "strip_diacritics": config.strip_diacritics,
@@ -775,16 +760,12 @@ def config_to_dict(config: AppConfig) -> dict[str, object]:
             "auto_group_name": config.grouping.auto_group_name,
         },
         "nlp": _nlp_to_dict(config.nlp),
-        "language": config.nlp.language,
-        "stanza_package": config.nlp.stanza_package,
-        "cpu_only": config.nlp.cpu_only,
         "filters": {
+            "upos_targets": sorted(config.filters.upos_targets),
             "min_token_length": config.filters.min_token_length,
             "drop_roman_numerals": config.filters.drop_roman_numerals,
             "roman_exceptions_file": config.filters.roman_exceptions_file,
-            "exclude_lemmas": config.filters.exclude_lemmas,
         },
-        "upos_targets": sorted(config.filters.upos_targets),
         "normalization": _normalization_to_dict(config.normalization),
         "dictcheck": {
             "enabled": config.dictcheck.enabled,
@@ -821,7 +802,6 @@ def config_to_dict(config: AppConfig) -> dict[str, object]:
         },
         "analysis_unit": config.analysis_unit,
         "out_dir": config.out_dir,
-        "vocab_path": config.vocab_path,
         "comparisons": [_comparison_to_dict(spec) for spec in config.comparisons],
         "validations": {
             "partitions": [_partition_to_dict(spec) for spec in config.partition_validations],
@@ -834,14 +814,3 @@ def config_to_dict(config: AppConfig) -> dict[str, object]:
     if config.csv_header is not None:
         out["csv_header"] = list(config.csv_header)
     return out
-
-
-def unknown_top_level_keys(raw_config: Mapping[str, object]) -> list[str]:
-    return [str(key) for key in raw_config if key not in KNOWN_TOP_LEVEL_KEYS]
-
-
-def unknown_filter_keys(raw_config: Mapping[str, object]) -> list[str]:
-    filters = raw_config.get("filter") or raw_config.get("filters") or {}
-    if not isinstance(filters, Mapping):
-        return []
-    return [str(key) for key in filters if key not in KNOWN_FILTER_KEYS]

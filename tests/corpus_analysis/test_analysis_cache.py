@@ -146,9 +146,9 @@ artifacts:
     enabled: true
     path: output/tokens.tsv
 filters:
+  upos_targets: [NOUN]
   min_token_length: 2
   drop_roman_numerals: true
-upos_targets: [NOUN]
 """
     assert _run(tmp_path, base, backend) == {"rosa": 1}
     assert len(backend.calls) == 1

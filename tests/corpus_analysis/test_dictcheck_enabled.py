@@ -34,9 +34,11 @@ def test_dictcheck_enabled_creates_known_unknown(tmp_path, monkeypatch):
             "text": {"files": [str(data_dir / "*.txt")]}
         },
         "out_dir": str(out_dir),
-        "language": "la",
-        "stanza_package": "perseus",
-        "cpu_only": True,
+        "nlp": {
+            "language": "la",
+            "stanza_package": "perseus",
+            "cpu_only": True,
+        },
         "dictcheck": {
             "enabled": True,
             # IMPORTANT: main() resolves relative to script_dir
@@ -112,9 +114,11 @@ def test_dictcheck_enabled_requires_wordlist(tmp_path, monkeypatch):
     cfg = {
         "groups": {"text": {"files": [str(data_dir / "*.txt")]}},
         "out_dir": str(out_dir),
-        "language": "la",
-        "stanza_package": "perseus",
-        "cpu_only": True,
+        "nlp": {
+            "language": "la",
+            "stanza_package": "perseus",
+            "cpu_only": True,
+        },
         "dictcheck": {
             "enabled": True,
             # wordlist missing on purpose

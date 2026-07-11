@@ -11,6 +11,7 @@ from typing import Any, Mapping, Sequence
 
 ON_MISMATCH_VALUES = {"error", "warn"}
 REPORT_VALUES = {"mismatches", "all"}
+PARTITION_KEYS = frozenset({"name", "whole", "parts", "on_mismatch", "report"})
 _SAFE_NAME_RE = re.compile(r"[^0-9A-Za-z]+")
 
 
@@ -82,6 +83,9 @@ def parse_partition_specs(config: dict) -> list[PartitionSpec]:
         label = f"validations.partitions[{index}]"
         if not isinstance(raw, dict):
             raise ValueError(f"{label} must be a mapping.")
+        unknown = sorted(str(key) for key in raw if key not in PARTITION_KEYS)
+        if unknown:
+            raise ValueError(f"Unknown {label} key(s): {', '.join(unknown)}")
 
         name = raw.get("name")
         if not isinstance(name, str) or not name.strip():

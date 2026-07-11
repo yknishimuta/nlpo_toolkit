@@ -66,9 +66,10 @@ def _write_config(project_root: Path, *, group_files: str = "input/*.txt", extra
                 "    files:",
                 f"      - {group_files}",
                 "out_dir: output",
-                "language: la",
-                "stanza_package: perseus",
-                "cpu_only: true",
+                "nlp:",
+                "  language: la",
+                "  stanza_package: perseus",
+                "  cpu_only: true",
                 extra,
                 "",
             ]
@@ -301,30 +302,6 @@ def test_run_features_auto_single_cleaned_errors_on_multiple(tmp_path: Path) -> 
             build_pipeline_fn=_build_pipeline,
             clean_mod=type("Clean", (), {"main": staticmethod(lambda _argv: 0)}),
         )
-
-
-def test_exclude_lemmas_is_not_applied(tmp_path: Path) -> None:
-    (tmp_path / "input").mkdir()
-    (tmp_path / "input" / "a.txt").write_text("Rosa amat.", encoding="utf-8")
-    (tmp_path / "config").mkdir()
-    (tmp_path / "config" / "exclude_lemmas.txt").write_text("rosa\n", encoding="utf-8")
-    config_path = _write_config(
-        tmp_path,
-        extra="\nfilters:\n  exclude_lemmas: config/exclude_lemmas.txt",
-    )
-    out = tmp_path / "features.csv"
-
-    run_features(
-        project_root=tmp_path,
-        config_path=config_path,
-        out=out,
-        mfw=2,
-        build_pipeline_fn=_build_pipeline,
-        clean_mod=object(),
-    )
-
-    rows = list(csv.DictReader(out.open(encoding="utf-8")))
-    assert "mfw_rosa" in rows[0]
 
 
 def test_mfw_negative_errors(tmp_path: Path) -> None:

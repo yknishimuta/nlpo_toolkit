@@ -21,17 +21,20 @@ def test_normalization_policy_is_written_to_summary_and_run_meta(tmp_path, monke
         "groups": {"text": {"files": [str(data_dir / "*.txt")]}},
         "out_dir": str(out_dir),
         "analysis_unit": "lemma",
-        "language": "la",
-        "stanza_package": "perseus",
-        "cpu_only": True,
+        "nlp": {
+            "language": "la",
+            "stanza_package": "perseus",
+            "cpu_only": True,
+        },
         "dictcheck": {"enabled": False},
         "normalization": {
             "enabled": True,
             "casefold": True,
-            "uv": "v_to_u",
-            "ij": "j_to_i",
-            "diacritics": "strip",
-            "ligatures": {"æ": "ae", "œ": "oe"},
+            "map_u_v": True,
+            "map_i_j": True,
+            "strip_diacritics": True,
+            "normalize_ligatures": True,
+            "unicode_nf": "NFC",
         },
     }
 
@@ -62,14 +65,14 @@ def test_normalization_policy_is_written_to_summary_and_run_meta(tmp_path, monke
     # Assert: summary.txt contains policy line
     summary = (out_dir / "summary.txt").read_text(encoding="utf-8")
     assert "normalization:" in summary
-    assert "uv=v_to_u" in summary
-    assert "ij=j_to_i" in summary
-    assert "diacritics=strip" in summary
+    assert "map_u_v=True" in summary
+    assert "map_i_j=True" in summary
+    assert "strip_diacritics=True" in summary
 
     # Assert: run_meta.json contains policy dict (structured)
     meta = json.loads((out_dir / "run_meta.json").read_text(encoding="utf-8"))
     assert meta["normalization"]["enabled"] is True
-    assert meta["normalization"]["uv"] == "v_to_u"
-    assert meta["normalization"]["ij"] == "j_to_i"
-    assert meta["normalization"]["diacritics"] == "strip"
-    assert meta["normalization"]["ligatures"]["æ"] == "ae"
+    assert meta["normalization"]["map_u_v"] is True
+    assert meta["normalization"]["map_i_j"] is True
+    assert meta["normalization"]["strip_diacritics"] is True
+    assert meta["normalization"]["normalize_ligatures"] is True

@@ -82,7 +82,6 @@ Example output:
 [OK] cleaned output dir: cleaned
 [OK] group text matched files: 3
 [WARN] duplicate YAML key: trace
-[WARN] filters.roman_exception_files is deprecated; use filters.roman_exceptions_file
 [OK] dictcheck wordlist found
 [OK] ref_tags patterns found
 [OK] output dir: output
@@ -175,9 +174,10 @@ groups:
       - input/*.txt
 
 out_dir: output
-language: la
-stanza_package: perseus
-cpu_only: true
+nlp:
+  language: la
+  stanza_package: perseus
+  cpu_only: true
 analysis_unit: lemma
 ```
 
@@ -222,9 +222,10 @@ groups:
       - input/*.txt
 
 out_dir: output
-language: la
-stanza_package: perseus
-cpu_only: true
+nlp:
+  language: la
+  stanza_package: perseus
+  cpu_only: true
 analysis_unit: lemma
 ```
 
@@ -512,11 +513,6 @@ concatenated, configured text normalization is applied, and reference tags are
 removed before NLP. If `ref_tags.enabled=true`, the pattern file must exist; a
 missing pattern file is a configuration error.
 
-`exclude_lemmas.txt` is not applied by `nlpo features`. Feature matrices are
-intended for style and distributional statistics, so removing nouns or other
-terms for vocabulary analysis would distort function-word, UPOS, MFW, and
-type-token features.
-
 ## N-Gram CLI
 
 Use `nlpo ngram` to build n-gram frequency tables from a token artifact,
@@ -586,9 +582,10 @@ groups:
       - input/*.txt
 
 out_dir: output
-language: la
-stanza_package: perseus
-cpu_only: true
+nlp:
+  language: la
+  stanza_package: perseus
+  cpu_only: true
 analysis_unit: lemma
 
 filters:
@@ -683,8 +680,7 @@ is the formal complete token artifact; if both are enabled, use different paths.
 that should not be removed by Roman numeral filtering. Blank lines and lines
 starting with `#` are ignored, matching is case-insensitive, and missing files
 are reported as configuration errors. The built-in surface-mode exceptions
-`vi` and `di` remain for backward compatibility. The old
-`roman_exception_files` key is still accepted but deprecated.
+`vi` and `di` remain available.
 
 ## Run Archive
 
@@ -769,7 +765,6 @@ different responsibilities.
 | `lexicon_map.tsv` | Corrects or normalizes the input text itself | Before Stanza / NLP | `uod -> quod` |
 | `lemma_normalize.tsv` | Corrects lemmas after NLP analysis | After Stanza / NLP | `omninus -> omnino` |
 | `filters` | Mechanically removes tokens from counting | Before frequency counting | Drop one-character tokens; drop Roman numerals |
-| `exclude_lemmas.txt` | Manually excludes unwanted lemmas | Before or after frequency output, depending on the workflow | Remove `idest`, `omnino`, etc. from the final table |
 | `dictcheck.wordlist` | Classifies lemmas as known or unknown | After frequency tables are created | Check whether a lemma exists in the dictionary wordlist |
 
 ## Docker

@@ -120,6 +120,7 @@ def test_analyze_one_corpus_writes_expected_outputs_from_record_pipeline(tmp_pat
     (tmp_path / "config").mkdir()
     (tmp_path / "config" / "roman.txt").write_text("xiv\n", encoding="utf-8")
     (tmp_path / "config" / "wordlist.txt").write_text("item_a\n", encoding="utf-8")
+    (tmp_path / "config" / "ref_tags.txt").write_text("REF\n", encoding="utf-8")
     config_path = tmp_path / "config.yml"
     config_path.write_text("dummy", encoding="utf-8")
 
@@ -136,7 +137,7 @@ def test_analyze_one_corpus_writes_expected_outputs_from_record_pipeline(tmp_pat
                 "enabled": True,
                 "wordlist": "config/wordlist.txt",
             },
-            "ref_tags": {"enabled": True},
+            "ref_tags": {"enabled": True, "patterns": "config/ref_tags.txt"},
             "trace": {
                 "enabled": True,
                 "path": "output/trace.tsv",

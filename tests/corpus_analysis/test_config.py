@@ -1,28 +1,40 @@
 from __future__ import annotations
 
+from dataclasses import fields
 from pathlib import Path
+
 import pytest
 import yaml
 
 from nlpo_toolkit.corpus_analysis.config import (
     AppConfig,
+    NormalizationConfig,
     config_to_dict,
     ensure_app_config,
     load_config,
 )
 
 
-def _assert_cache_sections_exclusive(serialized: dict[str, object]) -> None:
-    removed_key = "lemma" + "_cache"
-    assert "analysis_cache" in serialized
-    assert removed_key not in serialized
-
-
 def _assert_config_round_trip(config: AppConfig) -> dict[str, object]:
     serialized = config_to_dict(config)
-    _assert_cache_sections_exclusive(serialized)
     assert ensure_app_config(serialized) == config
     return serialized
+
+
+def test_minimal_canonical_config():
+    config = ensure_app_config(
+        {
+            "groups": {
+                "text": {
+                    "files": ["input/*.txt"],
+                }
+            }
+        }
+    )
+
+    assert config.groups["text"].files == ("input/*.txt",)
+    assert config.nlp.language == "la"
+    assert config.filters.upos_targets == frozenset({"NOUN"})
 
 
 def test_load_config_accepts_preprocess_and_groups(tmp_path: Path):
@@ -38,9 +50,10 @@ def test_load_config_accepts_preprocess_and_groups(tmp_path: Path):
                 "    files:",
                 "      - cleaned/*.txt",
                 "out_dir: output",
-                "language: la",
-                "stanza_package: perseus",
-                "cpu_only: true",
+                "nlp:",
+                "  language: la",
+                "  stanza_package: perseus",
+                "  cpu_only: true",
                 "",
             ]
         ),
@@ -52,7 +65,6 @@ def test_load_config_accepts_preprocess_and_groups(tmp_path: Path):
     assert isinstance(cfg, AppConfig)
     assert cfg.preprocess.kind == "cleaner"
     assert cfg.preprocess.config == "cleaners/config/sample.yml"
-    assert "text" in cfg.groups
     assert cfg.groups["text"].files == ("cleaned/*.txt",)
     assert cfg.analysis_unit == "lemma"
     assert cfg.filters.min_token_length == 0
@@ -63,41 +75,11 @@ def test_load_config_accepts_preprocess_and_groups(tmp_path: Path):
     assert cfg.nlp.backend == "stanza"
 
 
-def test_load_config_normalizes_group_to_groups(tmp_path: Path):
-    cfg_path = tmp_path / "cfg.yml"
-    cfg_path.write_text(
-        "\n".join(
-            [
-                "group:",
-                "  name: text",
-                "  files:",
-                "    - input/*.txt",
-                "out_dir: output",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    cfg = load_config(cfg_path)
-
-    assert "text" in cfg.groups
-    assert cfg.groups["text"].files == ("input/*.txt",)
-
-
-def test_load_config_rejects_missing_groups_and_group(tmp_path: Path):
+def test_load_config_rejects_missing_groups(tmp_path: Path):
     cfg_path = tmp_path / "invalid.yml"
     cfg_path.write_text("out_dir: output\n", encoding="utf-8")
 
-    with pytest.raises(ValueError, match=r"define 'groups' or 'group'"):
-        load_config(cfg_path)
-
-
-def test_load_config_rejects_deprecated_cleaner_config(tmp_path: Path):
-    cfg_path = tmp_path / "old.yml"
-    cfg_path.write_text("cleaner_config: cleaners/config/sample.yml\n", encoding="utf-8")
-
-    with pytest.raises(ValueError, match=r"Deprecated key 'cleaner_config'"):
+    with pytest.raises(ValueError, match="groups is required"):
         load_config(cfg_path)
 
 
@@ -123,45 +105,47 @@ def test_load_config_accepts_grouping_per_file(tmp_path: Path):
     assert cfg.grouping.mode == "per_file"
 
 
-def test_load_config_accepts_auto_single_cleaned_without_groups(tmp_path: Path):
-    cfg_path = tmp_path / "config.yml"
-    cfg_path.write_text(
-        "\n".join(
-            [
-                "grouping:",
-                "  mode: auto_single_cleaned",
-                "  auto_group_name: text",
-                "",
-            ]
-        ),
-        encoding="utf-8",
+def test_nlp_settings_are_nested():
+    config = ensure_app_config(
+        {
+            "groups": {
+                "text": {
+                    "files": ["input/*.txt"],
+                }
+            },
+            "nlp": {
+                "backend": "stanza",
+                "language": "la",
+                "stanza_package": "perseus",
+                "cpu_only": False,
+            },
+        }
     )
 
-    cfg = load_config(cfg_path)
-
-    assert cfg.grouping.mode == "auto_single_cleaned"
-    assert cfg.groups["text"].files == ()
+    assert config.nlp.cpu_only is False
 
 
-def test_load_config_rejects_invalid_grouping_mode(tmp_path: Path):
-    cfg_path = tmp_path / "cfg.yml"
-    cfg_path.write_text(
-        "\n".join(
-            [
-                "groups:",
-                "  text:",
-                "    files:",
-                "      - input/*.txt",
-                "grouping:",
-                "  mode: by_author",
-                "",
-            ]
-        ),
-        encoding="utf-8",
+def test_filter_settings_are_nested():
+    config = ensure_app_config(
+        {
+            "groups": {
+                "text": {
+                    "files": ["input/*.txt"],
+                }
+            },
+            "filters": {
+                "upos_targets": ["NOUN", "PROPN"],
+                "min_token_length": 2,
+                "drop_roman_numerals": True,
+                "roman_exceptions_file": "config/roman.txt",
+            },
+        }
     )
 
-    with pytest.raises(ValueError, match=r"grouping\.mode"):
-        load_config(cfg_path)
+    assert config.filters.upos_targets == frozenset({"NOUN", "PROPN"})
+    assert config.filters.min_token_length == 2
+    assert config.filters.drop_roman_numerals is True
+    assert config.filters.roman_exceptions_file == "config/roman.txt"
 
 
 def test_load_config_nested_values_and_config_to_dict(tmp_path: Path):
@@ -174,16 +158,14 @@ def test_load_config_nested_values_and_config_to_dict(tmp_path: Path):
                 "nlp:",
                 "  backend: transformers",
                 "  language: xx",
-                "  package: package_from_nlp",
+                "  stanza_package: package_from_nlp",
                 "  model_name: model_a",
-                "language: la",
-                "stanza_package: perseus",
-                "cpu_only: true",
-                "upos_targets: [NOUN, PROPN]",
+                "  cpu_only: true",
                 "filters:",
+                "  upos_targets: [NOUN, PROPN]",
                 "  min_token_length: 2",
                 "  drop_roman_numerals: true",
-                "  roman_exception_files: config/roman.txt",
+                "  roman_exceptions_file: config/roman.txt",
                 "trace:",
                 "  enabled: true",
                 "  max_rows: 10",
@@ -199,41 +181,16 @@ def test_load_config_nested_values_and_config_to_dict(tmp_path: Path):
     data = config_to_dict(cfg)
 
     assert cfg.nlp.backend == "transformers"
-    assert cfg.nlp.language == "la"
-    assert cfg.nlp.stanza_package == "perseus"
+    assert cfg.nlp.language == "xx"
+    assert cfg.nlp.stanza_package == "package_from_nlp"
     assert cfg.nlp.model_name == "model_a"
     assert cfg.filters.upos_targets == frozenset({"NOUN", "PROPN"})
     assert cfg.filters.roman_exceptions_file == "config/roman.txt"
     assert cfg.trace.max_rows == 10
     assert cfg.analysis_cache.directory == "cache/analysis"
     assert data["groups"] == {"corpus_a": {"files": ["input/corpus_a.txt"]}}
-    assert data["upos_targets"] == ["NOUN", "PROPN"]
+    assert data["filters"]["upos_targets"] == ["NOUN", "PROPN"]
     assert data["analysis_cache"]["dir"] == "cache/analysis"
-    assert ensure_app_config(data) == cfg
-
-
-def test_load_config_parses_analysis_cache(tmp_path: Path):
-    cfg_path = tmp_path / "cfg.yml"
-    cfg_path.write_text(
-        "\n".join(
-            [
-                "groups:",
-                "  corpus_a: {files: [input/corpus_a.txt]}",
-                "analysis_cache:",
-                "  enabled: true",
-                "  dir: .analysis_cache",
-                "  manifest_key_mode: relative",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    cfg = load_config(cfg_path)
-    assert cfg.analysis_cache.enabled is True
-    assert cfg.analysis_cache.directory == ".analysis_cache"
-    data = config_to_dict(cfg)
-    _assert_cache_sections_exclusive(data)
-    assert "analysis_cache" in data
     assert ensure_app_config(data) == cfg
 
 
@@ -275,19 +232,14 @@ def test_config_to_dict_round_trips_cleaner_and_full_sections():
                 "cpu_only": False,
             },
             "filters": {
+                "upos_targets": ["PROPN", "NOUN"],
                 "min_token_length": 2,
                 "drop_roman_numerals": True,
                 "roman_exceptions_file": "config/roman.txt",
-                "exclude_lemmas": "config/exclude.txt",
             },
-            "upos_targets": ["PROPN", "NOUN"],
             "normalization": {
                 "enabled": True,
                 "casefold": True,
-                "uv": "v",
-                "ij": "i",
-                "diacritics": "strip",
-                "ligatures": {"æ": "ae"},
                 "map_u_v": True,
                 "map_i_j": True,
                 "strip_diacritics": True,
@@ -336,7 +288,6 @@ def test_config_to_dict_round_trips_cleaner_and_full_sections():
             },
             "analysis_unit": "surface",
             "csv_header": ["form", "count"],
-            "vocab_path": "config/vocab.tsv",
             "out_dir": "custom-output",
         }
     )
@@ -453,24 +404,6 @@ def test_config_to_dict_round_trips_analysis_cache():
     }
 
 
-def test_config_rejects_removed_cache_key():
-    removed_key = "lemma" + "_cache"
-
-    with pytest.raises(ValueError, match="Unknown top-level config"):
-        ensure_app_config(
-            {
-                "groups": {
-                    "text": {
-                        "files": ["input/*.txt"],
-                    }
-                },
-                removed_key: {
-                    "enabled": True,
-                },
-            }
-        )
-
-
 def test_config_to_dict_output_is_yaml_safe():
     original = ensure_app_config(
         {
@@ -492,60 +425,150 @@ def test_config_to_dict_output_is_yaml_safe():
     loaded = yaml.safe_load(yaml_text)
     restored = ensure_app_config(loaded)
 
-    _assert_cache_sections_exclusive(serialized)
+    assert ("lemma" + "_cache") not in serialized
     assert restored == original
 
 
-def test_load_config_rejects_both_roman_exception_keys(tmp_path: Path):
-    cfg_path = tmp_path / "cfg.yml"
-    cfg_path.write_text(
-        "\n".join(
-            [
-                "groups:",
-                "  corpus_a: {files: [input/corpus_a.txt]}",
-                "filters:",
-                "  roman_exceptions_file: config/roman_a.txt",
-                "  roman_exception_files: config/roman_b.txt",
-                "",
-            ]
-        ),
-        encoding="utf-8",
+@pytest.mark.parametrize(
+    "removed_key",
+    [
+        "cleaner_config",
+        "cpu_only",
+        "filter",
+        "group",
+        "language",
+        "stanza_package",
+        "stanza_pkg",
+        "upos_targets",
+        "vocab_path",
+    ],
+)
+def test_removed_top_level_keys_are_rejected(removed_key: str):
+    raw = {
+        "groups": {
+            "text": {
+                "files": ["input/*.txt"],
+            }
+        },
+        removed_key: True,
+    }
+
+    with pytest.raises(ValueError, match="Unknown top-level"):
+        ensure_app_config(raw)
+
+
+@pytest.mark.parametrize(
+    ("section", "removed_key", "value"),
+    [
+        ("filters", "roman_exception_files", "config/roman.txt"),
+        ("filters", "exclude_lemmas", "config/exclude.txt"),
+        ("filters", "exclude_lemmas_file", "config/exclude.txt"),
+        ("ref_tags", "ref_tags_file", "config/ref_tags.txt"),
+        ("normalization", "uv", "v"),
+        ("normalization", "ij", "i"),
+        ("normalization", "diacritics", "strip"),
+        ("normalization", "ligatures", {"æ": "ae"}),
+    ],
+)
+def test_removed_nested_keys_are_rejected(section: str, removed_key: str, value: object):
+    raw = {
+        "groups": {
+            "text": {
+                "files": ["input/*.txt"],
+            }
+        },
+        section: {
+            removed_key: value,
+        },
+    }
+
+    with pytest.raises(ValueError, match=f"Unknown {section}"):
+        ensure_app_config(raw)
+
+
+def test_app_config_has_no_unused_vocab_path():
+    names = {field.name for field in fields(AppConfig)}
+
+    assert "vocab_path" not in names
+
+
+def test_normalization_config_has_only_active_fields():
+    names = {field.name for field in fields(NormalizationConfig)}
+
+    assert names == {
+        "enabled",
+        "casefold",
+        "unicode_nf",
+        "map_u_v",
+        "map_i_j",
+        "strip_diacritics",
+        "normalize_ligatures",
+    }
+
+
+def test_config_to_dict_uses_only_canonical_schema():
+    config = ensure_app_config(
+        {
+            "groups": {
+                "text": {
+                    "files": ["input/*.txt"],
+                }
+            },
+            "nlp": {
+                "language": "la",
+                "stanza_package": "perseus",
+            },
+            "filters": {
+                "upos_targets": ["NOUN"],
+            },
+        }
     )
 
-    with pytest.raises(ValueError, match="Specify only one"):
-        load_config(cfg_path)
+    serialized = config_to_dict(config)
+
+    assert "nlp" in serialized
+    assert "filters" in serialized
+
+    for removed in {
+        "group",
+        "filter",
+        "language",
+        "stanza_package",
+        "stanza_pkg",
+        "cpu_only",
+        "upos_targets",
+        "cleaner_config",
+        "vocab_path",
+    }:
+        assert removed not in serialized
 
 
-def test_load_config_uses_nlp_section_when_top_level_nlp_values_absent(tmp_path: Path):
-    cfg_path = tmp_path / "cfg.yml"
-    cfg_path.write_text(
-        "\n".join(
-            [
-                "groups:",
-                "  corpus_a: {files: [input/corpus_a.txt]}",
-                "nlp:",
-                "  language: zz",
-                "  package: package_a",
-                "  cpu_only: false",
-                "",
-            ]
-        ),
-        encoding="utf-8",
+def test_canonical_config_yaml_round_trip():
+    original = ensure_app_config(
+        {
+            "groups": {
+                "text": {
+                    "files": ["input/*.txt"],
+                }
+            },
+            "nlp": {
+                "backend": "stanza",
+                "language": "la",
+                "stanza_package": "perseus",
+                "cpu_only": True,
+            },
+            "filters": {
+                "upos_targets": ["NOUN"],
+                "min_token_length": 2,
+            },
+        }
     )
 
-    cfg = load_config(cfg_path)
+    serialized = config_to_dict(original)
+    serialized_yaml = yaml.safe_dump(serialized, sort_keys=False, allow_unicode=True)
+    loaded = yaml.safe_load(serialized_yaml)
 
-    assert cfg.nlp.language == "zz"
-    assert cfg.nlp.stanza_package == "package_a"
-    assert cfg.nlp.cpu_only is False
-
-
-def test_load_config_rejects_top_level_non_mapping(tmp_path: Path):
-    cfg_path = tmp_path / "cfg.yml"
-    cfg_path.write_text("- bad\n", encoding="utf-8")
-
-    with pytest.raises(ValueError, match="Top-level YAML"):
-        load_config(cfg_path)
+    assert ensure_app_config(loaded) == original
 
 
 @pytest.mark.parametrize(
@@ -554,9 +577,18 @@ def test_load_config_rejects_top_level_non_mapping(tmp_path: Path):
         ("groups:\n  corpus_a:\n    files: input/*.txt\n", "groups.corpus_a.files"),
         ("groups:\n  corpus_a:\n    files: [input/a.txt, 1]\n", "groups.corpus_a.files\\[1\\]"),
         ("groups:\n  corpus_a: {files: [input/a.txt]}\nanalysis_unit: token\n", "analysis_unit"),
-        ("groups:\n  corpus_a: {files: [input/a.txt]}\nfilters:\n  min_token_length: -1\n", "filters.min_token_length"),
-        ("groups:\n  corpus_a: {files: [input/a.txt]}\nfilters:\n  min_token_length: true\n", "filters.min_token_length"),
-        ("groups:\n  corpus_a: {files: [input/a.txt]}\nupos_targets: NOUN\n", "upos_targets"),
+        (
+            "groups:\n  corpus_a: {files: [input/a.txt]}\nfilters:\n  min_token_length: -1\n",
+            "filters.min_token_length",
+        ),
+        (
+            "groups:\n  corpus_a: {files: [input/a.txt]}\nfilters:\n  min_token_length: true\n",
+            "filters.min_token_length",
+        ),
+        (
+            "groups:\n  corpus_a: {files: [input/a.txt]}\nfilters:\n  upos_targets: NOUN\n",
+            "filters.upos_targets",
+        ),
         ("groups:\n  corpus_a: {files: [input/a.txt]}\ntrace:\n  max_rows: -1\n", "trace.max_rows"),
     ],
 )
@@ -565,6 +597,14 @@ def test_load_config_rejects_invalid_typed_values(tmp_path: Path, body: str, mat
     cfg_path.write_text(body, encoding="utf-8")
 
     with pytest.raises(ValueError, match=match):
+        load_config(cfg_path)
+
+
+def test_load_config_rejects_top_level_non_mapping(tmp_path: Path):
+    cfg_path = tmp_path / "cfg.yml"
+    cfg_path.write_text("- bad\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Top-level YAML"):
         load_config(cfg_path)
 
 

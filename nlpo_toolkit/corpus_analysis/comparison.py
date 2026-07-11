@@ -24,6 +24,19 @@ from nlpo_toolkit.comparison import (
 
 REPORT_VALUES = {"all", "filtered"}
 SORT_BY_VALUES = {"log_likelihood", "abs_log_ratio", "total_count", "item"}
+COMPARISON_KEYS = frozenset(
+    {
+        "name",
+        "group_a",
+        "group_b",
+        "scale",
+        "zero_correction",
+        "min_total_count",
+        "report",
+        "sort",
+    }
+)
+COMPARISON_SORT_KEYS = frozenset({"by", "descending"})
 EPSILON = 1e-12
 _SAFE_NAME_RE = re.compile(r"[^0-9A-Za-z]+")
 
@@ -109,6 +122,9 @@ def parse_comparison_specs(config: Mapping[str, Any]) -> list[ComparisonSpec]:
         label = f"comparisons[{index}]"
         if not isinstance(raw, Mapping):
             raise ValueError(f"{label} must be a mapping.")
+        unknown = sorted(str(key) for key in raw if key not in COMPARISON_KEYS)
+        if unknown:
+            raise ValueError(f"Unknown {label} key(s): {', '.join(unknown)}")
 
         name = raw.get("name")
         if not isinstance(name, str) or not name.strip():
@@ -157,6 +173,9 @@ def parse_comparison_specs(config: Mapping[str, Any]) -> list[ComparisonSpec]:
         if sort is not None:
             if not isinstance(sort, Mapping):
                 raise ValueError(f"comparison '{name}': sort must be a mapping.")
+            unknown_sort = sorted(str(key) for key in sort if key not in COMPARISON_SORT_KEYS)
+            if unknown_sort:
+                raise ValueError(f"Unknown {label}.sort key(s): {', '.join(unknown_sort)}")
             sort_by = sort.get("by", "log_likelihood")
             if sort_by not in SORT_BY_VALUES:
                 raise ValueError(f"comparison '{name}': sort.by must be one of {sorted(SORT_BY_VALUES)}.")
