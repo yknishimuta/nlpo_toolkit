@@ -22,19 +22,20 @@ Each command module defines its parser registration and execution handler.
 
 ## Install
 
-Local development:
+Normal installation:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
+python -m pip install .
 ```
 
-From GitHub:
+Editable development installation:
 
 ```bash
-pip install git+https://github.com/yknishimuta/nlpo_toolkit.git
+python -m pip install -e ".[dev]"
+nlpo --help
 ```
+
+Runtime and development dependencies are declared in `pyproject.toml`.
 
 Stanza model download is required for real NLP runs unless you use Docker:
 

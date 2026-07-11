@@ -6,7 +6,6 @@ from typing import Any
 import yaml
 
 from .config import (
-    AppConfig,
     load_config,
 )
 from .corpus import (

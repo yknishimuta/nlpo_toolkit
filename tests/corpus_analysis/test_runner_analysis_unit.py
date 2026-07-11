@@ -5,7 +5,6 @@ import json
 from collections import Counter
 from pathlib import Path
 
-import pytest
 
 from nlpo_toolkit.corpus_analysis.outputs import (
     write_frequency_csv,

@@ -23,7 +23,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Iterable
 
-import yaml  # pip install pyyaml
+import yaml
 
 
 # ----------------------------

@@ -8,7 +8,6 @@ import pytest
 from nlpo_toolkit.corpus_analysis.ref_tags import (
     load_ref_tag_patterns,
     strip_and_count_ref_tags,
-    RefTagPattern,
 )
 
 

@@ -1,4 +1,4 @@
-from typing import Collection, Set, Optional, Dict, List, Iterable, Mapping, Union, Any
+from typing import Collection, Set, Optional, Dict, List, Iterable, Mapping, Union
 
 from .interfaces import NLPBackend
 

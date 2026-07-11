@@ -1,6 +1,5 @@
 from __future__ import annotations
 from pathlib import Path
-import csv
 
 from nlpo_toolkit.corpus_analysis.dictcheck import split_frequency_csv
 

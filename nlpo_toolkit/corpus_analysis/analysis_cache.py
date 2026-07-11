@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Iterator, Mapping
 
 from .cache_storage import (
-    CacheLockTimeout,
     PruneReport,
     acquire_cache_lock,
     release_cache_lock,

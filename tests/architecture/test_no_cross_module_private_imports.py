@@ -31,8 +31,6 @@ def test_no_cross_module_private_imports() -> None:
         for path in sorted(root.rglob("*.py")):
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
             module_aliases: dict[str, str] = {}
-            current_module = _module_name(path)
-
             for node in ast.walk(tree):
                 if isinstance(node, ast.ImportFrom):
                     module = node.module

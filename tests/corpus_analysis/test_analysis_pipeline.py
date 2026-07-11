@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import Counter
-from pathlib import Path
 
 from nlpo_toolkit.corpus_analysis.analysis_pipeline import (
     apply_lemma_normalization,

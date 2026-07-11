@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 import csv
 
-import pytest
 
 from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.cli import count as mod

@@ -12,7 +12,6 @@ from nlpo_toolkit.corpus_analysis.analysis_cache import (
     build_analysis_cache_key,
     cache_lock_path,
     cache_metadata_path,
-    cache_object_path,
     get_or_compute_analysis_records,
     prepared_text_sha256,
     prune_analysis_cache,

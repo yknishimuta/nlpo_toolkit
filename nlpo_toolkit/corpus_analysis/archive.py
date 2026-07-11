@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
-from .runner_types import ReferencedConfigFile, RunResult
+from .runner_types import RunResult
 
 _IGNORED_ARCHIVE_NAMES = {".DS_Store", ".gitkeep"}
 

@@ -9,11 +9,8 @@ This module provides configurable cleaning utilities for Latin texts, with a foc
 
 ## Installation
 
-This module only requires standard library plus **PyYAML**:
-
-```
-pip install pyyaml
-```
+Install this module as part of the project with `python -m pip install .`.
+Dependencies are declared in the repository `pyproject.toml`.
 
 ## Usage
 

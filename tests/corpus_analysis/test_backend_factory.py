@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sys
-from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -18,7 +17,6 @@ from nlpo_toolkit.backends import (
 )
 from nlpo_toolkit.backends.factory import render_backend_info
 from nlpo_toolkit.backends.stanza_backend import (
-    StanzaBackend,
     convert_stanza_document_to_common_model,
 )
 from nlpo_toolkit.backends.transformers_backend import (

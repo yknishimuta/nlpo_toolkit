@@ -10,7 +10,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml README.md requirements.txt ./
+COPY pyproject.toml README.md ./
 COPY nlpo_toolkit ./nlpo_toolkit
 COPY utils.py ./utils.py
 

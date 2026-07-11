@@ -97,7 +97,6 @@ def test_run_clean_corpus_bad_rules_path_raises(tmp_path):
     base = tmp_path / "count_corpus"
     cfg_dir = base / "config"
     inp_dir = base / "input"
-    out_dir = base / "output"
     inp_dir.mkdir(parents=True, exist_ok=True)
     cfg_dir.mkdir(parents=True, exist_ok=True)
 

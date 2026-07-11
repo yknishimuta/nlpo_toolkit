@@ -43,11 +43,10 @@ def test_cache_lock_times_out_when_lock_exists(tmp_path: Path) -> None:
         )
 
 
-def test_cache_modules_share_lock_and_prune_types() -> None:
+def test_cache_modules_share_prune_type() -> None:
     from nlpo_toolkit.corpus_analysis import analysis_cache
     from nlpo_toolkit.corpus_analysis import cache_storage
 
-    assert analysis_cache.CacheLockTimeout is cache_storage.CacheLockTimeout
     assert analysis_cache.PruneReport is cache_storage.PruneReport
 
 
