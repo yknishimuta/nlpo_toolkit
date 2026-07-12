@@ -42,6 +42,10 @@ _string_tuple = string_tuple
 _optional_string_set = optional_string_set
 
 
+class ConfigError(ValueError):
+    """A configuration file could not be read, parsed, or validated."""
+
+
 def _parse_group_config(value: object, *, context: str) -> GroupConfig:
     group = _as_mapping(value, context=context)
     _reject_unknown_keys(group, allowed=KNOWN_GROUP_KEYS, context=context)
@@ -472,15 +476,26 @@ def parse_config(raw: Mapping[str, object]) -> AppConfig:
 
 
 def load_config(path: Path) -> AppConfig:
-    if not path.exists():
-        raise FileNotFoundError(f"Config not found: {path}")
     if path.suffix.lower() not in {".yml", ".yaml"}:
-        raise ValueError("Config file must be YAML (.yml / .yaml)")
+        raise ConfigError("Config file must be YAML (.yml / .yaml)")
 
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ConfigError(f"Config not found or unreadable: {path}: {exc}") from exc
+    except UnicodeError as exc:
+        raise ConfigError(f"Config file is not valid UTF-8: {path}: {exc}") from exc
+
+    try:
+        data = yaml.safe_load(text) or {}
+    except yaml.YAMLError as exc:
+        raise ConfigError(f"Invalid YAML in config file {path}: {exc}") from exc
     if not isinstance(data, Mapping):
-        raise ValueError("Top-level YAML must be a mapping.")
-    return parse_config(data)
+        raise ConfigError("Top-level YAML must be a mapping.")
+    try:
+        return parse_config(data)
+    except ValueError as exc:
+        raise ConfigError(str(exc)) from exc
 
 
 def ensure_app_config(config: AppConfig | Mapping[str, object]) -> AppConfig:

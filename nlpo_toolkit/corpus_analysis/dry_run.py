@@ -1,18 +1,21 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Mapping
 
 import yaml
 
 from .dependencies import CorpusPlanningDependencies
+from .config import ConfigError
 from .corpus import (
     inspect_preprocess,
     resolve_cleaner_plan,
     resolve_project_path,
 )
+from .corpus_errors import CleanerInspectionError, CorpusPreparationError
 from .io_utils import expand_globs
-from .run_plan import RunPlan, build_run_plan
+from .run_plan import RunPlan, RunPlanError, build_run_plan
 
 if TYPE_CHECKING:
     from .count_command import CountRequest
@@ -20,6 +23,16 @@ if TYPE_CHECKING:
 
 class DuplicateKeyLoader(yaml.SafeLoader):
     pass
+
+
+class DryRunConfigError(ValueError):
+    """The root configuration could not be inspected."""
+
+
+@dataclass(frozen=True)
+class DuplicateKeyConfig:
+    raw: Mapping[str, object]
+    duplicate_keys: tuple[str, ...]
 
 
 def _construct_mapping(loader: DuplicateKeyLoader, node: yaml.nodes.MappingNode, deep: bool = False) -> dict:
@@ -42,17 +55,33 @@ DuplicateKeyLoader.add_constructor(
 )
 
 
-def _load_yaml_with_duplicate_keys(path: Path) -> tuple[dict[str, Any], list[str]]:
-    loader = DuplicateKeyLoader(path.read_text(encoding="utf-8"))
+def _load_yaml_with_duplicate_keys(path: Path) -> DuplicateKeyConfig:
     try:
-        data = loader.get_single_data() or {}
-        duplicates = list(getattr(loader, "_duplicate_keys", []))
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise DryRunConfigError(
+            f"Failed to read config file: {path}: {exc}"
+        ) from exc
+    except UnicodeError as exc:
+        raise DryRunConfigError(
+            f"Config file is not valid UTF-8: {path}: {exc}"
+        ) from exc
+
+    loader = DuplicateKeyLoader(text)
+    try:
+        try:
+            data = loader.get_single_data() or {}
+            duplicates = tuple(getattr(loader, "_duplicate_keys", ()))
+        except yaml.YAMLError as exc:
+            raise DryRunConfigError(
+                f"Invalid YAML in config file {path}: {exc}"
+            ) from exc
     finally:
         loader.dispose()
 
     if not isinstance(data, dict):
-        raise ValueError("Top-level YAML must be a mapping.")
-    return data, duplicates
+        raise DryRunConfigError("Top-level YAML must be a mapping.")
+    return DuplicateKeyConfig(raw=data, duplicate_keys=duplicates)
 
 
 def _display_path(path: Path, project_root: Path) -> str:
@@ -64,9 +93,26 @@ def _display_path(path: Path, project_root: Path) -> str:
 
 
 def _count_cleaner_input_files(cleaner_config_path: Path) -> int:
-    cleaner_cfg = yaml.safe_load(cleaner_config_path.read_text(encoding="utf-8")) or {}
+    try:
+        text = cleaner_config_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise CleanerInspectionError(
+            f"Failed to read cleaner config: {cleaner_config_path}: {exc}"
+        ) from exc
+    except UnicodeError as exc:
+        raise CleanerInspectionError(
+            f"Cleaner config is not valid UTF-8: {cleaner_config_path}: {exc}"
+        ) from exc
+    try:
+        cleaner_cfg = yaml.safe_load(text) or {}
+    except yaml.YAMLError as exc:
+        raise CleanerInspectionError(
+            f"Invalid cleaner YAML: {cleaner_config_path}: {exc}"
+        ) from exc
     if not isinstance(cleaner_cfg, dict):
-        return 0
+        raise CleanerInspectionError(
+            f"Cleaner config root must be a mapping: {cleaner_config_path}"
+        )
 
     raw_input = cleaner_cfg.get("input")
     if not raw_input:
@@ -151,35 +197,40 @@ def execute_dry_run(
     exit_code = 0
 
     try:
-        _raw_cfg, duplicate_keys = _load_yaml_with_duplicate_keys(config_path)
+        duplicate_config = _load_yaml_with_duplicate_keys(config_path)
         cfg = dependencies.load_config(config_path)
-        lines.append("[OK] config loaded")
-    except Exception as exc:
+    except (DryRunConfigError, ConfigError) as exc:
         print(f"[ERROR] config: {exc}")
         return 1
+    duplicate_keys = duplicate_config.duplicate_keys
+    lines.append("[OK] config loaded")
 
-    cleaner_plan = resolve_cleaner_plan(cfg, project_root)
-    cleaner_config_path = cleaner_plan.config_path if cleaner_plan is not None else None
-    if cleaner_config_path is not None:
-        if cleaner_config_path.exists():
+    try:
+        cleaner_plan = resolve_cleaner_plan(cfg, project_root)
+        cleaner_config_path = (
+            cleaner_plan.config_path if cleaner_plan is not None else None
+        )
+        if cleaner_plan is not None:
+            cleaned_dir = inspect_preprocess(cleaner_plan)
+            cleaner_input_count = _count_cleaner_input_files(cleaner_plan.config_path)
+        else:
+            cleaned_dir = None
+            cleaner_input_count = 0
+    except (CleanerInspectionError, CorpusPreparationError) as exc:
+        lines.append(f"[ERROR] {exc}")
+        exit_code = 1
+        cleaner_config_path = None
+    else:
+        if cleaner_config_path is not None:
             lines.append(
                 "[OK] preprocess cleaner config found: "
                 f"{_display_path(cleaner_config_path, project_root)}"
             )
-            try:
-                cleaned_dir = inspect_preprocess(cleaner_plan)
-                lines.append(f"[OK] input files: {_count_cleaner_input_files(cleaner_config_path)}")
-                if cleaned_dir is not None:
-                    lines.append(f"[OK] cleaned output dir: {_display_path(cleaned_dir, project_root)}")
-            except Exception as exc:
-                lines.append(f"[ERROR] {exc}")
-                exit_code = 1
-        else:
-            lines.append(
-                "[ERROR] preprocess cleaner config missing: "
-                f"{_display_path(cleaner_config_path, project_root)}"
-            )
-            exit_code = 1
+            lines.append(f"[OK] input files: {cleaner_input_count}")
+            if cleaned_dir is not None:
+                lines.append(
+                    f"[OK] cleaned output dir: {_display_path(cleaned_dir, project_root)}"
+                )
 
     try:
         plan = build_run_plan(
@@ -196,8 +247,14 @@ def execute_dry_run(
             preprocess_mode="inspect",
             validate_references=False,
         )
+    except (RunPlanError, CorpusPreparationError) as exc:
+        lines.append(f"[ERROR] {exc}")
+        exit_code = 1
+    else:
         if cleaner_config_path is None:
-            lines.append(f"[OK] input files: {sum(len(files) for files in plan.group_files.values())}")
+            lines.append(
+                f"[OK] input files: {sum(len(files) for files in plan.group_files.values())}"
+            )
         lines.extend(render_run_plan(plan, project_root=project_root))
         if request.error_on_empty_group:
             for group_name, files in plan.group_files.items():
@@ -208,9 +265,6 @@ def execute_dry_run(
         lines.extend(spec_lines)
         lines.append(f"[OK] output dir: {_display_path(plan.out_dir, project_root)}")
         exit_code = max(exit_code, spec_exit_code)
-    except Exception as exc:
-        lines.append(f"[ERROR] {exc}")
-        exit_code = 1
 
     for key in duplicate_keys:
         lines.append(f"[WARN] duplicate YAML key: {key}")

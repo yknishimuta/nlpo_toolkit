@@ -18,12 +18,13 @@ from .models import (
     TokenArtifactConfig,
     TraceConfig,
 )
-from .parser import ensure_app_config, load_config, parse_config
+from .parser import ConfigError, ensure_app_config, load_config, parse_config
 from .serializer import config_to_dict
 
 __all__ = [
     "AnalysisCacheConfig",
     "AnalysisUnit",
+    "ConfigError",
     "AppConfig",
     "ArchiveConfig",
     "ArtifactsConfig",

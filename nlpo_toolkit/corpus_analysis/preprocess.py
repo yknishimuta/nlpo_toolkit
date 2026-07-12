@@ -7,14 +7,30 @@ import yaml
 
 from .config import AppConfig, ensure_app_config
 from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner
+from .corpus_errors import CleanerInspectionError
 
 
 def _load_yaml(path: Path) -> Dict[str, Any]:
-    obj = yaml.safe_load(path.read_text(encoding="utf-8"))
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise CleanerInspectionError(
+            f"Failed to read cleaner config: {path}: {exc}"
+        ) from exc
+    except UnicodeError as exc:
+        raise CleanerInspectionError(
+            f"Cleaner config is not valid UTF-8: {path}: {exc}"
+        ) from exc
+    try:
+        obj = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise CleanerInspectionError(
+            f"Invalid cleaner YAML: {path}: {exc}"
+        ) from exc
     if obj is None:
         return {}
     if not isinstance(obj, dict):
-        raise ValueError(f"YAML root must be mapping: {path}")
+        raise CleanerInspectionError(f"Cleaner config root must be a mapping: {path}")
     return obj
 
 
@@ -22,7 +38,7 @@ def resolve_cleaner_output_dir(cleaner_yml: Path) -> Path:
     cfg = _load_yaml(cleaner_yml)
     out = cfg.get("output")
     if not out:
-        raise ValueError(f"cleaner config missing 'output': {cleaner_yml}")
+        raise CleanerInspectionError(f"cleaner config missing 'output': {cleaner_yml}")
     out_p = Path(str(out))
     if out_p.is_absolute():
         return out_p

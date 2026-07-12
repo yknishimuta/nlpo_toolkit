@@ -9,7 +9,7 @@ from typing import Iterable, Mapping, Sequence
 
 from .config import AppConfig, GroupConfig
 from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner, run_cleaner
-from .corpus_errors import CorpusPreparationError
+from .corpus_errors import CleanerInspectionError, CorpusPreparationError
 from .io_utils import expand_globs, read_concat
 from .normalizer import normalize_text
 from .preprocess import expand_cleaned_dir_placeholders, resolve_cleaner_output_dir
@@ -91,7 +91,7 @@ def execute_preprocess(
     if plan is None:
         return None
     if not plan.config_path.exists():
-        raise FileNotFoundError(f"Cleaner config file not found: {plan.config_path}")
+        raise CleanerInspectionError(f"Cleaner config file not found: {plan.config_path}")
     run_cleaner(
         config_path=plan.config_path,
         cleaner=cleaner,
@@ -104,7 +104,7 @@ def inspect_preprocess(plan: CleanerPlan | None) -> Path | None:
     if plan is None:
         return None
     if not plan.config_path.exists():
-        raise FileNotFoundError(f"Cleaner config file not found: {plan.config_path}")
+        raise CleanerInspectionError(f"Cleaner config file not found: {plan.config_path}")
     return resolve_cleaner_output_dir(plan.config_path)
 
 

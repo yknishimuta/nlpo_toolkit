@@ -7,6 +7,10 @@ class CorpusPreparationError(ValueError):
     """Corpus preparation could not complete."""
 
 
+class CleanerInspectionError(CorpusPreparationError):
+    """A cleaner configuration could not be inspected."""
+
+
 class CorpusReadError(CorpusPreparationError):
     """A configured corpus file could not be read as UTF-8."""
 

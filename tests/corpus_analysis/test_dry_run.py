@@ -8,6 +8,7 @@ from nlpo_toolkit.corpus_analysis.count_command import CountRequest
 from nlpo_toolkit.corpus_analysis.dependencies import CorpusPlanningDependencies
 from nlpo_toolkit.corpus_analysis.dry_run import execute_dry_run
 from nlpo_toolkit.corpus_analysis.config import load_config
+from nlpo_toolkit.corpus_analysis.config import ConfigError
 
 
 def _execute_dry_run(
@@ -245,3 +246,141 @@ def test_dry_run_partition_empty_reference_is_error(tmp_path: Path, capsys):
     out = capsys.readouterr().out
     assert rc == 1
     assert "[ERROR] partition full_split references empty group: part_b" in out
+
+
+@pytest.mark.parametrize(
+    ("contents", "binary"),
+    (
+        ("groups: [\n", False),
+        (b"\xff\xfe", True),
+        ("- not\n- a\n- mapping\n", False),
+        ("groups: {}\nunknown_key: true\n", False),
+    ),
+)
+def test_dry_run_reports_user_correctable_config_errors(
+    tmp_path: Path,
+    capsys,
+    contents: str | bytes,
+    binary: bool,
+) -> None:
+    config_path = tmp_path / "broken.yml"
+    if binary:
+        assert isinstance(contents, bytes)
+        config_path.write_bytes(contents)
+    else:
+        assert isinstance(contents, str)
+        config_path.write_text(contents, encoding="utf-8")
+
+    rc = _execute_dry_run(project_root=tmp_path, config_path=config_path)
+
+    assert rc == 1
+    assert "[ERROR] config:" in capsys.readouterr().out
+
+
+def test_dry_run_reports_missing_config_and_preserves_cause(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    config_path = tmp_path / "missing.yml"
+
+    rc = _execute_dry_run(project_root=tmp_path, config_path=config_path)
+
+    assert rc == 1
+    assert "missing.yml" in capsys.readouterr().out
+    with pytest.raises(ConfigError) as caught:
+        load_config(config_path)
+    assert isinstance(caught.value.__cause__, FileNotFoundError)
+
+
+@pytest.mark.parametrize(
+    "error",
+    (
+        RuntimeError("programmer bug"),
+        TypeError("wrong internal call"),
+        AssertionError("unexpected state"),
+    ),
+)
+def test_dry_run_does_not_hide_programmer_errors(
+    tmp_path: Path,
+    error: Exception,
+) -> None:
+    config_path = tmp_path / "config.yml"
+    config_path.write_text("groups: {}\n", encoding="utf-8")
+
+    def broken_loader(_path: Path):
+        raise error
+
+    with pytest.raises(type(error), match=str(error)):
+        execute_dry_run(
+            request=CountRequest(
+                project_root=tmp_path,
+                config_path=config_path,
+                dry_run=True,
+            ),
+            dependencies=CorpusPlanningDependencies(
+                load_config=broken_loader,
+                cleaner_loader=lambda: pytest.fail(
+                    "cleaner loader must not be called"
+                ),
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    "cleaner_contents",
+    (
+        "groups: [\n",
+        "- not-a-mapping\n",
+        "input: ../input\n",
+    ),
+)
+def test_dry_run_reports_invalid_cleaner_config(
+    tmp_path: Path,
+    capsys,
+    cleaner_contents: str,
+) -> None:
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "cleaner.yml").write_text(cleaner_contents, encoding="utf-8")
+    config_path = config_dir / "groups.yml"
+    config_path.write_text(
+        "preprocess:\n"
+        "  kind: cleaner\n"
+        "  config: config/cleaner.yml\n"
+        "groups:\n"
+        "  text: {files: ['{cleaned_dir}/*.txt']}\n",
+        encoding="utf-8",
+    )
+
+    rc = _execute_dry_run(project_root=tmp_path, config_path=config_path)
+
+    assert rc == 1
+    assert "[ERROR]" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("create_invalid_utf8", (False, True))
+def test_dry_run_reports_missing_or_non_utf8_cleaner_config(
+    tmp_path: Path,
+    capsys,
+    create_invalid_utf8: bool,
+) -> None:
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    if create_invalid_utf8:
+        (config_dir / "cleaner.yml").write_bytes(b"\xff\xfe")
+    config_path = config_dir / "groups.yml"
+    config_path.write_text(
+        "preprocess:\n"
+        "  kind: cleaner\n"
+        "  config: config/cleaner.yml\n"
+        "groups:\n"
+        "  text: {files: ['{cleaned_dir}/*.txt']}\n",
+        encoding="utf-8",
+    )
+
+    rc = _execute_dry_run(project_root=tmp_path, config_path=config_path)
+
+    assert rc == 1
+    output = capsys.readouterr().out
+    assert "[ERROR]" in output
+    assert "cleaner.yml" in output
