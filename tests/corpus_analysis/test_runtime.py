@@ -5,9 +5,9 @@ from pathlib import Path
 import pytest
 
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
-from nlpo_toolkit.corpus_analysis.runner_types import RunnerDependencies
 from nlpo_toolkit.corpus_analysis.config import ensure_app_config
 from nlpo_toolkit.corpus_analysis.runtime import prepare_run_context
+from tests.corpus_analysis.fake_nlp import runner_dependencies
 
 
 def test_prepare_run_context_validates_plan_before_nlp_initialization(tmp_path: Path) -> None:
@@ -22,16 +22,15 @@ def test_prepare_run_context_validates_plan_before_nlp_initialization(tmp_path: 
             info=NLPBackendInfo(name="fake", language="la"),
         )
 
-    deps = RunnerDependencies(
-        load_config=lambda _path: ensure_app_config({
+    deps = runner_dependencies(
+        lambda _path: ensure_app_config({
             "groups": {
                 "a": {"files": ["input/a.txt"]},
                 "b": {"files": ["input/missing.txt"]},
             },
             "comparisons": [{"name": "ab", "group_a": "a", "group_b": "b"}],
         }),
-        cleaner=object(),
-        backend_factory=backend_factory,
+        backend_factory,
     )
 
     with pytest.raises(ValueError, match="comparison ab references empty group: a"):

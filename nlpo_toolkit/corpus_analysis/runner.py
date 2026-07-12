@@ -4,7 +4,8 @@ from pathlib import Path
 from typing import Optional
 
 from . import analysis_pipeline, post_analysis, run_reporting, runtime
-from .runner_types import RunnerDependencies, RunResult
+from .dependencies import RunnerDependencies
+from .runner_types import RunResult
 
 
 def run(
@@ -27,7 +28,7 @@ def run(
         error_on_empty_group=error_on_empty_group,
         dependencies=dependencies,
     )
-    analysis = analysis_pipeline.analyze_corpora(context, dependencies)
+    analysis = analysis_pipeline.analyze_corpora(context)
     partitions = post_analysis.execute_partition_validations(
         context=context,
         analysis=analysis,

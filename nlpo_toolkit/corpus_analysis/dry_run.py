@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from .config import (
-    load_config,
-)
+from .dependencies import CorpusPlanningDependencies
 from .corpus import (
     inspect_preprocess,
     resolve_cleaner_plan,
@@ -15,6 +13,9 @@ from .corpus import (
 )
 from .io_utils import expand_globs
 from .run_plan import RunPlan, build_run_plan
+
+if TYPE_CHECKING:
+    from .count_command import CountRequest
 
 
 class DuplicateKeyLoader(yaml.SafeLoader):
@@ -136,16 +137,13 @@ def _render_spec_diagnostics(plan: RunPlan) -> tuple[list[str], int]:
     return lines, exit_code
 
 
-def dry_run_count(
+def execute_dry_run(
     *,
-    project_root: Path,
-    config_path: Path,
-    group_by_file: bool = False,
-    error_on_empty_group: bool = False,
-    auto_single_cleaned: bool = False,
+    request: CountRequest,
+    dependencies: CorpusPlanningDependencies,
 ) -> int:
-    project_root = Path(project_root).resolve()
-    config_path = Path(config_path)
+    project_root = Path(request.project_root).resolve()
+    config_path = Path(request.config_path)
     if not config_path.is_absolute():
         config_path = (project_root / config_path).resolve()
 
@@ -154,7 +152,7 @@ def dry_run_count(
 
     try:
         _raw_cfg, duplicate_keys = _load_yaml_with_duplicate_keys(config_path)
-        cfg = load_config(config_path)
+        cfg = dependencies.load_config(config_path)
         lines.append("[OK] config loaded")
     except Exception as exc:
         print(f"[ERROR] config: {exc}")
@@ -188,17 +186,20 @@ def dry_run_count(
             project_root=project_root,
             script_dir=None,
             config_path=config_path,
-            group_by_file=group_by_file,
-            auto_single_cleaned=auto_single_cleaned,
+            group_by_file=request.group_by_file,
+            auto_single_cleaned=request.auto_single_cleaned,
             error_on_empty_group=False,
-            load_config_fn=lambda _path: cfg,
+            dependencies=CorpusPlanningDependencies(
+                load_config=lambda _path: cfg,
+                cleaner_loader=dependencies.cleaner_loader,
+            ),
             preprocess_mode="inspect",
             validate_references=False,
         )
         if cleaner_config_path is None:
             lines.append(f"[OK] input files: {sum(len(files) for files in plan.group_files.values())}")
         lines.extend(render_run_plan(plan, project_root=project_root))
-        if error_on_empty_group:
+        if request.error_on_empty_group:
             for group_name, files in plan.group_files.items():
                 if not files:
                     lines.append(f"[ERROR] group {group_name} matched files: 0")

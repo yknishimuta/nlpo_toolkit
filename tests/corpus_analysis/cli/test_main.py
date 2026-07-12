@@ -46,26 +46,35 @@ def test_count_vocabula_command_is_not_registered() -> None:
 
 
 def test_main_dispatches_through_registered_handler(monkeypatch, tmp_path) -> None:
-    calls: list[dict[str, object]] = []
+    calls = []
 
-    def fake_run_count(**kwargs: object) -> int:
-        calls.append(kwargs)
+    def fake_execute_count_command(request, *, dependencies) -> int:
+        calls.append((request, dependencies))
         return 7
 
-    monkeypatch.setattr(count_cli, "run_count", fake_run_count)
+    monkeypatch.setattr(
+        count_cli,
+        "execute_count_command",
+        fake_execute_count_command,
+    )
 
     rc = main(["count", "--project-root", str(tmp_path)])
 
     assert rc == 7
-    assert calls[0]["project_root"] == tmp_path.resolve()
-    assert calls[0]["command_line"] == ["nlpo", "count", "--project-root", str(tmp_path)]
+    assert calls[0][0].project_root == tmp_path.resolve()
+    assert calls[0][0].command_line == (
+        "nlpo",
+        "count",
+        "--project-root",
+        str(tmp_path),
+    )
 
 
 def test_parser_build_does_not_initialize_count_backend(monkeypatch) -> None:
-    def fail_backend_init(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("backend should not be initialized while building parser")
+    def fail_command(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("command service must not run while building parser")
 
-    monkeypatch.setattr(count_cli, "default_runner_dependencies", fail_backend_init)
+    monkeypatch.setattr(count_cli, "execute_count_command", fail_command)
 
     build_parser()
 

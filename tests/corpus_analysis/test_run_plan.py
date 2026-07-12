@@ -4,7 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from nlpo_toolkit.corpus_analysis.runner_types import RunnerDependencies
+from nlpo_toolkit.corpus_analysis.analysis_policy import AnalysisExtractionPolicy
+from nlpo_toolkit.corpus_analysis.config import ensure_app_config
+from nlpo_toolkit.corpus_analysis.dependencies import (
+    AnalysisDependencies,
+    CorpusPlanningDependencies,
+    RunnerDependencies,
+)
 from nlpo_toolkit.corpus_analysis.runtime import prepare_run_context
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.run_plan import build_run_plan
@@ -14,8 +20,18 @@ def _write_config(path: Path) -> None:
     path.write_text("dummy", encoding="utf-8")
 
 
-def _loader(data: dict):
-    return lambda _path: data
+def _loader(data: dict, *, cleaner=None):
+    config = ensure_app_config(data)
+
+    def unexpected_cleaner_loader():
+        if cleaner is None:
+            raise AssertionError("cleaner loader must not be called")
+        return cleaner
+
+    return CorpusPlanningDependencies(
+        load_config=lambda _path: config,
+        cleaner_loader=unexpected_cleaner_loader,
+    )
 
 
 def _base_groups() -> dict:
@@ -39,7 +55,7 @@ def test_build_run_plan_has_no_output_directory_side_effect(tmp_path: Path) -> N
         group_by_file=None,
         auto_single_cleaned=False,
         error_on_empty_group=False,
-        load_config_fn=_loader({**_base_groups(), "out_dir": "output"}),
+        dependencies=_loader({**_base_groups(), "out_dir": "output"}),
         preprocess_mode="inspect",
     )
 
@@ -74,14 +90,14 @@ def test_inspect_mode_does_not_run_cleaner(tmp_path: Path) -> None:
         group_by_file=None,
         auto_single_cleaned=False,
         error_on_empty_group=False,
-        load_config_fn=_loader(
+        dependencies=_loader(
             {
                 "preprocess": {"kind": "cleaner", "config": "config/cleaner.yml"},
                 "groups": {"text": {"files": ["{cleaned_dir}/*.txt"]}},
-            }
+            },
+            cleaner=FailingCleaner,
         ),
         preprocess_mode="inspect",
-        cleaner=FailingCleaner,
     )
 
     assert plan.cleaned_dir == (tmp_path / "cleaned").resolve()
@@ -109,14 +125,14 @@ def test_execute_mode_runs_cleaner_before_resolving_groups(tmp_path: Path) -> No
         group_by_file=None,
         auto_single_cleaned=False,
         error_on_empty_group=False,
-        load_config_fn=_loader(
+        dependencies=_loader(
             {
                 "preprocess": {"kind": "cleaner", "config": "config/cleaner.yml"},
                 "groups": {"text": {"files": ["{cleaned_dir}/*.txt"]}},
-            }
+            },
+            cleaner=FakeCleaner,
         ),
         preprocess_mode="execute",
-        cleaner=FakeCleaner,
     )
 
     assert plan.group_files["text"] == ((tmp_path / "cleaned" / "made.txt").resolve(),)
@@ -161,7 +177,7 @@ def test_inspect_and_execute_match_when_cleaned_files_already_exist(tmp_path: Pa
         group_by_file=None,
         auto_single_cleaned=False,
         error_on_empty_group=False,
-        load_config_fn=_loader(data),
+        dependencies=_loader(data),
         preprocess_mode="inspect",
     )
     execute_plan = build_run_plan(
@@ -171,9 +187,8 @@ def test_inspect_and_execute_match_when_cleaned_files_already_exist(tmp_path: Pa
         group_by_file=None,
         auto_single_cleaned=False,
         error_on_empty_group=False,
-        load_config_fn=_loader(data),
+        dependencies=_loader(data, cleaner=NoopCleaner),
         preprocess_mode="execute",
-        cleaner=NoopCleaner,
     )
 
     assert inspect_plan.grouping_mode == execute_plan.grouping_mode
@@ -202,7 +217,7 @@ def test_yaml_per_file_mode_rejects_partition_and_comparison(tmp_path: Path) -> 
             group_by_file=False,
             auto_single_cleaned=False,
             error_on_empty_group=False,
-            load_config_fn=_loader(
+            dependencies=_loader(
                 {
                     "groups": groups,
                     "grouping": {"mode": "per_file"},
@@ -224,7 +239,7 @@ def test_yaml_per_file_mode_rejects_partition_and_comparison(tmp_path: Path) -> 
             group_by_file=False,
             auto_single_cleaned=False,
             error_on_empty_group=False,
-            load_config_fn=_loader(
+            dependencies=_loader(
                 {
                     "groups": {"a": {"files": ["input/a.txt"]}, "b": {"files": ["input/b.txt"]}},
                     "grouping": {"mode": "per_file"},
@@ -246,7 +261,7 @@ def test_cli_group_by_file_rejects_partition(tmp_path: Path) -> None:
             group_by_file=True,
             auto_single_cleaned=False,
             error_on_empty_group=False,
-            load_config_fn=_loader(
+            dependencies=_loader(
                 {
                     "groups": {
                         "full": {"files": ["input/full.txt"]},
@@ -283,7 +298,7 @@ def test_auto_single_cleaned_selects_one_and_ignores_dotfiles(tmp_path: Path) ->
         group_by_file=None,
         auto_single_cleaned=False,
         error_on_empty_group=False,
-        load_config_fn=_loader(
+        dependencies=_loader(
             {
                 "groups": {"text": {"files": ["{cleaned_dir}/*.txt"]}},
                 "preprocess": {"kind": "cleaner", "config": "config/cleaner.yml"},
@@ -319,7 +334,7 @@ def test_auto_single_cleaned_rejects_zero_and_multiple_files(tmp_path: Path) -> 
             group_by_file=None,
             auto_single_cleaned=False,
             error_on_empty_group=False,
-            load_config_fn=_loader(data),
+            dependencies=_loader(data),
             preprocess_mode="inspect",
         )
 
@@ -333,7 +348,7 @@ def test_auto_single_cleaned_rejects_zero_and_multiple_files(tmp_path: Path) -> 
             group_by_file=None,
             auto_single_cleaned=False,
             error_on_empty_group=False,
-            load_config_fn=_loader(data),
+            dependencies=_loader(data),
             preprocess_mode="inspect",
         )
 
@@ -352,7 +367,7 @@ def test_empty_group_policy_and_spec_references(tmp_path: Path) -> None:
         group_by_file=None,
         auto_single_cleaned=False,
         error_on_empty_group=False,
-        load_config_fn=_loader({"groups": {"empty": {"files": ["input/no_match*.txt"]}}}),
+        dependencies=_loader({"groups": {"empty": {"files": ["input/no_match*.txt"]}}}),
         preprocess_mode="inspect",
     )
     assert plan.group_files == {"empty": ()}
@@ -365,7 +380,7 @@ def test_empty_group_policy_and_spec_references(tmp_path: Path) -> None:
             group_by_file=None,
             auto_single_cleaned=False,
             error_on_empty_group=True,
-            load_config_fn=_loader({"groups": {"empty": {"files": ["input/no_match*.txt"]}}}),
+            dependencies=_loader({"groups": {"empty": {"files": ["input/no_match*.txt"]}}}),
             preprocess_mode="inspect",
         )
 
@@ -377,7 +392,7 @@ def test_empty_group_policy_and_spec_references(tmp_path: Path) -> None:
             group_by_file=None,
             auto_single_cleaned=False,
             error_on_empty_group=False,
-            load_config_fn=_loader(
+            dependencies=_loader(
                 {
                     "groups": {
                         "whole": {"files": ["input/whole.txt"]},
@@ -409,7 +424,7 @@ def test_comparison_empty_reference_fails_plan(tmp_path: Path) -> None:
             group_by_file=None,
             auto_single_cleaned=False,
             error_on_empty_group=False,
-            load_config_fn=_loader(
+            dependencies=_loader(
                 {
                     "groups": {
                         "a": {"files": ["input/a.txt"]},
@@ -435,7 +450,7 @@ def test_prepare_run_context_validates_plan_before_nlp_initialization(tmp_path: 
         )
 
     deps = RunnerDependencies(
-        load_config=_loader(
+        planning=_loader(
             {
                 "groups": {
                     "a": {"files": ["input/a.txt"]},
@@ -444,8 +459,10 @@ def test_prepare_run_context_validates_plan_before_nlp_initialization(tmp_path: 
                 "comparisons": [{"name": "ab", "group_a": "a", "group_b": "b"}],
             }
         ),
-        cleaner=object(),
-        backend_factory=backend_factory,
+        analysis=AnalysisDependencies(
+            backend_factory=backend_factory,
+            extraction_policy=AnalysisExtractionPolicy(),
+        ),
     )
 
     with pytest.raises(ValueError, match="comparison ab references empty group: a"):

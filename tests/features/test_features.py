@@ -10,12 +10,13 @@ from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.features import (
     FeatureError,
     FeatureOptions,
+    FeatureRequest,
     build_feature_rows,
     compute_basic_features,
     compute_mfw_features,
     compute_upos_features,
     select_mfw,
-    run_features,
+    execute_feature_command,
     safe_feature_name,
     write_feature_matrix,
 )
@@ -27,7 +28,11 @@ from nlpo_toolkit.corpus_analysis.analysis_policy import AnalysisExtractionPolic
 from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.config import NLPConfig
-from nlpo_toolkit.corpus_analysis.dependencies import FeatureDependencies
+from nlpo_toolkit.corpus_analysis.dependencies import (
+    AnalysisDependencies,
+    CorpusPlanningDependencies,
+    FeatureCommandDependencies,
+)
 
 
 def _doc_for_text(text: str) -> NLPDocument:
@@ -58,13 +63,23 @@ def _backend_factory(config: NLPConfig) -> BuiltNLPBackend:
     )
 
 
-def _dependencies(cleaner=object()) -> FeatureDependencies:
+def _dependencies(cleaner=None) -> FeatureCommandDependencies:
     from nlpo_toolkit.corpus_analysis.config import load_config
 
-    return FeatureDependencies(
-        load_config=load_config,
-        backend_factory=_backend_factory,
-        cleaner=cleaner,
+    def cleaner_loader():
+        if cleaner is None:
+            raise AssertionError("cleaner loader must not be called")
+        return cleaner
+
+    return FeatureCommandDependencies(
+        planning=CorpusPlanningDependencies(
+            load_config=load_config,
+            cleaner_loader=cleaner_loader,
+        ),
+        analysis=AnalysisDependencies(
+            backend_factory=_backend_factory,
+            extraction_policy=AnalysisExtractionPolicy(),
+        ),
     )
 
 
@@ -327,10 +342,12 @@ def test_run_features_one_group_writes_csv(tmp_path: Path) -> None:
     config_path = _write_config(tmp_path)
     out = tmp_path / "output" / "features.csv"
 
-    rc = run_features(
-        project_root=tmp_path,
-        config_path=config_path,
-        out=out,
+    rc = execute_feature_command(
+        FeatureRequest(
+            project_root=tmp_path,
+            config_path=config_path,
+            out_path=out,
+        ),
         dependencies=_dependencies(),
     )
 
@@ -354,14 +371,18 @@ def test_run_features_accepts_backend_factory(tmp_path: Path) -> None:
 
     base = _dependencies()
 
-    rc = run_features(
-        project_root=tmp_path,
-        config_path=config_path,
-        out=out,
-        dependencies=FeatureDependencies(
-            load_config=base.load_config,
-            backend_factory=recording_factory,
-            cleaner=base.cleaner,
+    rc = execute_feature_command(
+        FeatureRequest(
+            project_root=tmp_path,
+            config_path=config_path,
+            out_path=out,
+        ),
+        dependencies=FeatureCommandDependencies(
+            planning=base.planning,
+            analysis=AnalysisDependencies(
+                backend_factory=recording_factory,
+                extraction_policy=base.analysis.extraction_policy,
+            ),
         ),
     )
 
@@ -393,10 +414,12 @@ def test_run_features_two_groups_two_rows(tmp_path: Path) -> None:
     )
     out = tmp_path / "features.csv"
 
-    run_features(
-        project_root=tmp_path,
-        config_path=config_path,
-        out=out,
+    execute_feature_command(
+        FeatureRequest(
+            project_root=tmp_path,
+            config_path=config_path,
+            out_path=out,
+        ),
         dependencies=_dependencies(),
     )
 
@@ -411,11 +434,13 @@ def test_run_features_group_by_file(tmp_path: Path) -> None:
     config_path = _write_config(tmp_path)
     out = tmp_path / "features.csv"
 
-    run_features(
-        project_root=tmp_path,
-        config_path=config_path,
-        out=out,
-        group_by_file=True,
+    execute_feature_command(
+        FeatureRequest(
+            project_root=tmp_path,
+            config_path=config_path,
+            out_path=out,
+            group_by_file=True,
+        ),
         dependencies=_dependencies(),
     )
 
@@ -448,10 +473,12 @@ def test_run_features_auto_single_cleaned(tmp_path: Path) -> None:
     )
     out = tmp_path / "features.csv"
 
-    run_features(
-        project_root=tmp_path,
-        config_path=config_path,
-        out=out,
+    execute_feature_command(
+        FeatureRequest(
+            project_root=tmp_path,
+            config_path=config_path,
+            out_path=out,
+        ),
         dependencies=_dependencies(
             type("Clean", (), {"main": staticmethod(lambda _argv: 0)})
         ),
@@ -486,9 +513,11 @@ def test_run_features_auto_single_cleaned_errors_on_multiple(tmp_path: Path) -> 
     )
 
     with pytest.raises(ValueError, match="expected exactly one"):
-        run_features(
-            project_root=tmp_path,
-            config_path=config_path,
+        execute_feature_command(
+            FeatureRequest(
+                project_root=tmp_path,
+                config_path=config_path,
+            ),
             dependencies=_dependencies(
                 type("Clean", (), {"main": staticmethod(lambda _argv: 0)})
             ),

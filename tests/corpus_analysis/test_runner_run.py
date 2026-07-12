@@ -8,8 +8,20 @@ import pytest
 import nlpo_toolkit.corpus_analysis.analysis_pipeline as analysis_pipeline_mod
 import nlpo_toolkit.corpus_analysis.run_reporting as run_reporting_mod
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
-import nlpo_toolkit.corpus_analysis.runtime as runtime_mod
 from tests.corpus_analysis.fake_nlp import fake_backend_factory, runner_dependencies
+
+
+class NoopCleaner:
+    @staticmethod
+    def main(_argv):
+        return 0
+
+
+def _write_cleaner_config(root: Path) -> None:
+    (root / "cleaner.yml").write_text(
+        "kind: scholastic_text\ninput: input\noutput: cleaned\n",
+        encoding="utf-8",
+    )
 
 def test_run_minimal_success(tmp_path: Path, monkeypatch):
     script_dir = tmp_path
@@ -34,7 +46,6 @@ def test_run_minimal_success(tmp_path: Path, monkeypatch):
         }
 
     # --- stub preprocess
-    monkeypatch.setattr(runtime_mod, "run_preprocess_if_needed", lambda **kwargs: None)
 
     # --- capture CSV writes
     calls = []
@@ -89,7 +100,6 @@ def test_run_analysis_unit_surface_uses_surface_form(tmp_path: Path, monkeypatch
             "groups": {"g": {"files": ["a.txt"]}},
         }
 
-    monkeypatch.setattr(runtime_mod, "run_preprocess_if_needed", lambda **kwargs: None)
 
     monkeypatch.setattr(run_reporting_mod, "build_run_meta", lambda **kwargs: {})
     monkeypatch.setattr(run_reporting_mod, "collect_runtime_environment", lambda _sd: {})
@@ -126,7 +136,6 @@ def test_run_dictcheck_requires_wordlist(tmp_path: Path, monkeypatch):
             "dictcheck": {"enabled": True},
         }
 
-    monkeypatch.setattr(runtime_mod, "run_preprocess_if_needed", lambda **kwargs: None)
     monkeypatch.setattr(run_reporting_mod, "build_run_meta", lambda **kwargs: {})
     monkeypatch.setattr(run_reporting_mod, "collect_runtime_environment", lambda _sd: {})
     monkeypatch.setattr(run_reporting_mod, "write_run_meta", lambda meta, out_dir: None)
@@ -158,7 +167,6 @@ def test_run_dictcheck_writes_known_unknown(tmp_path: Path, monkeypatch):
             "dictcheck": {"enabled": True, "wordlist": str(wl)},
         }
 
-    monkeypatch.setattr(runtime_mod, "run_preprocess_if_needed", lambda **kwargs: None)
     monkeypatch.setattr(run_reporting_mod, "build_run_meta", lambda **kwargs: {})
     monkeypatch.setattr(run_reporting_mod, "collect_runtime_environment", lambda _sd: {})
     monkeypatch.setattr(run_reporting_mod, "write_run_meta", lambda meta, out_dir: None)
@@ -206,7 +214,6 @@ def test_run_applies_filter_options_in_record_pipeline(tmp_path: Path, monkeypat
             }
         }
 
-    monkeypatch.setattr(runtime_mod, "run_preprocess_if_needed", lambda **kwargs: None)
 
     monkeypatch.setattr(run_reporting_mod, "build_run_meta", lambda **kwargs: {})
     monkeypatch.setattr(run_reporting_mod, "collect_runtime_environment", lambda _sd: {})
@@ -250,7 +257,6 @@ def test_run_group_by_file_writes_one_csv_per_input_file(tmp_path: Path, monkeyp
             "grouping": {"mode": "per_file"},
         }
 
-    monkeypatch.setattr(runtime_mod, "run_preprocess_if_needed", lambda **kwargs: None)
     monkeypatch.setattr(run_reporting_mod, "build_run_meta", lambda **kwargs: {"groups_files": kwargs["groups_files"]})
     monkeypatch.setattr(run_reporting_mod, "collect_runtime_environment", lambda _sd: {})
 
@@ -294,7 +300,6 @@ def test_run_group_by_file_cli_override(tmp_path: Path, monkeypatch):
             "groups": {"all": {"files": ["input/*.txt"]}},
         }
 
-    monkeypatch.setattr(runtime_mod, "run_preprocess_if_needed", lambda **kwargs: None)
     monkeypatch.setattr(run_reporting_mod, "build_run_meta", lambda **kwargs: {"groups_files": kwargs["groups_files"]})
     monkeypatch.setattr(run_reporting_mod, "collect_runtime_environment", lambda _sd: {})
     monkeypatch.setattr(run_reporting_mod, "write_run_meta", lambda meta, out_dir: None)
@@ -334,7 +339,6 @@ def test_run_meta_records_generated_outputs_and_actual_group_files(tmp_path: Pat
             "dictcheck": {"enabled": False},
         }
 
-    monkeypatch.setattr(runtime_mod, "run_preprocess_if_needed", lambda **kwargs: None)
 
     rc = runner_mod.run(
         project_root=project_root,
@@ -357,7 +361,6 @@ def test_run_error_on_empty_group(tmp_path: Path, monkeypatch):
     def load_config_fn(_p: Path):
         return {"out_dir": "output", "groups": {"empty": {"files": ["input/*.txt"]}}}
 
-    monkeypatch.setattr(runtime_mod, "run_preprocess_if_needed", lambda **kwargs: None)
 
     with pytest.raises(ValueError, match="No files matched"):
         runner_mod.run(
@@ -376,20 +379,24 @@ def test_run_auto_single_cleaned_records_selected_file(tmp_path: Path, monkeypat
     cleaned_dir.mkdir()
     selected = cleaned_dir / "satyricon.cleaned.txt"
     selected.write_text("rosa", encoding="utf-8")
+    _write_cleaner_config(tmp_path)
 
     def load_config_fn(_p: Path):
         return {
             "out_dir": "output",
+            "preprocess": {"kind": "cleaner", "config": "cleaner.yml"},
             "groups": {"old": {"files": ["cleaned/*.txt"]}},
             "grouping": {"mode": "auto_single_cleaned", "auto_group_name": "text"},
         }
 
-    monkeypatch.setattr(runtime_mod, "run_preprocess_if_needed", lambda **kwargs: cleaned_dir)
-
     rc = runner_mod.run(
         project_root=project_root,
         config_path=config_path,
-        dependencies=runner_dependencies(load_config_fn, fake_backend_factory()),
+        dependencies=runner_dependencies(
+            load_config_fn,
+            fake_backend_factory(),
+            cleaner=NoopCleaner(),
+        ),
     )
 
     assert rc.exit_code == 0
@@ -404,21 +411,25 @@ def test_run_auto_single_cleaned_errors_on_zero_files(tmp_path: Path, monkeypatc
     config_path.write_text("dummy", encoding="utf-8")
     cleaned_dir = tmp_path / "cleaned"
     cleaned_dir.mkdir()
+    _write_cleaner_config(tmp_path)
 
     def load_config_fn(_p: Path):
         return {
             "out_dir": "output",
+            "preprocess": {"kind": "cleaner", "config": "cleaner.yml"},
             "groups": {"old": {"files": ["cleaned/*.txt"]}},
             "grouping": {"mode": "auto_single_cleaned"},
         }
-
-    monkeypatch.setattr(runtime_mod, "run_preprocess_if_needed", lambda **kwargs: cleaned_dir)
 
     with pytest.raises(ValueError, match="no \\.txt files"):
         runner_mod.run(
             project_root=project_root,
             config_path=config_path,
-            dependencies=runner_dependencies(load_config_fn, fake_backend_factory()),
+            dependencies=runner_dependencies(
+                load_config_fn,
+                fake_backend_factory(),
+                cleaner=NoopCleaner(),
+            ),
         )
 
 
@@ -432,19 +443,23 @@ def test_run_auto_single_cleaned_errors_on_multiple_files(tmp_path: Path, monkey
     (cleaned_dir / "b.cleaned.txt").write_text("b", encoding="utf-8")
     (cleaned_dir / ".DS_Store").write_text("ignored", encoding="utf-8")
     (cleaned_dir / ".gitkeep").write_text("", encoding="utf-8")
+    _write_cleaner_config(tmp_path)
 
     def load_config_fn(_p: Path):
         return {
             "out_dir": "output",
+            "preprocess": {"kind": "cleaner", "config": "cleaner.yml"},
             "groups": {"old": {"files": ["cleaned/*.txt"]}},
             "grouping": {"mode": "auto_single_cleaned"},
         }
-
-    monkeypatch.setattr(runtime_mod, "run_preprocess_if_needed", lambda **kwargs: cleaned_dir)
 
     with pytest.raises(ValueError, match="expected exactly one"):
         runner_mod.run(
             project_root=project_root,
             config_path=config_path,
-            dependencies=runner_dependencies(load_config_fn, fake_backend_factory()),
+            dependencies=runner_dependencies(
+                load_config_fn,
+                fake_backend_factory(),
+                cleaner=NoopCleaner(),
+            ),
         )

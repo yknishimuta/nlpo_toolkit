@@ -7,7 +7,6 @@ from types import SimpleNamespace
 import pytest
 
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
-import nlpo_toolkit.corpus_analysis.runtime as runtime_mod
 from nlpo_toolkit.backends import (
     BuiltNLPBackend,
     NLPBackendConfigError,
@@ -292,7 +291,6 @@ def test_runner_uses_backend_factory_and_records_metadata(tmp_path: Path, monkey
             info=NLPBackendInfo(name="fake", language=config.language),
         )
 
-    monkeypatch.setattr(runtime_mod, "run_preprocess_if_needed", lambda **kwargs: None)
 
     rc = runner_mod.run(
         project_root=tmp_path,

@@ -3,30 +3,13 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any, Iterable, Mapping
 
-from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
+from nlpo_toolkit.backends import NLPBackendInfo
 
-from .config import AppConfig, NLPConfig
-from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner
 from .corpus import PreparedCorpus
 from .analysis_policy import AnalysisExtractionPolicy, DEFAULT_ANALYSIS_EXTRACTION_POLICY
 from .run_plan import RunPlan
-
-
-ConfigLoader = Callable[[Path], AppConfig]
-BackendFactory = Callable[[NLPConfig], BuiltNLPBackend]
-SentenceSplitterFactory = Callable[[NLPConfig], Any]
-
-
-@dataclass(frozen=True)
-class RunnerDependencies:
-    load_config: ConfigLoader
-    backend_factory: BackendFactory
-    cleaner: CleanerRunner | None = None
-    cleaner_loader: CleanerLoader = load_default_cleaner
-    sentence_splitter_factory: SentenceSplitterFactory | None = None
-    extraction_policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY
 
 
 @dataclass(frozen=True)

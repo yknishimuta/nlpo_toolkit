@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.config import ensure_app_config
-from nlpo_toolkit.corpus_analysis.runner_types import RunnerDependencies
+from tests.corpus_analysis.fake_nlp import runner_dependencies
 
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
 
@@ -25,7 +25,7 @@ def test_run_orchestrates_steps_in_order(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(
         runner_mod.analysis_pipeline,
         "analyze_corpora",
-        lambda ctx, deps: calls.append("analyze") or analysis,
+        lambda ctx: calls.append("analyze") or analysis,
     )
     monkeypatch.setattr(
         runner_mod.post_analysis,
@@ -51,11 +51,11 @@ def test_run_orchestrates_steps_in_order(monkeypatch, tmp_path: Path) -> None:
     rc = runner_mod.run(
         project_root=tmp_path,
         config_path=tmp_path / "config.yml",
-        dependencies=RunnerDependencies(
-            load_config=lambda _path: ensure_app_config(
+        dependencies=runner_dependencies(
+            lambda _path: ensure_app_config(
                 {"groups": {"text": {"files": ["input/*.txt"]}}}
             ),
-            backend_factory=lambda _config: BuiltNLPBackend(
+            lambda _config: BuiltNLPBackend(
                 backend=object(),
                 info=NLPBackendInfo(name="fake", language="la"),
             ),

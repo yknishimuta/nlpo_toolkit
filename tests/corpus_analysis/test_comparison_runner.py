@@ -8,9 +8,11 @@ from pathlib import Path
 import pytest
 
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
-import nlpo_toolkit.corpus_analysis.runtime as runtime_mod
 from nlpo_toolkit.corpus_analysis.archive import ArchiveOptions, create_run_archive
-from nlpo_toolkit.corpus_analysis.dry_run import dry_run_count
+from nlpo_toolkit.corpus_analysis.count_command import CountRequest
+from nlpo_toolkit.corpus_analysis.dependencies import CorpusPlanningDependencies
+from nlpo_toolkit.corpus_analysis.dry_run import execute_dry_run
+from nlpo_toolkit.corpus_analysis.config import load_config
 from tests.corpus_analysis.fake_nlp import FakeNLPBackend, fake_backend_factory, runner_dependencies
 
 
@@ -31,7 +33,6 @@ def _run_with_config(
     config_path = project_root / "groups.config.yml"
     config_path.write_text("dummy", encoding="utf-8")
 
-    monkeypatch.setattr(runtime_mod, "run_preprocess_if_needed", lambda **kwargs: None)
 
     if counter_by_text is None:
         counter_by_text = {
@@ -225,7 +226,6 @@ def test_runner_rejects_group_by_file_with_comparisons(
         },
         "comparisons": [{"name": "comparison_1", "group_a": "corpus_a", "group_b": "corpus_b"}],
     }
-    monkeypatch.setattr(runtime_mod, "run_preprocess_if_needed", lambda **kwargs: None)
 
     with pytest.raises(ValueError, match="comparisons cannot be used"):
         runner_mod.run(
@@ -260,7 +260,19 @@ def test_dry_run_reports_comparison_and_empty_reference(tmp_path: Path, capsys: 
         encoding="utf-8",
     )
 
-    rc = dry_run_count(project_root=project_root, config_path=config_path)
+    rc = execute_dry_run(
+        request=CountRequest(
+            project_root=project_root,
+            config_path=config_path,
+            dry_run=True,
+        ),
+        dependencies=CorpusPlanningDependencies(
+            load_config=load_config,
+            cleaner_loader=lambda: pytest.fail(
+                "cleaner loader must not be called"
+            ),
+        ),
+    )
 
     out = capsys.readouterr().out
     assert rc == 1

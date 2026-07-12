@@ -2,7 +2,38 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nlpo_toolkit.corpus_analysis.dry_run import dry_run_count
+import pytest
+
+from nlpo_toolkit.corpus_analysis.count_command import CountRequest
+from nlpo_toolkit.corpus_analysis.dependencies import CorpusPlanningDependencies
+from nlpo_toolkit.corpus_analysis.dry_run import execute_dry_run
+from nlpo_toolkit.corpus_analysis.config import load_config
+
+
+def _execute_dry_run(
+    *,
+    project_root: Path,
+    config_path: Path,
+    group_by_file: bool = False,
+    error_on_empty_group: bool = False,
+    auto_single_cleaned: bool = False,
+) -> int:
+    return execute_dry_run(
+        request=CountRequest(
+            project_root=project_root,
+            config_path=config_path,
+            group_by_file=group_by_file,
+            error_on_empty_group=error_on_empty_group,
+            auto_single_cleaned=auto_single_cleaned,
+            dry_run=True,
+        ),
+        dependencies=CorpusPlanningDependencies(
+            load_config=load_config,
+            cleaner_loader=lambda: pytest.fail(
+                "cleaner loader must not be called"
+            ),
+        ),
+    )
 
 
 def test_dry_run_reports_config_paths_matches_and_warnings(tmp_path: Path, capsys):
@@ -67,7 +98,7 @@ def test_dry_run_reports_config_paths_matches_and_warnings(tmp_path: Path, capsy
         encoding="utf-8",
     )
 
-    rc = dry_run_count(project_root=project_root, config_path=config_path)
+    rc = _execute_dry_run(project_root=project_root, config_path=config_path)
 
     out = capsys.readouterr().out
     assert rc == 0
@@ -103,7 +134,7 @@ def test_dry_run_error_on_empty_group(tmp_path: Path, capsys):
         encoding="utf-8",
     )
 
-    rc = dry_run_count(
+    rc = _execute_dry_run(
         project_root=project_root,
         config_path=config_path,
         error_on_empty_group=True,
@@ -146,7 +177,7 @@ def test_dry_run_auto_single_cleaned_reports_selected_file(tmp_path: Path, capsy
         encoding="utf-8",
     )
 
-    rc = dry_run_count(project_root=project_root, config_path=config_path)
+    rc = _execute_dry_run(project_root=project_root, config_path=config_path)
 
     out = capsys.readouterr().out
     assert rc == 0
@@ -179,7 +210,7 @@ def test_dry_run_reports_partition_validation_ok(tmp_path: Path, capsys):
         encoding="utf-8",
     )
 
-    rc = dry_run_count(project_root=project_root, config_path=config_path)
+    rc = _execute_dry_run(project_root=project_root, config_path=config_path)
 
     out = capsys.readouterr().out
     assert rc == 0
@@ -209,7 +240,7 @@ def test_dry_run_partition_empty_reference_is_error(tmp_path: Path, capsys):
         encoding="utf-8",
     )
 
-    rc = dry_run_count(project_root=project_root, config_path=config_path)
+    rc = _execute_dry_run(project_root=project_root, config_path=config_path)
 
     out = capsys.readouterr().out
     assert rc == 1

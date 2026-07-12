@@ -34,7 +34,6 @@ from .runner_types import (
     DictCheckOutput,
     GroupAnalysisResult,
     RunContext,
-    RunnerDependencies,
 )
 from .token_artifact import (
     TokenArtifactMetadata,
@@ -426,7 +425,6 @@ def write_dictcheck_outputs(
 def analyze_one_corpus(
     *,
     context: RunContext,
-    dependencies: RunnerDependencies,
     corpus: PreparedCorpus,
     trace_paths: Mapping[str, Path],
     lemma_normalization_map: Mapping[str, str] | None,
@@ -481,7 +479,6 @@ def analyze_one_corpus(
 
 def analyze_corpora(
     context: RunContext,
-    dependencies: RunnerDependencies,
 ) -> AnalysisResults:
     plan = context.plan
     prepared_corpora = context.prepared_corpora
@@ -516,7 +513,6 @@ def analyze_corpora(
     for corpus in prepared_corpora:
         result = analyze_one_corpus(
             context=context,
-            dependencies=dependencies,
             corpus=corpus,
             trace_paths=trace_paths,
             token_artifact_paths=token_artifact_paths,

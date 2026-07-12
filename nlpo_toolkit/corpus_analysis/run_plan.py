@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Literal, Mapping, Sequence
+from typing import Literal, Mapping, Sequence
 
 from nlpo_toolkit.comparison.configured import ComparisonSpec
-from .config import AppConfig, ensure_app_config
+from .config import AppConfig
 from .corpus import (
     CorpusWorkItem,
     execute_preprocess,
@@ -13,7 +13,7 @@ from .corpus import (
     resolve_cleaner_plan,
     resolve_corpus_work_items,
 )
-from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner
+from .dependencies import CorpusPlanningDependencies
 from .partition_models import PartitionSpec
 
 
@@ -148,27 +148,17 @@ def _resolve_cleaned_dir(
     config: AppConfig,
     project_root: Path,
     preprocess_mode: Literal["inspect", "execute"],
-    cleaner: CleanerRunner | None,
-    cleaner_loader: CleanerLoader,
-    preprocess_fn: Callable[..., Path | None] | None,
+    dependencies: CorpusPlanningDependencies,
 ) -> Path | None:
     plan = resolve_cleaner_plan(config, project_root)
     if preprocess_mode == "inspect":
         return inspect_preprocess(plan)
     if preprocess_mode == "execute":
-        if preprocess_fn is not None:
-            return preprocess_fn(
-                config=config,
-                project_root=project_root,
-                cleaner=cleaner,
-                cleaner_loader=cleaner_loader,
-            )
         if plan is None:
             return None
         return execute_preprocess(
             plan,
-            cleaner=cleaner,
-            cleaner_loader=cleaner_loader,
+            cleaner_loader=dependencies.cleaner_loader,
         )
     raise ValueError("preprocess_mode must be 'inspect' or 'execute'")
 
@@ -181,11 +171,8 @@ def build_run_plan(
     group_by_file: bool | None,
     auto_single_cleaned: bool,
     error_on_empty_group: bool,
-    load_config_fn: Callable[[Path], AppConfig | Mapping[str, object]],
+    dependencies: CorpusPlanningDependencies,
     preprocess_mode: Literal["inspect", "execute"],
-    cleaner: CleanerRunner | None = None,
-    cleaner_loader: CleanerLoader = load_default_cleaner,
-    preprocess_fn: Callable[..., Path | None] | None = None,
     validate_references: bool = True,
 ) -> RunPlan:
     corpus_plan = build_corpus_plan(
@@ -195,11 +182,8 @@ def build_run_plan(
         group_by_file=group_by_file,
         auto_single_cleaned=auto_single_cleaned,
         error_on_empty_group=error_on_empty_group,
-        load_config_fn=load_config_fn,
+        dependencies=dependencies,
         preprocess_mode=preprocess_mode,
-        cleaner=cleaner,
-        cleaner_loader=cleaner_loader,
-        preprocess_fn=preprocess_fn,
     )
     config = corpus_plan.config
     partition_specs = config.partition_validations
@@ -248,18 +232,15 @@ def build_corpus_plan(
     group_by_file: bool | None,
     auto_single_cleaned: bool,
     error_on_empty_group: bool,
-    load_config_fn: Callable[[Path], AppConfig | Mapping[str, object]],
+    dependencies: CorpusPlanningDependencies,
     preprocess_mode: Literal["inspect", "execute"],
-    cleaner: CleanerRunner | None = None,
-    cleaner_loader: CleanerLoader = load_default_cleaner,
-    preprocess_fn: Callable[..., Path | None] | None = None,
 ) -> CorpusPlan:
     resolved_root, resolved_config = resolve_run_paths(
         project_root=project_root,
         script_dir=script_dir,
         config_path=config_path,
     )
-    config = ensure_app_config(load_config_fn(resolved_config))
+    config = dependencies.load_config(resolved_config)
     if not config.groups:
         raise RunPlanError("config.groups must be a non-empty mapping")
 
@@ -272,9 +253,7 @@ def build_corpus_plan(
         config=config,
         project_root=resolved_root,
         preprocess_mode=preprocess_mode,
-        cleaner=cleaner,
-        cleaner_loader=cleaner_loader,
-        preprocess_fn=preprocess_fn,
+        dependencies=dependencies,
     )
     resolved = resolve_corpus_work_items(
         config=config,

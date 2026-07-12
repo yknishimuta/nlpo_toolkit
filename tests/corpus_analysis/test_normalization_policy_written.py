@@ -1,15 +1,16 @@
 import json
 from pathlib import Path
 
-from nlpo_toolkit.corpus_analysis import cli
-from nlpo_toolkit.corpus_analysis.cli import count as mod
+from nlpo_toolkit.corpus_analysis.runner import run
 from tests.corpus_analysis.fake_nlp import fake_backend_factory, runner_dependencies
 
 
-def test_normalization_policy_is_written_to_summary_and_run_meta(tmp_path, monkeypatch):
+def test_normalization_policy_is_written_to_summary_and_run_meta(tmp_path):
     # Arrange
     script_dir = tmp_path / "runner_dir"
     (script_dir / "config").mkdir(parents=True, exist_ok=True)
+    config_path = script_dir / "config" / "groups.config.yml"
+    config_path.write_text("dummy", encoding="utf-8")
 
     data_dir = script_dir / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -43,26 +44,17 @@ def test_normalization_policy_is_written_to_summary_and_run_meta(tmp_path, monke
         return cfg
 
 
-    # Make main() think config exists
-    real_exists = Path.exists
-
-    def fake_exists(self: Path) -> bool:
-        if self.name == "groups.config.yml":
-            return True
-        return real_exists(self)
-
-    monkeypatch.setattr(mod.Path, "exists", fake_exists)
-
-    
     dependencies = runner_dependencies(
         fake_load_config,
         fake_backend_factory([("x", "x", "NOUN")]),
     )
-    monkeypatch.setattr(mod, "default_runner_dependencies", lambda: dependencies)
-
     # Act
-    rc = cli.main(["count", "--project-root", str(script_dir)])
-    assert rc == 0
+    result = run(
+        project_root=script_dir,
+        config_path=config_path,
+        dependencies=dependencies,
+    )
+    assert result.exit_code == 0
 
     # Assert: summary.txt contains policy line
     summary = (out_dir / "summary.txt").read_text(encoding="utf-8")

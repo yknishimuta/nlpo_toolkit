@@ -308,10 +308,8 @@ def write_ngrams_from_config(
         group_by_file=request.group_by_file,
         auto_single_cleaned=request.auto_single_cleaned,
         error_on_empty_group=request.error_on_empty_group,
-        load_config_fn=dependencies.load_config,
+        dependencies=dependencies.planning,
         preprocess_mode="execute",
-        cleaner=dependencies.cleaner,
-        cleaner_loader=dependencies.cleaner_loader,
     )
     corpora = prepare_corpora(
         work_items=plan.work_items,

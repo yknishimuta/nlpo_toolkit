@@ -16,8 +16,8 @@ from .analysis_records import (
     iter_nlp_analysis_records_from_text,
 )
 from .analysis_policy import AnalysisExtractionPolicy, DEFAULT_ANALYSIS_EXTRACTION_POLICY
-from .dependencies import FeatureDependencies
-from .corpus import prepare_corpora, run_preprocess_if_needed
+from .dependencies import FeatureCommandDependencies
+from .corpus import prepare_corpora
 from .run_plan import build_corpus_plan
 from .runtime import build_nlp_runtime
 
@@ -204,6 +204,21 @@ class FeatureOptions:
 
 
 @dataclass(frozen=True)
+class FeatureRequest:
+    project_root: Path
+    config_path: Path
+    out_path: Path | None = None
+    output_format: str = "csv"
+    field: str = "lemma"
+    mfw: int = 0
+    include_upos: bool = True
+    include_basic: bool = True
+    group_by_file: bool = False
+    auto_single_cleaned: bool = False
+    error_on_empty_group: bool = False
+
+
+@dataclass(frozen=True)
 class PreparedFeatureCorpus:
     group: str
     files: tuple[Path, ...]
@@ -310,47 +325,34 @@ def write_feature_matrix(rows: list[dict[str, Any]], out: Path | TextIO | None, 
             f.close()
 
 
-def run_features(
+def execute_feature_command(
+    request: FeatureRequest,
     *,
-    project_root: Path,
-    config_path: Path,
-    out: Path | None = None,
-    output_format: str = "csv",
-    field: str = "lemma",
-    mfw: int = 0,
-    include_upos: bool = True,
-    include_basic: bool = True,
-    group_by_file: bool = False,
-    auto_single_cleaned: bool = False,
-    error_on_empty_group: bool = False,
-    dependencies: FeatureDependencies,
+    dependencies: FeatureCommandDependencies,
 ) -> int:
     try:
         plan = build_corpus_plan(
-            project_root=project_root,
+            project_root=request.project_root,
             script_dir=None,
-            config_path=config_path,
-            group_by_file=group_by_file,
-            auto_single_cleaned=auto_single_cleaned,
-            error_on_empty_group=error_on_empty_group,
-            load_config_fn=dependencies.load_config,
+            config_path=request.config_path,
+            group_by_file=request.group_by_file,
+            auto_single_cleaned=request.auto_single_cleaned,
+            error_on_empty_group=request.error_on_empty_group,
+            dependencies=dependencies.planning,
             preprocess_mode="execute",
-            cleaner=dependencies.cleaner,
-            cleaner_loader=dependencies.cleaner_loader,
-            preprocess_fn=run_preprocess_if_needed,
         )
     except FileNotFoundError as exc:
         raise FeatureError(str(exc)) from exc
     config = plan.config
 
     options = FeatureOptions(
-        field=field,
-        mfw=mfw,
-        include_upos=include_upos,
-        include_basic=include_basic,
+        field=request.field,
+        mfw=request.mfw,
+        include_upos=request.include_upos,
+        include_basic=request.include_basic,
         min_token_length=config.filters.min_token_length,
         drop_roman_numerals=config.filters.drop_roman_numerals,
-        extraction_policy=dependencies.extraction_policy,
+        extraction_policy=dependencies.analysis.extraction_policy,
     )
 
     groups_texts: list[tuple[str, list[Path], str]] = []
@@ -363,9 +365,13 @@ def run_features(
 
     nlp, _backend_info, _package = build_nlp_runtime(
         config=config,
-        backend_factory=dependencies.backend_factory,
+        backend_factory=dependencies.analysis.backend_factory,
     )
 
     rows = build_feature_rows(groups_texts, nlp, options)
-    write_feature_matrix(rows, out=out, format=output_format)
+    write_feature_matrix(
+        rows,
+        out=request.out_path,
+        format=request.output_format,
+    )
     return 0

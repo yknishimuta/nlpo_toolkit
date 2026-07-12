@@ -50,7 +50,6 @@ def test_runner_integration_uses_roman_exception_file_in_final_csv(tmp_path: Pat
             },
         }
 
-    monkeypatch.setattr(runtime_mod, "run_preprocess_if_needed", lambda **kwargs: None)
 
     rc = runner_mod.run(
         project_root=tmp_path,
@@ -103,7 +102,6 @@ def test_runner_loads_roman_exceptions_once_for_multiple_groups(tmp_path: Path, 
         calls.append(path)
         return frozenset({"xiv"})
 
-    monkeypatch.setattr(runtime_mod, "run_preprocess_if_needed", lambda **kwargs: None)
     monkeypatch.setattr(runtime_mod, "load_roman_exceptions", fake_loader)
 
     rc = runner_mod.run(

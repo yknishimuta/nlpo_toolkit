@@ -3,12 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 import csv
 
-from nlpo_toolkit.corpus_analysis import cli
-from nlpo_toolkit.corpus_analysis.cli import count as mod
+import pytest
+
+from nlpo_toolkit.corpus_analysis.runner import run
 from tests.corpus_analysis.fake_nlp import fake_backend_factory, runner_dependencies
 
 
-def test_dictcheck_enabled_creates_known_unknown(tmp_path, monkeypatch):
+def test_dictcheck_enabled_creates_known_unknown(tmp_path):
     # --- Arrange: fake "repo" layout that main() expects ---
     script_dir = tmp_path / "runner_dir"
     (script_dir / "config").mkdir(parents=True, exist_ok=True)
@@ -49,34 +50,25 @@ def test_dictcheck_enabled_creates_known_unknown(tmp_path, monkeypatch):
         },
     }
 
-    # main() reads: script_dir/config/groups.config.yml
+    config_path = script_dir / "config" / "groups.config.yml"
+    config_path.write_text("dummy", encoding="utf-8")
+
     def fake_load_config(path: Path):
         assert path.name == "groups.config.yml"
         return cfg
 
-
-    # Make main() think config exists
-    real_exists = Path.exists
-
-    def fake_exists(self: Path) -> bool:
-        if self.name == "groups.config.yml":
-            return True
-        return real_exists(self)
-
-    monkeypatch.setattr(mod.Path, "exists", fake_exists)
-
-    
     dependencies = runner_dependencies(
         fake_load_config,
         fake_backend_factory(
             [("rosa", "rosa", "NOUN"), ("rosa", "rosa", "NOUN"), ("puella", "puella", "NOUN")]
         ),
     )
-    monkeypatch.setattr(mod, "default_runner_dependencies", lambda: dependencies)
-
-    # --- Act ---
-    rc = cli.main(["count", "--project-root", str(script_dir)])
-    assert rc == 0
+    result = run(
+        project_root=script_dir,
+        config_path=config_path,
+        dependencies=dependencies,
+    )
+    assert result.exit_code == 0
 
     # --- Assert ---
     base_csv = out_dir / "frequency_text.csv"
@@ -99,7 +91,7 @@ def test_dictcheck_enabled_creates_known_unknown(tmp_path, monkeypatch):
     assert [r["lemma"] for r in unknown_rows] == ["puella"]
 
 
-def test_dictcheck_enabled_requires_wordlist(tmp_path, monkeypatch):
+def test_dictcheck_enabled_requires_wordlist(tmp_path):
     script_dir = tmp_path / "runner_dir"
     (script_dir / "config").mkdir(parents=True, exist_ok=True)
 
@@ -122,27 +114,20 @@ def test_dictcheck_enabled_requires_wordlist(tmp_path, monkeypatch):
             # wordlist missing on purpose
         },
     }
+    config_path = script_dir / "config" / "groups.config.yml"
+    config_path.write_text("dummy", encoding="utf-8")
 
     def fake_load_config(path: Path):
         assert path.name == "groups.config.yml"
         return cfg
 
-
-    real_exists = Path.exists
-
-    def fake_exists(self: Path) -> bool:
-        if self.name == "groups.config.yml":
-            return True
-        return real_exists(self)
-
-    monkeypatch.setattr(mod.Path, "exists", fake_exists)
-    
     dependencies = runner_dependencies(
         fake_load_config,
         fake_backend_factory([("rosa", "rosa", "NOUN")]),
     )
-    monkeypatch.setattr(mod, "default_runner_dependencies", lambda: dependencies)
-
-    import pytest
     with pytest.raises(ValueError, match=r"dictcheck\.wordlist"):
-        cli.main(["count", "--project-root", str(script_dir)])
+        run(
+            project_root=script_dir,
+            config_path=config_path,
+            dependencies=dependencies,
+        )

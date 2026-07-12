@@ -5,8 +5,8 @@ import sys
 from pathlib import Path
 
 from ..cleaner_runtime import CleanerError
-from ..dependencies import default_feature_dependencies
-from ..features import FeatureError, run_features
+from ..dependencies import default_feature_command_dependencies
+from ..features import FeatureError, FeatureRequest, execute_feature_command
 from .common import (
     CLIContext,
     add_project_config_arguments,
@@ -95,19 +95,21 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
     project_root = resolve_project_root(args.project_root)
     config_path = resolve_config_path(project_root=project_root, config_path=args.config)
     try:
-        return run_features(
-            project_root=project_root,
-            config_path=config_path,
-            out=args.out,
-            output_format=args.format,
-            field=args.field,
-            mfw=args.mfw,
-            include_upos=bool(args.include_upos),
-            include_basic=bool(args.include_basic),
-            group_by_file=bool(args.group_by_file),
-            auto_single_cleaned=bool(args.auto_single_cleaned),
-            error_on_empty_group=bool(args.error_on_empty_group),
-            dependencies=default_feature_dependencies(),
+        return execute_feature_command(
+            FeatureRequest(
+                project_root=project_root,
+                config_path=config_path,
+                out_path=args.out,
+                output_format=args.format,
+                field=args.field,
+                mfw=args.mfw,
+                include_upos=bool(args.include_upos),
+                include_basic=bool(args.include_basic),
+                group_by_file=bool(args.group_by_file),
+                auto_single_cleaned=bool(args.auto_single_cleaned),
+                error_on_empty_group=bool(args.error_on_empty_group),
+            ),
+            dependencies=default_feature_command_dependencies(),
         )
     except (CleanerError, FeatureError, ValueError, FileNotFoundError) as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)

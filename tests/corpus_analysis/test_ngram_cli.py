@@ -8,7 +8,10 @@ import pytest
 from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.config import ensure_app_config, load_config
 from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
-from nlpo_toolkit.corpus_analysis.dependencies import ConfigNgramDependencies
+from nlpo_toolkit.corpus_analysis.dependencies import (
+    ConfigNgramDependencies,
+    CorpusPlanningDependencies,
+)
 from nlpo_toolkit.corpus_analysis.ngram import (
     ConfigNgramRequest,
     NgramError,
@@ -315,7 +318,14 @@ def test_config_ngram_uses_canonical_corpus_plan_with_overrides(tmp_path, monkey
             auto_single_cleaned=True,
             error_on_empty_group=True,
         ),
-        dependencies=ConfigNgramDependencies(load_config=load_config),
+        dependencies=ConfigNgramDependencies(
+            planning=CorpusPlanningDependencies(
+                load_config=load_config,
+                cleaner_loader=lambda: pytest.fail(
+                    "cleaner loader must not be called"
+                ),
+            ),
+        ),
     )
 
     assert rc == 0
@@ -350,7 +360,14 @@ def test_config_ngram_rejects_lemma_before_planning(tmp_path, monkeypatch):
                 output_format="tsv",
                 out_path=None,
             ),
-            dependencies=ConfigNgramDependencies(load_config=load_config),
+            dependencies=ConfigNgramDependencies(
+                planning=CorpusPlanningDependencies(
+                    load_config=load_config,
+                    cleaner_loader=lambda: pytest.fail(
+                        "cleaner loader must not be called"
+                    ),
+                ),
+            ),
         )
 
 

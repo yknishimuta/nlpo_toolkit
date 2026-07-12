@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
+from nlpo_toolkit.corpus_analysis.analysis_policy import AnalysisExtractionPolicy
 from nlpo_toolkit.corpus_analysis.config import ensure_app_config
 from nlpo_toolkit.corpus_analysis.corpus import (
     CorpusWorkItem,
@@ -24,12 +25,18 @@ from nlpo_toolkit.corpus_analysis.corpus_errors import (
 )
 from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis.dependencies import (
+    AnalysisDependencies,
     ConfigNgramDependencies,
-    FeatureDependencies,
+    CorpusPlanningDependencies,
+    FeatureCommandDependencies,
 )
 from nlpo_toolkit.corpus_analysis.ngram import ConfigNgramRequest
-from nlpo_toolkit.corpus_analysis.runner_types import RunnerDependencies
-from tests.corpus_analysis.fake_nlp import FakeNLPBackend, fake_backend_factory
+from nlpo_toolkit.corpus_analysis.features import FeatureRequest
+from tests.corpus_analysis.fake_nlp import (
+    FakeNLPBackend,
+    fake_backend_factory,
+    runner_dependencies,
+)
 
 
 def _config(data: dict):
@@ -260,10 +267,9 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
     runner_mod.run(
         project_root=tmp_path,
         config_path=config_path,
-        dependencies=RunnerDependencies(
-            load_config=load_config,
-            cleaner=object(),
-            backend_factory=fake_backend_factory(
+        dependencies=runner_dependencies(
+            load_config,
+            fake_backend_factory(
                 backend=CaptureCountNLP(tokens=(("item_a", "item_a", "NOUN"),))
             ),
         ),
@@ -274,16 +280,24 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
             received["features"] = text
             return type("Doc", (), {"sentences": []})()
 
-    features_mod.run_features(
-        project_root=tmp_path,
-        config_path=config_path,
-        out=tmp_path / "features.csv",
-        dependencies=FeatureDependencies(
-            load_config=load_config,
-            cleaner=object(),
-            backend_factory=lambda _config: BuiltNLPBackend(
-                backend=CaptureNLP(),
-                info=NLPBackendInfo(name="fake", language="la", package="package_a"),
+    planning = CorpusPlanningDependencies(
+        load_config=load_config,
+        cleaner_loader=lambda: pytest.fail("cleaner loader must not be called"),
+    )
+    features_mod.execute_feature_command(
+        FeatureRequest(
+            project_root=tmp_path,
+            config_path=config_path,
+            out_path=tmp_path / "features.csv",
+        ),
+        dependencies=FeatureCommandDependencies(
+            planning=planning,
+            analysis=AnalysisDependencies(
+                backend_factory=lambda _config: BuiltNLPBackend(
+                    backend=CaptureNLP(),
+                    info=NLPBackendInfo(name="fake", language="la", package="package_a"),
+                ),
+                extraction_policy=AnalysisExtractionPolicy(),
             ),
         ),
     )
@@ -309,8 +323,7 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
             out_path=tmp_path / "ngrams.tsv",
         ),
         dependencies=ConfigNgramDependencies(
-            load_config=load_config,
-            cleaner=object(),
+            planning=planning,
         ),
     )
 

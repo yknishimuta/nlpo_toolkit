@@ -7,9 +7,10 @@ from nlpo_toolkit.backends import NLPBackendInfo
 from nlpo_toolkit.nlp import load_roman_exceptions
 
 from .config import AppConfig
-from .corpus import prepare_corpora, resolve_project_path, run_preprocess_if_needed
+from .corpus import prepare_corpora, resolve_project_path
+from .dependencies import BackendFactory, RunnerDependencies
 from .run_plan import build_run_plan, ensure_out_dir
-from .runner_types import BackendFactory, RunContext, RunnerDependencies
+from .runner_types import RunContext
 
 
 def build_nlp_runtime(
@@ -28,7 +29,7 @@ def initialize_nlp_runtime(
 ) -> tuple[Any, NLPBackendInfo, Any]:
     return build_nlp_runtime(
         config=config,
-        backend_factory=dependencies.backend_factory,
+        backend_factory=dependencies.analysis.backend_factory,
     )
 
 
@@ -37,9 +38,9 @@ def initialize_sentence_splitter(
     config: AppConfig,
     dependencies: RunnerDependencies,
 ) -> Any | None:
-    if dependencies.sentence_splitter_factory is None:
+    if dependencies.analysis.sentence_splitter_factory is None:
         return None
-    return dependencies.sentence_splitter_factory(config.nlp)
+    return dependencies.analysis.sentence_splitter_factory(config.nlp)
 
 
 def load_roman_exceptions_for_run(
@@ -71,11 +72,8 @@ def prepare_run_context(
         group_by_file=group_by_file,
         auto_single_cleaned=auto_single_cleaned,
         error_on_empty_group=error_on_empty_group,
-        load_config_fn=dependencies.load_config,
+        dependencies=dependencies.planning,
         preprocess_mode="execute",
-        cleaner=dependencies.cleaner,
-        cleaner_loader=dependencies.cleaner_loader,
-        preprocess_fn=run_preprocess_if_needed,
     )
     prepared_corpora = prepare_corpora(
         work_items=plan.work_items,
@@ -102,5 +100,5 @@ def prepare_run_context(
         backend_info=backend_info,
         splitter_nlp=splitter_nlp,
         roman_exceptions=roman_exceptions,
-        extraction_policy=dependencies.extraction_policy,
+        extraction_policy=dependencies.analysis.extraction_policy,
     )

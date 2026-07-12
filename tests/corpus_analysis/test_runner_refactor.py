@@ -19,10 +19,10 @@ from nlpo_toolkit.corpus_analysis.runner_types import (
     AnalysisResults,
     ComparisonRunResult,
     PartitionRunResult,
-    RunnerDependencies,
 )
 from nlpo_toolkit.corpus_analysis.runtime import prepare_run_context
 from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
+from tests.corpus_analysis.fake_nlp import runner_dependencies
 
 
 class FakeBackend:
@@ -50,12 +50,11 @@ def _backend_factory(config):
 
 
 def _base_dependencies():
-    return RunnerDependencies(
-        load_config=lambda _path: ensure_app_config(
+    return runner_dependencies(
+        lambda _path: ensure_app_config(
             {"groups": {"text": {"files": ["input/*.txt"]}}}
         ),
-        cleaner=object(),
-        backend_factory=_backend_factory,
+        _backend_factory,
     )
 
 
@@ -93,11 +92,7 @@ def test_prepare_run_context_resolves_per_file_work_items(tmp_path: Path) -> Non
             "groups": {"group_a": {"files": ["input/*.txt"]}},
         })
 
-    deps = RunnerDependencies(
-        load_config=load_config,
-        cleaner=object(),
-        backend_factory=_backend_factory,
-    )
+    deps = runner_dependencies(load_config, _backend_factory)
 
     context = prepare_run_context(
         project_root=tmp_path,
@@ -146,11 +141,7 @@ def test_analyze_one_corpus_writes_expected_outputs_from_record_pipeline(tmp_pat
             },
         })
 
-    deps = RunnerDependencies(
-        load_config=load_config,
-        cleaner=object(),
-        backend_factory=_backend_factory,
-    )
+    deps = runner_dependencies(load_config, _backend_factory)
     context = prepare_run_context(
         project_root=tmp_path,
         script_dir=None,
@@ -170,7 +161,6 @@ def test_analyze_one_corpus_writes_expected_outputs_from_record_pipeline(tmp_pat
 
     result = analyze_one_corpus(
         context=context,
-        dependencies=deps,
         corpus=corpus,
         trace_paths={"group_a": tmp_path / "output" / "trace_group_a.tsv"},
         lemma_normalization_map=None,
@@ -198,11 +188,7 @@ def test_summary_lines_and_metadata_include_existing_fields(tmp_path: Path) -> N
             "groups": {"group_a": {"files": ["input/a.txt"]}},
         })
 
-    deps = RunnerDependencies(
-        load_config=load_config,
-        cleaner=object(),
-        backend_factory=_backend_factory,
-    )
+    deps = runner_dependencies(load_config, _backend_factory)
     context = prepare_run_context(
         project_root=tmp_path,
         script_dir=None,

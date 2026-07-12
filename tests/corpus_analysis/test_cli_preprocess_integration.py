@@ -4,9 +4,9 @@ from pathlib import Path
 import csv
 
 
-from nlpo_toolkit.corpus_analysis.cli import count as mod
+from nlpo_toolkit.corpus_analysis.count_command import CountRequest, execute_count_command
 from nlpo_toolkit.corpus_analysis.config import load_config
-from tests.corpus_analysis.fake_nlp import fake_backend_factory, runner_dependencies
+from tests.corpus_analysis.fake_nlp import count_command_dependencies, fake_backend_factory
 
 # Dummy stanza-like objects
 class DummySentence:
@@ -22,7 +22,7 @@ class DummySplitter:
         return DummyDoc([DummySentence("Puella rosam amat."), DummySentence("Rosa pulchra est.")])
 
 
-def test_preprocess_cleaner_integration_fixed(tmp_path, monkeypatch):
+def test_preprocess_cleaner_integration_fixed(tmp_path):
     """
     Preprocess integration test (cleaner), fixed layout version.
 
@@ -90,7 +90,7 @@ def test_preprocess_cleaner_integration_fixed(tmp_path, monkeypatch):
     class FakeCleaner:
         main = staticmethod(fake_cleaner_main)
 
-    dependencies = runner_dependencies(
+    dependencies = count_command_dependencies(
         lambda _path: load_config(groups_cfg_path),
         fake_backend_factory(
             [("rosa", "rosa", "NOUN"), ("rosa", "rosa", "NOUN"), ("puella", "puella", "NOUN")]
@@ -99,9 +99,8 @@ def test_preprocess_cleaner_integration_fixed(tmp_path, monkeypatch):
     )
 
     # --- Act
-    rc = mod.run_count(
-        project_root=script_dir,
-        config_path=groups_cfg_path,
+    rc = execute_count_command(
+        CountRequest(project_root=script_dir, config_path=groups_cfg_path),
         dependencies=dependencies,
     )
     assert rc == 0

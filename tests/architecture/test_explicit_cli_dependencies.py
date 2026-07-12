@@ -30,7 +30,9 @@ def test_cli_has_no_monkeypatch_detection() -> None:
 
 def test_runner_and_features_have_no_legacy_pipeline_arguments() -> None:
     runner_parameters = inspect.signature(run).parameters
-    feature_parameters = inspect.signature(features.run_features).parameters
+    feature_parameters = inspect.signature(
+        features.execute_feature_command
+    ).parameters
     assert "build_pipeline_fn" not in runner_parameters
     assert "build_sentence_splitter_fn" not in runner_parameters
     assert "build_pipeline_fn" not in feature_parameters

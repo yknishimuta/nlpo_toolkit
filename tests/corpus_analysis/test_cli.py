@@ -4,121 +4,76 @@ from pathlib import Path
 
 from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.cli import count as count_cli
+from nlpo_toolkit.corpus_analysis.count_command import CountRequest
+from nlpo_toolkit.corpus_analysis.dependencies import CountCommandDependencies
 
 
-def test_count_cli_uses_project_root_default_config(tmp_path, monkeypatch):
-    calls = []
+def _capture_count_request(monkeypatch, *, exit_code: int = 0):
+    calls: list[tuple[CountRequest, CountCommandDependencies]] = []
 
-    def fake_run_count(**kwargs) -> int:
-        calls.append(kwargs)
-        return 0
+    def fake_execute_count_command(
+        request: CountRequest,
+        *,
+        dependencies: CountCommandDependencies,
+    ) -> int:
+        calls.append((request, dependencies))
+        return exit_code
 
-    monkeypatch.setattr(count_cli, "run_count", fake_run_count)
-
-    rc = cli.main(["count", "--project-root", str(tmp_path)])
-
-    assert rc == 0
-    assert calls[0]["project_root"] == tmp_path.resolve()
-    assert calls[0]["config_path"] == tmp_path / "config" / "groups.config.yml"
-    assert calls[0]["group_by_file"] is False
-    assert calls[0]["archive_run"] is False
-    assert calls[0]["run_name"] is None
-
-
-def test_count_accepts_config_relative_to_project_root(tmp_path, monkeypatch):
-    calls = []
-
-    def fake_run_count(**kwargs) -> int:
-        calls.append(kwargs)
-        return 0
-
-    monkeypatch.setattr(count_cli, "run_count", fake_run_count)
-
-    rc = cli.main(["count", "--project-root", str(tmp_path), "--config", "custom.yml"])
-
-    assert rc == 0
-    assert calls[0]["project_root"] == tmp_path.resolve()
-    assert calls[0]["config_path"] == (tmp_path / "custom.yml").resolve()
-    assert calls[0]["group_by_file"] is False
+    monkeypatch.setattr(
+        count_cli,
+        "execute_count_command",
+        fake_execute_count_command,
+    )
+    return calls
 
 
-def test_count_cli_accepts_group_by_file(tmp_path, monkeypatch):
-    calls = []
-
-    def fake_run_count(**kwargs) -> int:
-        calls.append(kwargs)
-        return 0
-
-    monkeypatch.setattr(count_cli, "run_count", fake_run_count)
-
-    rc = cli.main(["count", "--project-root", str(tmp_path), "--group-by-file"])
-
-    assert rc == 0
-    assert calls[0]["project_root"] == tmp_path.resolve()
-    assert calls[0]["config_path"] == tmp_path / "config" / "groups.config.yml"
-    assert calls[0]["group_by_file"] is True
-
-
-def test_count_cli_accepts_run_archive_options(tmp_path, monkeypatch):
-    calls = []
-
-    def fake_run_count(**kwargs) -> int:
-        calls.append(kwargs)
-        return 0
-
-    monkeypatch.setattr(count_cli, "run_count", fake_run_count)
+def test_count_cli_builds_canonical_request(tmp_path, monkeypatch) -> None:
+    calls = _capture_count_request(monkeypatch, exit_code=7)
 
     rc = cli.main(
         [
             "count",
             "--project-root",
             str(tmp_path),
+            "--config",
+            "custom.yml",
+            "--group-by-file",
             "--run-name",
             "my run",
             "--runs-dir",
             "archives",
             "--include-cleaned",
             "--include-input",
+            "--auto-single-cleaned",
+            "--error-on-empty-group",
         ]
     )
 
-    assert rc == 0
-    assert calls[0]["archive_run"] is False
-    assert calls[0]["run_name"] == "my run"
-    assert calls[0]["runs_dir"] == Path("archives")
-    assert calls[0]["include_cleaned"] is True
-    assert calls[0]["include_input"] is True
-    assert calls[0]["command_line"][0:2] == ["nlpo", "count"]
+    assert rc == 7
+    request, dependencies = calls[0]
+    assert request.project_root == tmp_path.resolve()
+    assert request.config_path == (tmp_path / "custom.yml").resolve()
+    assert request.group_by_file is True
+    assert request.run_name == "my run"
+    assert request.runs_dir == Path("archives")
+    assert request.include_cleaned is True
+    assert request.include_input is True
+    assert request.auto_single_cleaned is True
+    assert request.error_on_empty_group is True
+    assert request.command_line[:2] == ("nlpo", "count")
+    assert isinstance(dependencies, CountCommandDependencies)
 
 
-def test_count_cli_accepts_auto_single_cleaned(tmp_path, monkeypatch):
-    calls = []
+def test_count_cli_default_request_and_dry_run(tmp_path, monkeypatch) -> None:
+    calls = _capture_count_request(monkeypatch)
 
-    def fake_run_count(**kwargs) -> int:
-        calls.append(kwargs)
-        return 0
-
-    monkeypatch.setattr(count_cli, "run_count", fake_run_count)
-
-    rc = cli.main(["count", "--project-root", str(tmp_path), "--auto-single-cleaned"])
-
-    assert rc == 0
-    assert calls[0]["auto_single_cleaned"] is True
-
-
-def test_count_cli_accepts_dry_run(tmp_path, monkeypatch):
-    calls = []
-
-    def fake_dry_run_count(**kwargs) -> int:
-        calls.append(kwargs)
-        return 0
-
-    monkeypatch.setattr(count_cli, "dry_run_count", fake_dry_run_count)
-
-    rc = cli.main(["count", "--dry-run", "--project-root", str(tmp_path), "--group-by-file"])
+    rc = cli.main(
+        ["count", "--dry-run", "--project-root", str(tmp_path)]
+    )
 
     assert rc == 0
-    assert calls[0]["project_root"] == tmp_path.resolve()
-    assert calls[0]["config_path"] == tmp_path / "config" / "groups.config.yml"
-    assert calls[0]["group_by_file"] is True
-    assert calls[0]["error_on_empty_group"] is False
+    request, _dependencies = calls[0]
+    assert request.config_path == tmp_path / "config" / "groups.config.yml"
+    assert request.dry_run is True
+    assert request.archive_run is False
+    assert request.group_by_file is False

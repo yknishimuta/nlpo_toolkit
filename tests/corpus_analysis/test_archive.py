@@ -13,10 +13,13 @@ from nlpo_toolkit.corpus_analysis.archive import (
     sanitize_run_name,
 )
 from nlpo_toolkit.corpus_analysis.config import ensure_app_config
+from nlpo_toolkit.corpus_analysis.count_command import CountRequest, execute_count_command
+from nlpo_toolkit.corpus_analysis.dependencies import (
+    CountCommandDependencies,
+    default_runner_dependencies,
+)
 from nlpo_toolkit.corpus_analysis.run_plan import RunPlan
 from nlpo_toolkit.corpus_analysis.runner_types import ReferencedConfigFile, RunResult
-from nlpo_toolkit.corpus_analysis.cli import count as count_cli
-from nlpo_toolkit.corpus_analysis.dependencies import default_runner_dependencies
 
 
 def make_run_result(
@@ -116,15 +119,21 @@ def test_missing_declared_output_fails_without_partial_archive(tmp_path: Path) -
 
 
 def test_count_cli_uses_run_result_without_reloading_config_or_manifest(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     result = make_run_result(tmp_path)
-    monkeypatch.setattr(count_cli, "run", lambda **kwargs: result)
-    rc = count_cli.run_count(
-        project_root=tmp_path,
-        config_path=result.plan.config_path,
-        run_name="cli-result",
-        dependencies=default_runner_dependencies(),
+    dependencies = CountCommandDependencies(
+        runner=default_runner_dependencies(),
+        run_analysis=lambda **_kwargs: result,
+        archive_creator=create_run_archive,
+    )
+    rc = execute_count_command(
+        CountRequest(
+            project_root=tmp_path,
+            config_path=result.plan.config_path,
+            run_name="cli-result",
+        ),
+        dependencies=dependencies,
     )
 
     assert rc == 0
@@ -133,16 +142,21 @@ def test_count_cli_uses_run_result_without_reloading_config_or_manifest(
 
 
 def test_count_cli_does_not_archive_nonzero_run_result(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
     result = replace(make_run_result(tmp_path), exit_code=1)
-    monkeypatch.setattr(count_cli, "run", lambda **kwargs: result)
-
-    rc = count_cli.run_count(
-        project_root=tmp_path,
-        config_path=result.plan.config_path,
-        run_name="must-not-exist",
-        dependencies=default_runner_dependencies(),
+    dependencies = CountCommandDependencies(
+        runner=default_runner_dependencies(),
+        run_analysis=lambda **_kwargs: result,
+        archive_creator=create_run_archive,
+    )
+    rc = execute_count_command(
+        CountRequest(
+            project_root=tmp_path,
+            config_path=result.plan.config_path,
+            run_name="must-not-exist",
+        ),
+        dependencies=dependencies,
     )
 
     assert rc == 1

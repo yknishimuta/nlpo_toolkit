@@ -10,7 +10,14 @@ from nlpo_toolkit.corpus_analysis.analysis_policy import (
     AnalysisExtractionPolicy,
     DEFAULT_ANALYSIS_EXTRACTION_POLICY,
 )
-from nlpo_toolkit.corpus_analysis.runner_types import BackendFactory, RunnerDependencies
+from nlpo_toolkit.corpus_analysis.dependencies import (
+    AnalysisDependencies,
+    BackendFactory,
+    CorpusPlanningDependencies,
+    CountCommandDependencies,
+    RunnerDependencies,
+)
+from nlpo_toolkit.corpus_analysis.archive import create_run_archive
 from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
 
 
@@ -81,15 +88,45 @@ def runner_dependencies(
     load_config,
     backend_factory: BackendFactory,
     *,
-    cleaner=object(),
+    cleaner=None,
     extraction_policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY,
 ) -> RunnerDependencies:
     def canonical_loader(path) -> AppConfig:
         return ensure_app_config(load_config(path))
 
+    def cleaner_loader():
+        if cleaner is None:
+            raise AssertionError("cleaner loader must not be called")
+        return cleaner
+
     return RunnerDependencies(
-        load_config=canonical_loader,
-        backend_factory=backend_factory,
-        cleaner=cleaner,
-        extraction_policy=extraction_policy,
+        planning=CorpusPlanningDependencies(
+            load_config=canonical_loader,
+            cleaner_loader=cleaner_loader,
+        ),
+        analysis=AnalysisDependencies(
+            backend_factory=backend_factory,
+            extraction_policy=extraction_policy,
+        ),
+    )
+
+
+def count_command_dependencies(
+    load_config,
+    backend_factory: BackendFactory,
+    *,
+    cleaner=None,
+    extraction_policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY,
+) -> CountCommandDependencies:
+    from nlpo_toolkit.corpus_analysis.runner import run
+
+    return CountCommandDependencies(
+        runner=runner_dependencies(
+            load_config,
+            backend_factory,
+            cleaner=cleaner,
+            extraction_policy=extraction_policy,
+        ),
+        run_analysis=run,
+        archive_creator=create_run_archive,
     )
