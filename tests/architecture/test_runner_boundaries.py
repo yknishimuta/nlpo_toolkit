@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import ast
+import subprocess
+import sys
 from dataclasses import fields
 from pathlib import Path
+
+import pytest
 
 
 RUNNER_MODULES = (
@@ -45,8 +49,21 @@ def test_runner_responsibilities_live_in_dedicated_modules() -> None:
     assert build_final_run_metadata.__module__.endswith(".run_reporting")
 
 
-def test_runner_modules_import_independently() -> None:
-    pass
+@pytest.mark.parametrize(
+    "module",
+    (
+        "nlpo_toolkit.corpus_analysis.runner_types",
+        "nlpo_toolkit.corpus_analysis.runtime",
+        "nlpo_toolkit.corpus_analysis.analysis_pipeline",
+        "nlpo_toolkit.corpus_analysis.post_analysis",
+        "nlpo_toolkit.corpus_analysis.run_reporting",
+    ),
+)
+def test_runner_modules_import_independently(module: str) -> None:
+    subprocess.run(
+        [sys.executable, "-c", f"import {module}"],
+        check=True,
+    )
 
 
 def test_split_modules_do_not_import_runner() -> None:

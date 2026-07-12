@@ -33,7 +33,7 @@ python -m nlpo_toolkit.latin.cleaners.run_clean_corpus
 By default, it uses:
 
 ```
-clean_configs/sample.yml
+nlpo_toolkit/latin/cleaners/config/sample.yml
 ```
 
 as defined in:
@@ -51,13 +51,6 @@ You can specify a different YAML config file by passing the path as an argument:
 ```
 python -m nlpo_toolkit.latin.cleaners.run_clean_corpus \
     /path/to/your/custom_config.yml
-```
-
-or, if calling the script directly:
-
-```
-python nlpo_toolkit/latin/cleaners/run_clean_config.py \
-    /path/to/config.yml
 ```
 
 By default, the script uses a sample config under the cleaners directory.

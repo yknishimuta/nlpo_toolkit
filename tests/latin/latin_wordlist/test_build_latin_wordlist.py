@@ -1,12 +1,6 @@
-from pathlib import Path
-import sys
 import textwrap
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-import build_latin_wordlist as mod
+from nlpo_toolkit.latin.latin_wordlist import build_latin_wordlist as mod
 
 
 def test_build_latin_wordlist_small_corpus(tmp_path, monkeypatch):
@@ -125,4 +119,3 @@ def test_build_latin_wordlist_small_corpus(tmp_path, monkeypatch):
     # From extra wordlist:
     assert "homo" in vocab
     assert "bonus" in vocab
-

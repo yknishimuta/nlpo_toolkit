@@ -1,10 +1,9 @@
-from __future__ import annotations
-
 """Low-level cache storage primitives shared by cache implementations.
 
-This module must not depend on legacy lemma-cache or analysis-cache payload
-formats.
+This module is independent of cache payload formats.
 """
+
+from __future__ import annotations
 
 import os
 import time

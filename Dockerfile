@@ -12,7 +12,6 @@ RUN apt-get update \
 
 COPY pyproject.toml README.md ./
 COPY nlpo_toolkit ./nlpo_toolkit
-COPY utils.py ./utils.py
 
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir .
