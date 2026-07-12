@@ -60,7 +60,7 @@ def test_dictcheck_disabled_does_not_create_known_unknown(tmp_path, monkeypatch)
     monkeypatch.setattr(mod, "default_runner_dependencies", lambda: dependencies)
 
     # --- Act ---
-    rc = cli.main(["count-vocabula", "--project-root", str(script_dir)])
+    rc = cli.main(["count", "--project-root", str(script_dir)])
     assert rc == 0
 
     # --- Assert ---

@@ -120,7 +120,7 @@ def test_count_cli_uses_run_result_without_reloading_config_or_manifest(
 ) -> None:
     result = make_run_result(tmp_path)
     monkeypatch.setattr(count_cli, "run", lambda **kwargs: result)
-    rc = count_cli.run_count_vocabula(
+    rc = count_cli.run_count(
         project_root=tmp_path,
         config_path=result.plan.config_path,
         run_name="cli-result",
@@ -138,7 +138,7 @@ def test_count_cli_does_not_archive_nonzero_run_result(
     result = replace(make_run_result(tmp_path), exit_code=1)
     monkeypatch.setattr(count_cli, "run", lambda **kwargs: result)
 
-    rc = count_cli.run_count_vocabula(
+    rc = count_cli.run_count(
         project_root=tmp_path,
         config_path=result.plan.config_path,
         run_name="must-not-exist",

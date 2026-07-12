@@ -75,7 +75,7 @@ def test_dictcheck_enabled_creates_known_unknown(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "default_runner_dependencies", lambda: dependencies)
 
     # --- Act ---
-    rc = cli.main(["count-vocabula", "--project-root", str(script_dir)])
+    rc = cli.main(["count", "--project-root", str(script_dir)])
     assert rc == 0
 
     # --- Assert ---
@@ -145,4 +145,4 @@ def test_dictcheck_enabled_requires_wordlist(tmp_path, monkeypatch):
 
     import pytest
     with pytest.raises(ValueError, match=r"dictcheck\.wordlist"):
-        cli.main(["count-vocabula", "--project-root", str(script_dir)])
+        cli.main(["count", "--project-root", str(script_dir)])

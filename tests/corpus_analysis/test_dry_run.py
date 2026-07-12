@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nlpo_toolkit.corpus_analysis.dry_run import dry_run_count_vocabula
+from nlpo_toolkit.corpus_analysis.dry_run import dry_run_count
 
 
 def test_dry_run_reports_config_paths_matches_and_warnings(tmp_path: Path, capsys):
@@ -67,7 +67,7 @@ def test_dry_run_reports_config_paths_matches_and_warnings(tmp_path: Path, capsy
         encoding="utf-8",
     )
 
-    rc = dry_run_count_vocabula(project_root=project_root, config_path=config_path)
+    rc = dry_run_count(project_root=project_root, config_path=config_path)
 
     out = capsys.readouterr().out
     assert rc == 0
@@ -103,7 +103,7 @@ def test_dry_run_error_on_empty_group(tmp_path: Path, capsys):
         encoding="utf-8",
     )
 
-    rc = dry_run_count_vocabula(
+    rc = dry_run_count(
         project_root=project_root,
         config_path=config_path,
         error_on_empty_group=True,
@@ -146,7 +146,7 @@ def test_dry_run_auto_single_cleaned_reports_selected_file(tmp_path: Path, capsy
         encoding="utf-8",
     )
 
-    rc = dry_run_count_vocabula(project_root=project_root, config_path=config_path)
+    rc = dry_run_count(project_root=project_root, config_path=config_path)
 
     out = capsys.readouterr().out
     assert rc == 0
@@ -179,7 +179,7 @@ def test_dry_run_reports_partition_validation_ok(tmp_path: Path, capsys):
         encoding="utf-8",
     )
 
-    rc = dry_run_count_vocabula(project_root=project_root, config_path=config_path)
+    rc = dry_run_count(project_root=project_root, config_path=config_path)
 
     out = capsys.readouterr().out
     assert rc == 0
@@ -209,7 +209,7 @@ def test_dry_run_partition_empty_reference_is_error(tmp_path: Path, capsys):
         encoding="utf-8",
     )
 
-    rc = dry_run_count_vocabula(project_root=project_root, config_path=config_path)
+    rc = dry_run_count(project_root=project_root, config_path=config_path)
 
     out = capsys.readouterr().out
     assert rc == 1

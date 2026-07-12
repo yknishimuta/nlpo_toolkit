@@ -55,7 +55,7 @@ def test_analysis_unit_surface_writes_word_frequency_and_passes_use_lemma_false(
     monkeypatch.setattr(mod, "default_runner_dependencies", lambda: dependencies)
 
     # --- Act ---
-    rc = cli.main(["count-vocabula", "--project-root", str(script_dir)])
+    rc = cli.main(["count", "--project-root", str(script_dir)])
     assert rc == 0
 
     # --- Assert: header changes for surface ---

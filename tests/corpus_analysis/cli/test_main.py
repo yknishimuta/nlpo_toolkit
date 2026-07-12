@@ -4,6 +4,8 @@ import argparse
 import ast
 from pathlib import Path
 
+import pytest
+
 from nlpo_toolkit.corpus_analysis.cli import build_parser, main
 from nlpo_toolkit.corpus_analysis.cli import count as count_cli
 
@@ -22,29 +24,35 @@ def test_root_parser_registers_all_commands() -> None:
         "compare",
         "concordance",
         "count",
-        "count-vocabula",
         "features",
         "ngram",
     }
 
 
-def test_count_alias_and_count_vocabula_use_same_handler() -> None:
+def test_count_uses_count_handler() -> None:
     parser = build_parser()
-    full = parser.parse_args(["count-vocabula", "--project-root", "."])
-    alias = parser.parse_args(["count", "--project-root", "."])
+    args = parser.parse_args(["count", "--project-root", "."])
 
-    assert full.handler is count_cli.execute
-    assert alias.handler is count_cli.execute
+    assert args.handler is count_cli.execute
+
+
+def test_count_vocabula_command_is_not_registered() -> None:
+    parser = build_parser()
+
+    with pytest.raises(SystemExit) as exc_info:
+        parser.parse_args(["count-vocabula", "--project-root", "."])
+
+    assert exc_info.value.code == 2
 
 
 def test_main_dispatches_through_registered_handler(monkeypatch, tmp_path) -> None:
     calls: list[dict[str, object]] = []
 
-    def fake_run_count_vocabula(**kwargs: object) -> int:
+    def fake_run_count(**kwargs: object) -> int:
         calls.append(kwargs)
         return 7
 
-    monkeypatch.setattr(count_cli, "run_count_vocabula", fake_run_count_vocabula)
+    monkeypatch.setattr(count_cli, "run_count", fake_run_count)
 
     rc = main(["count", "--project-root", str(tmp_path)])
 

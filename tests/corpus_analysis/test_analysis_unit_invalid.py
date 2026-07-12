@@ -52,4 +52,4 @@ def test_analysis_unit_invalid_raises_value_error(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "default_runner_dependencies", lambda: dependencies)
 
     with pytest.raises(ValueError, match=r"analysis_unit"):
-        cli.main(["count-vocabula", "--project-root", str(script_dir)])
+        cli.main(["count", "--project-root", str(script_dir)])

@@ -136,7 +136,7 @@ def _render_spec_diagnostics(plan: RunPlan) -> tuple[list[str], int]:
     return lines, exit_code
 
 
-def dry_run_count_vocabula(
+def dry_run_count(
     *,
     project_root: Path,
     config_path: Path,

@@ -8,7 +8,7 @@ from ..archive import ArchiveOptions, RunArchiveError, create_run_archive
 from ..cleaner_runtime import CleanerError
 from ..corpus_errors import CorpusPreparationError
 from ..dependencies import default_runner_dependencies
-from ..dry_run import dry_run_count_vocabula
+from ..dry_run import dry_run_count
 from ..runner import run
 from ..runner_types import RunnerDependencies
 from .common import (
@@ -19,7 +19,7 @@ from .common import (
     set_handler,
 )
 
-def run_count_vocabula(
+def run_count(
     *,
     project_root: Path,
     config_path: Path,
@@ -89,10 +89,12 @@ def run_count_vocabula(
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:
-    for name in ("count-vocabula", "count"):
-        parser = subparsers.add_parser(name)
-        _configure_parser(parser)
-        set_handler(parser, execute)
+    parser = subparsers.add_parser(
+        "count",
+        help="Count corpus vocabulary and write frequency outputs.",
+    )
+    _configure_parser(parser)
+    set_handler(parser, execute)
 
 
 def _configure_parser(parser: argparse.ArgumentParser) -> None:
@@ -114,7 +116,7 @@ def _configure_parser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--archive-run",
         action="store_true",
-        help="Archive this successful count-vocabula run under --runs-dir.",
+        help="Archive this successful count run under --runs-dir.",
     )
     parser.add_argument(
         "--run-name",
@@ -154,7 +156,7 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
     config_path = resolve_config_path(project_root=project_root, config_path=args.config)
 
     if args.dry_run:
-        return dry_run_count_vocabula(
+        return dry_run_count(
             project_root=project_root,
             config_path=config_path,
             group_by_file=bool(args.group_by_file),
@@ -162,7 +164,7 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
             auto_single_cleaned=bool(args.auto_single_cleaned),
         )
 
-    return run_count_vocabula(
+    return run_count(
         project_root=project_root,
         config_path=config_path,
         group_by_file=bool(args.group_by_file),

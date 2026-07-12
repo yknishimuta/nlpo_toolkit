@@ -99,7 +99,7 @@ def test_preprocess_cleaner_integration_fixed(tmp_path, monkeypatch):
     )
 
     # --- Act
-    rc = mod.run_count_vocabula(
+    rc = mod.run_count(
         project_root=script_dir,
         config_path=groups_cfg_path,
         dependencies=dependencies,

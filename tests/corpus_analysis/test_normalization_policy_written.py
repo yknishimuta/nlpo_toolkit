@@ -61,7 +61,7 @@ def test_normalization_policy_is_written_to_summary_and_run_meta(tmp_path, monke
     monkeypatch.setattr(mod, "default_runner_dependencies", lambda: dependencies)
 
     # Act
-    rc = cli.main(["count-vocabula", "--project-root", str(script_dir)])
+    rc = cli.main(["count", "--project-root", str(script_dir)])
     assert rc == 0
 
     # Assert: summary.txt contains policy line

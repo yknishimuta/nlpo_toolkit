@@ -10,7 +10,7 @@ import pytest
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
 import nlpo_toolkit.corpus_analysis.runtime as runtime_mod
 from nlpo_toolkit.corpus_analysis.archive import ArchiveOptions, create_run_archive
-from nlpo_toolkit.corpus_analysis.dry_run import dry_run_count_vocabula
+from nlpo_toolkit.corpus_analysis.dry_run import dry_run_count
 from tests.corpus_analysis.fake_nlp import FakeNLPBackend, fake_backend_factory, runner_dependencies
 
 
@@ -260,7 +260,7 @@ def test_dry_run_reports_comparison_and_empty_reference(tmp_path: Path, capsys: 
         encoding="utf-8",
     )
 
-    rc = dry_run_count_vocabula(project_root=project_root, config_path=config_path)
+    rc = dry_run_count(project_root=project_root, config_path=config_path)
 
     out = capsys.readouterr().out
     assert rc == 1
