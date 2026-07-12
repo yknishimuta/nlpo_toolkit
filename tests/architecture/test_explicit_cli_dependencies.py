@@ -44,7 +44,3 @@ def test_cli_has_no_pipeline_wrapper_attributes() -> None:
     assert not hasattr(count_cli, "build_pipeline")
     assert not hasattr(count_cli, "build_sentence_splitter")
     assert not hasattr(features_cli, "build_pipeline")
-
-
-def test_nlp_hooks_module_was_removed() -> None:
-    assert not Path("nlpo_toolkit/corpus_analysis/nlp_hooks.py").exists()

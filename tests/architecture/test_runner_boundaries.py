@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import os
 import subprocess
 import sys
 from dataclasses import fields
@@ -9,13 +10,29 @@ from pathlib import Path
 import pytest
 
 
-RUNNER_MODULES = (
-    Path("nlpo_toolkit/corpus_analysis/runner_types.py"),
-    Path("nlpo_toolkit/corpus_analysis/runtime.py"),
-    Path("nlpo_toolkit/corpus_analysis/analysis_pipeline.py"),
-    Path("nlpo_toolkit/corpus_analysis/post_analysis.py"),
-    Path("nlpo_toolkit/corpus_analysis/run_reporting.py"),
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+RUNNER_SPLIT_MODULE_NAMES = (
+    "nlpo_toolkit.corpus_analysis.runner_types",
+    "nlpo_toolkit.corpus_analysis.analysis_policy",
+    "nlpo_toolkit.corpus_analysis.analysis_records",
+    "nlpo_toolkit.corpus_analysis.runtime",
+    "nlpo_toolkit.corpus_analysis.analysis_pipeline",
+    "nlpo_toolkit.corpus_analysis.post_analysis",
+    "nlpo_toolkit.corpus_analysis.run_reporting",
 )
+RUNNER_RELATED_MODULE_NAMES = (
+    "nlpo_toolkit.corpus_analysis.dependencies",
+    *RUNNER_SPLIT_MODULE_NAMES,
+)
+RUNNER_IMPORTABLE_MODULE_NAMES = (
+    *RUNNER_RELATED_MODULE_NAMES,
+    "nlpo_toolkit.corpus_analysis.runner",
+)
+
+
+def _source_path(module_name: str) -> Path:
+    return PROJECT_ROOT / Path(*module_name.split(".")).with_suffix(".py")
 
 
 def test_runner_top_level_function_surface_is_only_run() -> None:
@@ -50,25 +67,45 @@ def test_runner_responsibilities_live_in_dedicated_modules() -> None:
 
 
 @pytest.mark.parametrize(
-    "module",
-    (
-        "nlpo_toolkit.corpus_analysis.runner_types",
-        "nlpo_toolkit.corpus_analysis.runtime",
-        "nlpo_toolkit.corpus_analysis.analysis_pipeline",
-        "nlpo_toolkit.corpus_analysis.post_analysis",
-        "nlpo_toolkit.corpus_analysis.run_reporting",
-    ),
+    "module_name",
+    RUNNER_IMPORTABLE_MODULE_NAMES,
+    ids=lambda name: name.rsplit(".", 1)[-1],
 )
-def test_runner_modules_import_independently(module: str) -> None:
-    subprocess.run(
-        [sys.executable, "-c", f"import {module}"],
-        check=True,
+def test_runner_modules_import_independently(module_name: str) -> None:
+    environment = os.environ.copy()
+    existing_pythonpath = environment.get("PYTHONPATH", "")
+    pythonpath = [str(PROJECT_ROOT)]
+    if existing_pythonpath:
+        pythonpath.append(existing_pythonpath)
+    environment["PYTHONPATH"] = os.pathsep.join(pythonpath)
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            f"import importlib; importlib.import_module({module_name!r})",
+        ],
+        cwd=PROJECT_ROOT,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=15,
+    )
+
+    assert completed.returncode == 0, (
+        f"Command: {completed.args!r}\n"
+        f"Module: {module_name}\n"
+        f"Return code: {completed.returncode}\n"
+        f"stdout:\n{completed.stdout}\n"
+        f"stderr:\n{completed.stderr}"
     )
 
 
 def test_split_modules_do_not_import_runner() -> None:
     violations: list[str] = []
-    for path in RUNNER_MODULES:
+    for module_name in RUNNER_SPLIT_MODULE_NAMES:
+        path = _source_path(module_name)
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
