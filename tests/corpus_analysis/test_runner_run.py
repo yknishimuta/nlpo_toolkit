@@ -18,6 +18,7 @@ class NoopCleaner:
 
 
 def _write_cleaner_config(root: Path) -> None:
+    (root / "input").mkdir(exist_ok=True)
     (root / "cleaner.yml").write_text(
         "kind: scholastic_text\ninput: input\noutput: cleaned\n",
         encoding="utf-8",

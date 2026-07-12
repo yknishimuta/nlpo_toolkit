@@ -22,7 +22,13 @@ def test_main_uses_default_config(tmp_path, monkeypatch):
     config_dir.mkdir(parents=True, exist_ok=True)
 
     config_path = config_dir / "sample.yml"
-    config_path.write_text("dummy: true\n", encoding="utf-8")
+    config_path.write_text(
+        "kind: corpus_corporum\n"
+        "input: input.txt\n"
+        "output: out/cleaned.txt\n"
+        "rules_path: config/latin_cleaners/corpus_corporum.yml\n",
+        encoding="utf-8",
+    )
 
     input_path = config_dir / "input.txt"
     input_path.write_text("Salve mundi", encoding="utf-8")
@@ -36,20 +42,6 @@ def test_main_uses_default_config(tmp_path, monkeypatch):
     rules_abs = (config_dir / rules_rel).resolve()
     rules_abs.parent.mkdir(parents=True, exist_ok=True)
     rules_abs.write_text("# dummy rules\n", encoding="utf-8")
-
-    # Monkeypatch load_clean_config to return a controlled mapping
-    def fake_load_clean_config(path: Path):
-        # Ensure that the script passes the expected config path
-        assert path == config_path
-        return {
-            "kind": "corpus_corporum",
-            "input": "input.txt",
-            "output": "out/cleaned.txt",
-            "rules_path": str(rules_rel),
-            # ref_tsv/doc_id_prefix intentionally omitted in this test
-        }
-
-    monkeypatch.setattr(mod, "load_clean_config", fake_load_clean_config)
 
     def fake_clean_text(
         raw: str,
@@ -96,7 +88,13 @@ def test_main_with_explicit_config_path(tmp_path, monkeypatch):
     config_dir.mkdir(parents=True, exist_ok=True)
 
     config_path = config_dir / "custom.yml"
-    config_path.write_text("dummy: true\n", encoding="utf-8")
+    config_path.write_text(
+        "kind: scholastic_text\n"
+        "input: in.txt\n"
+        "output: out/cleaned2.txt\n"
+        "rules_path: config/latin_cleaners/custom_rules.yml\n",
+        encoding="utf-8",
+    )
 
     input_path = config_dir / "in.txt"
     input_path.write_text("Puella rosam amat.", encoding="utf-8")
@@ -109,19 +107,6 @@ def test_main_with_explicit_config_path(tmp_path, monkeypatch):
     rules_abs.parent.mkdir(parents=True, exist_ok=True)
     rules_abs.write_text("# dummy rules\n", encoding="utf-8")
 
-    def fake_load_clean_config(path: Path):
-        # main() should pass the argv[0] here
-        assert path == config_path
-        return {
-            "kind": "sample_kind",
-            "input": "in.txt",
-            "output": "out/cleaned2.txt",
-            "rules_path": str(rules_rel),
-            # ref_tsv/doc_id_prefix intentionally omitted in this test
-        }
-
-    monkeypatch.setattr(mod, "load_clean_config", fake_load_clean_config)
-
     def fake_clean_text(
         raw: str,
         *,
@@ -131,7 +116,7 @@ def test_main_with_explicit_config_path(tmp_path, monkeypatch):
         rules_path=None,
     ) -> str:
         assert raw == "Puella rosam amat."
-        assert kind == "sample_kind"
+        assert kind == "scholastic_text"
 
         # assertions
         assert ref_tsv is None

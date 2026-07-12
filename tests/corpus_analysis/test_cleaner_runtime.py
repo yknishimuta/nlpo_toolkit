@@ -7,12 +7,21 @@ from nlpo_toolkit.corpus_analysis.cleaner_runtime import (
     CleanerUnavailableError,
 )
 from nlpo_toolkit.corpus_analysis.corpus import CleanerPlan, execute_preprocess
+from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 
 
 def _plan(tmp_path: Path) -> CleanerPlan:
     config = tmp_path / "cleaner.yml"
-    config.write_text("output: cleaned\n", encoding="utf-8")
-    return CleanerPlan(config_path=config)
+    source = tmp_path / "input.txt"
+    source.write_text("input", encoding="utf-8")
+    config.write_text(
+        "kind: scholastic_text\ninput: input.txt\noutput: cleaned\n",
+        encoding="utf-8",
+    )
+    return CleanerPlan(
+        config_path=config,
+        inspection=inspect_cleaner_config(config),
+    )
 
 
 def test_no_preprocess_does_not_load_cleaner() -> None:

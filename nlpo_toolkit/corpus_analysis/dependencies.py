@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
 from nlpo_toolkit.backends import BuiltNLPBackend, create_nlp_backend
+from nlpo_toolkit.cleaner_contracts import CleanerConfigInspection
 from nlpo_toolkit.nlp import build_sentence_splitter
 
 from .analysis_policy import (
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
 
 
 ConfigLoader = Callable[[Path], AppConfig]
+CleanerConfigInspector = Callable[[Path], CleanerConfigInspection]
 BackendFactory = Callable[[NLPConfig], BuiltNLPBackend]
 SentenceSplitterFactory = Callable[[NLPConfig], Any]
 ArchiveCreator = Callable[["RunResult", "ArchiveOptions"], "RunArchiveResult"]
@@ -41,10 +43,17 @@ class CountRunner(Protocol):
     ) -> RunResult: ...
 
 
+def _inspect_cleaner_config(path: Path) -> CleanerConfigInspection:
+    from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
+
+    return inspect_cleaner_config(path)
+
+
 @dataclass(frozen=True)
 class CorpusPlanningDependencies:
     load_config: ConfigLoader
     cleaner_loader: CleanerLoader
+    cleaner_inspector: CleanerConfigInspector = _inspect_cleaner_config
 
 
 @dataclass(frozen=True)
@@ -90,6 +99,7 @@ def default_corpus_planning_dependencies() -> CorpusPlanningDependencies:
     return CorpusPlanningDependencies(
         load_config=load_config,
         cleaner_loader=load_default_cleaner,
+        cleaner_inspector=_inspect_cleaner_config,
     )
 
 

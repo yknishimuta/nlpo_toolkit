@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Literal, Mapping, Sequence
 
 from nlpo_toolkit.comparison.configured import ComparisonSpec
+from nlpo_toolkit.cleaner_contracts import CleanerConfigInspection
 from .config import AppConfig
 from .corpus import (
     CorpusWorkItem,
@@ -28,6 +29,7 @@ class CorpusPlan:
     auto_mode: bool
     work_items: tuple[CorpusWorkItem, ...]
     group_files: Mapping[str, tuple[Path, ...]]
+    cleaner_inspection: CleanerConfigInspection | None = None
 
 
 @dataclass(frozen=True)
@@ -48,6 +50,7 @@ class RunPlan:
     analysis_unit: str
     use_lemma: bool
     csv_header: tuple[str, str]
+    cleaner_inspection: CleanerConfigInspection | None = None
 
 
 class RunPlanError(ValueError):
@@ -149,16 +152,20 @@ def _resolve_cleaned_dir(
     project_root: Path,
     preprocess_mode: Literal["inspect", "execute"],
     dependencies: CorpusPlanningDependencies,
-) -> Path | None:
-    plan = resolve_cleaner_plan(config, project_root)
+) -> tuple[Path | None, CleanerConfigInspection | None]:
+    plan = resolve_cleaner_plan(
+        config,
+        project_root,
+        inspector=dependencies.cleaner_inspector,
+    )
     if preprocess_mode == "inspect":
-        return inspect_preprocess(plan)
+        return inspect_preprocess(plan), plan.inspection if plan is not None else None
     if preprocess_mode == "execute":
         if plan is None:
-            return None
-        return execute_preprocess(
-            plan,
-            cleaner_loader=dependencies.cleaner_loader,
+            return None, None
+        return (
+            execute_preprocess(plan, cleaner_loader=dependencies.cleaner_loader),
+            plan.inspection,
         )
     raise ValueError("preprocess_mode must be 'inspect' or 'execute'")
 
@@ -221,6 +228,7 @@ def build_run_plan(
         analysis_unit=analysis_unit,
         use_lemma=use_lemma,
         csv_header=csv_header,
+        cleaner_inspection=corpus_plan.cleaner_inspection,
     )
 
 
@@ -249,7 +257,7 @@ def build_corpus_plan(
         group_by_file=group_by_file,
         auto_single_cleaned=auto_single_cleaned,
     )
-    cleaned_dir = _resolve_cleaned_dir(
+    cleaned_dir, cleaner_inspection = _resolve_cleaned_dir(
         config=config,
         project_root=resolved_root,
         preprocess_mode=preprocess_mode,
@@ -273,4 +281,5 @@ def build_corpus_plan(
         auto_mode=auto_mode,
         work_items=tuple(resolved.work_items),
         group_files=resolved.group_files,
+        cleaner_inspection=cleaner_inspection,
     )

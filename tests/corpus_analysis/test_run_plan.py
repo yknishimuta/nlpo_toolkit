@@ -14,6 +14,7 @@ from nlpo_toolkit.corpus_analysis.dependencies import (
 from nlpo_toolkit.corpus_analysis.runtime import prepare_run_context
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.run_plan import build_run_plan
+from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 
 
 def _write_config(path: Path) -> None:
@@ -40,6 +41,55 @@ def _base_groups() -> dict:
             "text": {"files": ["input/*.txt"]},
         },
     }
+
+
+def test_build_run_plan_inspects_cleaner_once(tmp_path: Path) -> None:
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    input_dir = tmp_path / "input"
+    input_dir.mkdir()
+    (input_dir / "a.txt").write_text("a", encoding="utf-8")
+    cleaner_path = config_dir / "cleaner.yml"
+    cleaner_path.write_text(
+        "kind: scholastic_text\ninput: ../input\noutput: ../cleaned\n",
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "groups.yml"
+    _write_config(config_path)
+    calls: list[Path] = []
+
+    def inspector(path: Path):
+        calls.append(path)
+        return inspect_cleaner_config(path)
+
+    dependencies = CorpusPlanningDependencies(
+        load_config=lambda _path: ensure_app_config(
+            {
+                "preprocess": {
+                    "kind": "cleaner",
+                    "config": "config/cleaner.yml",
+                },
+                "groups": {"text": {"files": ["input/*.txt"]}},
+            }
+        ),
+        cleaner_loader=lambda: pytest.fail("cleaner must not execute"),
+        cleaner_inspector=inspector,
+    )
+
+    plan = build_run_plan(
+        project_root=tmp_path,
+        script_dir=None,
+        config_path=config_path,
+        group_by_file=False,
+        auto_single_cleaned=False,
+        error_on_empty_group=False,
+        dependencies=dependencies,
+        preprocess_mode="inspect",
+    )
+
+    assert calls == [cleaner_path.resolve()]
+    assert plan.cleaner_inspection is not None
+    assert plan.cleaner_inspection.input_files == ((input_dir / "a.txt").resolve(),)
 
 
 def test_build_run_plan_has_no_output_directory_side_effect(tmp_path: Path) -> None:
@@ -74,7 +124,10 @@ def test_inspect_mode_does_not_run_cleaner(tmp_path: Path) -> None:
     (tmp_path / "cleaned").mkdir()
     (tmp_path / "cleaned" / "a.txt").write_text("cleaned", encoding="utf-8")
     cleaner_config = tmp_path / "config" / "cleaner.yml"
-    cleaner_config.write_text("output: ../cleaned\n", encoding="utf-8")
+    cleaner_config.write_text(
+        "kind: scholastic_text\ninput: .\noutput: ../cleaned\n",
+        encoding="utf-8",
+    )
     config_path = tmp_path / "config.yml"
     _write_config(config_path)
 
@@ -107,7 +160,10 @@ def test_inspect_mode_does_not_run_cleaner(tmp_path: Path) -> None:
 def test_execute_mode_runs_cleaner_before_resolving_groups(tmp_path: Path) -> None:
     (tmp_path / "config").mkdir()
     cleaner_config = tmp_path / "config" / "cleaner.yml"
-    cleaner_config.write_text("output: ../cleaned\n", encoding="utf-8")
+    cleaner_config.write_text(
+        "kind: scholastic_text\ninput: .\noutput: ../cleaned\n",
+        encoding="utf-8",
+    )
     config_path = tmp_path / "config.yml"
     _write_config(config_path)
 
@@ -145,7 +201,10 @@ def test_inspect_and_execute_match_when_cleaned_files_already_exist(tmp_path: Pa
     cleaned.mkdir()
     (cleaned / "a.txt").write_text("cleaned", encoding="utf-8")
     cleaner_config = tmp_path / "config" / "cleaner.yml"
-    cleaner_config.write_text("output: ../cleaned\n", encoding="utf-8")
+    cleaner_config.write_text(
+        "kind: scholastic_text\ninput: .\noutput: ../cleaned\n",
+        encoding="utf-8",
+    )
     config_path = tmp_path / "config.yml"
     _write_config(config_path)
     data = {
@@ -287,7 +346,10 @@ def test_auto_single_cleaned_selects_one_and_ignores_dotfiles(tmp_path: Path) ->
     selected.write_text("cleaned", encoding="utf-8")
     (cleaned / ".DS_Store").write_text("ignored", encoding="utf-8")
     cleaner_config = tmp_path / "config" / "cleaner.yml"
-    cleaner_config.write_text("output: ../cleaned\n", encoding="utf-8")
+    cleaner_config.write_text(
+        "kind: scholastic_text\ninput: .\noutput: ../cleaned\n",
+        encoding="utf-8",
+    )
     config_path = tmp_path / "config.yml"
     _write_config(config_path)
 
@@ -317,7 +379,10 @@ def test_auto_single_cleaned_rejects_zero_and_multiple_files(tmp_path: Path) -> 
     cleaned = tmp_path / "cleaned"
     cleaned.mkdir()
     cleaner_config = tmp_path / "config" / "cleaner.yml"
-    cleaner_config.write_text("output: ../cleaned\n", encoding="utf-8")
+    cleaner_config.write_text(
+        "kind: scholastic_text\ninput: .\noutput: ../cleaned\n",
+        encoding="utf-8",
+    )
     config_path = tmp_path / "config.yml"
     _write_config(config_path)
     data = {

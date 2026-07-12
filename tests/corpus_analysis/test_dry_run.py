@@ -155,7 +155,7 @@ def test_dry_run_auto_single_cleaned_reports_selected_file(tmp_path: Path, capsy
     selected.write_text("cleaned", encoding="utf-8")
     (cleaned_dir / ".DS_Store").write_text("ignored", encoding="utf-8")
     (project_root / "config" / "cleaner.yml").write_text(
-        "kind: scholastic_text\ninput: ../input\noutput: ../cleaned\n",
+        "kind: scholastic_text\ninput: ../cleaned\noutput: ../cleaned\n",
         encoding="utf-8",
     )
     config_path = project_root / "config" / "groups.config.yml"

@@ -17,7 +17,7 @@ from .runner_types import (
     RunResult,
     deduplicate_resolved_paths,
 )
-from .config_references import build_config_file_inventory, cleaner_input_files
+from .config_references import build_config_file_inventory
 
 
 @dataclass(frozen=True)
@@ -268,7 +268,9 @@ def build_run_result(
         cleaned_files: tuple[Path, ...] = ()
     else:
         input_files = deduplicate_resolved_paths(
-            cleaner_input_files(plan.config, plan.project_root)
+            plan.cleaner_inspection.input_files
+            if plan.cleaner_inspection is not None
+            else ()
         )
         cleaned_root = plan.cleaned_dir.resolve()
         cleaned_files = tuple(
@@ -291,6 +293,7 @@ def build_run_result(
             config=plan.config,
             config_path=plan.config_path,
             project_root=plan.project_root,
+            cleaner_inspection=plan.cleaner_inspection,
         ),
         summary_path=report.summary_path.resolve(),
         metadata_path=report.metadata_path.resolve(),

@@ -19,6 +19,7 @@ from nlpo_toolkit.corpus_analysis.dependencies import (
 )
 from nlpo_toolkit.corpus_analysis.archive import create_run_archive
 from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
+from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 
 
 TokenSpec = tuple[str, str | None, str]
@@ -103,6 +104,7 @@ def runner_dependencies(
         planning=CorpusPlanningDependencies(
             load_config=canonical_loader,
             cleaner_loader=cleaner_loader,
+            cleaner_inspector=inspect_cleaner_config,
         ),
         analysis=AnalysisDependencies(
             backend_factory=backend_factory,

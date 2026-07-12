@@ -36,6 +36,7 @@ def test_preprocess_cleaner_integration_fixed(tmp_path):
     # --- Arrange: fake "script directory" so main() can find config/groups.config.yml
     script_dir = tmp_path / "runner_dir"
     (script_dir / "config").mkdir(parents=True, exist_ok=True)
+    (script_dir / "input").mkdir()
 
     # cleaner config path (passed to cleaner main)
     cleaner_cfg_path = script_dir / "cleaner.yml"

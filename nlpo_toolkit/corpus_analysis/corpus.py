@@ -7,12 +7,14 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Iterable, Mapping, Sequence
 
+from nlpo_toolkit.cleaner_contracts import CleanerConfigError, CleanerConfigInspection
+
 from .config import AppConfig, GroupConfig
 from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner, run_cleaner
 from .corpus_errors import CleanerInspectionError, CorpusPreparationError
 from .io_utils import expand_globs, read_concat
 from .normalizer import normalize_text
-from .preprocess import expand_cleaned_dir_placeholders, resolve_cleaner_output_dir
+from .preprocess import expand_cleaned_dir_placeholders
 from .ref_tags import RefTagPattern, load_ref_tag_patterns, strip_and_count_ref_tags
 
 
@@ -46,6 +48,7 @@ class ResolvedCorpora:
 @dataclass(frozen=True)
 class CleanerPlan:
     config_path: Path
+    inspection: CleanerConfigInspection
 
 
 def resolve_project_path(project_root: Path, raw: object) -> Path:
@@ -74,12 +77,22 @@ def _unique_label(base: str, used: set[str]) -> str:
     return label
 
 
-def resolve_cleaner_plan(config: AppConfig, project_root: Path) -> CleanerPlan | None:
+def resolve_cleaner_plan(
+    config: AppConfig,
+    project_root: Path,
+    *,
+    inspector,
+) -> CleanerPlan | None:
     if config.preprocess.kind != "cleaner":
         return None
     if not config.preprocess.config:
         raise CorpusPreparationError("'preprocess.config' is required when preprocess.kind=cleaner")
-    return CleanerPlan(config_path=resolve_project_path(project_root, config.preprocess.config))
+    config_path = resolve_project_path(project_root, config.preprocess.config)
+    try:
+        inspection = inspector(config_path)
+    except CleanerConfigError as exc:
+        raise CleanerInspectionError(str(exc)) from exc
+    return CleanerPlan(config_path=config_path, inspection=inspection)
 
 
 def execute_preprocess(
@@ -97,7 +110,7 @@ def execute_preprocess(
         cleaner=cleaner,
         cleaner_loader=cleaner_loader,
     )
-    return resolve_cleaner_output_dir(plan.config_path)
+    return plan.inspection.config.output_path
 
 
 def inspect_preprocess(plan: CleanerPlan | None) -> Path | None:
@@ -105,21 +118,7 @@ def inspect_preprocess(plan: CleanerPlan | None) -> Path | None:
         return None
     if not plan.config_path.exists():
         raise CleanerInspectionError(f"Cleaner config file not found: {plan.config_path}")
-    return resolve_cleaner_output_dir(plan.config_path)
-
-
-def run_preprocess_if_needed(
-    *,
-    config: AppConfig,
-    project_root: Path,
-    cleaner: CleanerRunner | None = None,
-    cleaner_loader: CleanerLoader = load_default_cleaner,
-) -> Path | None:
-    return execute_preprocess(
-        resolve_cleaner_plan(config, project_root),
-        cleaner=cleaner,
-        cleaner_loader=cleaner_loader,
-    )
+    return plan.inspection.config.output_path
 
 
 def resolve_group_files(

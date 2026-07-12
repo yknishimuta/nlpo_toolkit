@@ -468,7 +468,7 @@ def test_run_features_auto_single_cleaned(tmp_path: Path) -> None:
         ),
     )
     (tmp_path / "config" / "cleaner.yml").write_text(
-        "kind: scholastic_text\ninput: ../input\noutput: ../cleaned\n",
+            "kind: scholastic_text\ninput: ../cleaned\noutput: ../cleaned\n",
         encoding="utf-8",
     )
     out = tmp_path / "features.csv"
@@ -508,7 +508,7 @@ def test_run_features_auto_single_cleaned_errors_on_multiple(tmp_path: Path) -> 
         ),
     )
     (tmp_path / "config" / "cleaner.yml").write_text(
-        "kind: scholastic_text\ninput: ../input\noutput: ../cleaned\n",
+            "kind: scholastic_text\ninput: ../cleaned\noutput: ../cleaned\n",
         encoding="utf-8",
     )
 

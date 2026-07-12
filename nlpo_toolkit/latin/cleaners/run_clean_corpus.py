@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
-from .config_loader import load_clean_config
+from .config_loader import load_cleaner_config, resolve_cleaner_input_files
 from . import clean_text
 
 
@@ -72,60 +72,18 @@ def main(argv: list[str] | None = None) -> int:
     else:
         config_path = DEFAULT_CONFIG.resolve()
 
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config file not found: {config_path}")
-
-    yaml_data = load_clean_config(config_path)
+    config = load_cleaner_config(config_path)
     print(f"[DEBUG] config_path={config_path}")
 
-    kind = yaml_data["kind"]
-    raw_input = yaml_data["input"]
-    raw_output = yaml_data["output"]
-    filename_template: str | None = yaml_data.get("output_filename_template")
-
-    # optional ref TSV + doc_id prefix + rules yaml + lexicon map
-    raw_ref_tsv = yaml_data.get("ref_tsv")
-    doc_id_prefix: str = str(yaml_data.get("doc_id_prefix") or "")
-    raw_rules_path = yaml_data.get("rules_path")
-    raw_lexicon_map_path = yaml_data.get("lexicon_map_path")
-
-    config_dir = config_path.parent
-
-    # Resolve paths relative to the config file's directory
-    input_path = Path(raw_input)
-    if not input_path.is_absolute():
-        input_path = (config_dir / input_path)
-    input_path = input_path.expanduser().resolve()
-
-    output_path = Path(raw_output)
-    if not output_path.is_absolute():
-        output_path = (config_dir / output_path)
-    output_path = output_path.expanduser().resolve()
-
-    ref_tsv: Path | None = None
-    if raw_ref_tsv:
-        ref_tsv = Path(raw_ref_tsv)
-        if not ref_tsv.is_absolute():
-            ref_tsv = (config_dir / ref_tsv)
-        ref_tsv = ref_tsv.expanduser().resolve()
-
-    rules_path: Path | None = None
-    if raw_rules_path:
-        rules_path = Path(raw_rules_path)
-        if not rules_path.is_absolute():
-            rules_path = (config_dir / rules_path)
-        rules_path = rules_path.expanduser().resolve()
-        if not rules_path.exists():
-            raise FileNotFoundError(f"rules_path not found: {rules_path}")
-
-    lexicon_map_path: Path | None = None
-    if raw_lexicon_map_path:
-        lexicon_map_path = Path(raw_lexicon_map_path)
-        if not lexicon_map_path.is_absolute():
-            lexicon_map_path = (config_dir / lexicon_map_path)
-        lexicon_map_path = lexicon_map_path.expanduser().resolve()
-        if not lexicon_map_path.exists():
-            raise FileNotFoundError(f"lexicon_map_path not found: {lexicon_map_path}")
+    kind = config.kind
+    input_path = config.input_path
+    output_path = config.output_path
+    filename_template = config.output_filename_template
+    ref_tsv = config.ref_tsv_path
+    doc_id_prefix = config.doc_id_prefix or ""
+    rules_path = config.rules_path
+    lexicon_map_path = config.lexicon_map_path
+    source_files = resolve_cleaner_input_files(input_path)
 
     # Directory mode
     if input_path.is_dir():
@@ -138,14 +96,7 @@ def main(argv: list[str] | None = None) -> int:
 
         output_path.mkdir(parents=True, exist_ok=True)
 
-        sources: list[Path] = []
-        for p in sorted(input_path.iterdir()):
-            if not p.is_file():
-                continue
-            if p.suffix.lower() != ".txt":
-                print(f"[SKIP] not .txt: {p}")
-                continue
-            sources.append(p)
+        sources = list(source_files)
 
         stems = [p.stem for p in sources]
         has_dup_stem = len(stems) != len(set(stems))
@@ -196,6 +147,7 @@ def main(argv: list[str] | None = None) -> int:
 
         print(f"[{kind}] cleaned {idx} files in directory: {input_path} -> {output_path}")
     else:
+        input_path = source_files[0]
         if output_path.is_dir():
             dst = output_path / input_path.name
         else:

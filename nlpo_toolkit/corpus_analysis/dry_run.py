@@ -8,13 +8,8 @@ import yaml
 
 from .dependencies import CorpusPlanningDependencies
 from .config import ConfigError
-from .corpus import (
-    inspect_preprocess,
-    resolve_cleaner_plan,
-    resolve_project_path,
-)
-from .corpus_errors import CleanerInspectionError, CorpusPreparationError
-from .io_utils import expand_globs
+from .corpus import resolve_project_path
+from .corpus_errors import CorpusPreparationError
 from .run_plan import RunPlan, RunPlanError, build_run_plan
 
 if TYPE_CHECKING:
@@ -90,44 +85,6 @@ def _display_path(path: Path, project_root: Path) -> str:
         return str(path.resolve().relative_to(project_root))
     except ValueError:
         return str(path)
-
-
-def _count_cleaner_input_files(cleaner_config_path: Path) -> int:
-    try:
-        text = cleaner_config_path.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise CleanerInspectionError(
-            f"Failed to read cleaner config: {cleaner_config_path}: {exc}"
-        ) from exc
-    except UnicodeError as exc:
-        raise CleanerInspectionError(
-            f"Cleaner config is not valid UTF-8: {cleaner_config_path}: {exc}"
-        ) from exc
-    try:
-        cleaner_cfg = yaml.safe_load(text) or {}
-    except yaml.YAMLError as exc:
-        raise CleanerInspectionError(
-            f"Invalid cleaner YAML: {cleaner_config_path}: {exc}"
-        ) from exc
-    if not isinstance(cleaner_cfg, dict):
-        raise CleanerInspectionError(
-            f"Cleaner config root must be a mapping: {cleaner_config_path}"
-        )
-
-    raw_input = cleaner_cfg.get("input")
-    if not raw_input:
-        return 0
-
-    input_path = Path(str(raw_input))
-    if not input_path.is_absolute():
-        input_path = (cleaner_config_path.parent / input_path).resolve()
-
-    if input_path.is_file():
-        return 1
-    if input_path.is_dir():
-        return len([p for p in input_path.rglob("*") if p.is_file()])
-
-    return len(expand_globs([str(input_path)]))
 
 
 def render_run_plan(plan: RunPlan, *, project_root: Path) -> list[str]:
@@ -206,33 +163,6 @@ def execute_dry_run(
     lines.append("[OK] config loaded")
 
     try:
-        cleaner_plan = resolve_cleaner_plan(cfg, project_root)
-        cleaner_config_path = (
-            cleaner_plan.config_path if cleaner_plan is not None else None
-        )
-        if cleaner_plan is not None:
-            cleaned_dir = inspect_preprocess(cleaner_plan)
-            cleaner_input_count = _count_cleaner_input_files(cleaner_plan.config_path)
-        else:
-            cleaned_dir = None
-            cleaner_input_count = 0
-    except (CleanerInspectionError, CorpusPreparationError) as exc:
-        lines.append(f"[ERROR] {exc}")
-        exit_code = 1
-        cleaner_config_path = None
-    else:
-        if cleaner_config_path is not None:
-            lines.append(
-                "[OK] preprocess cleaner config found: "
-                f"{_display_path(cleaner_config_path, project_root)}"
-            )
-            lines.append(f"[OK] input files: {cleaner_input_count}")
-            if cleaned_dir is not None:
-                lines.append(
-                    f"[OK] cleaned output dir: {_display_path(cleaned_dir, project_root)}"
-                )
-
-    try:
         plan = build_run_plan(
             project_root=project_root,
             script_dir=None,
@@ -243,6 +173,7 @@ def execute_dry_run(
             dependencies=CorpusPlanningDependencies(
                 load_config=lambda _path: cfg,
                 cleaner_loader=dependencies.cleaner_loader,
+                cleaner_inspector=dependencies.cleaner_inspector,
             ),
             preprocess_mode="inspect",
             validate_references=False,
@@ -251,9 +182,20 @@ def execute_dry_run(
         lines.append(f"[ERROR] {exc}")
         exit_code = 1
     else:
-        if cleaner_config_path is None:
+        cleaner_inspection = plan.cleaner_inspection
+        if cleaner_inspection is None:
             lines.append(
                 f"[OK] input files: {sum(len(files) for files in plan.group_files.values())}"
+            )
+        else:
+            lines.append(
+                "[OK] preprocess cleaner config found: "
+                f"{_display_path(cleaner_inspection.config.source_path, project_root)}"
+            )
+            lines.append(f"[OK] input files: {len(cleaner_inspection.input_files)}")
+            lines.append(
+                "[OK] cleaned output dir: "
+                f"{_display_path(cleaner_inspection.config.output_path, project_root)}"
             )
         lines.extend(render_run_plan(plan, project_root=project_root))
         if request.error_on_empty_group:
