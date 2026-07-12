@@ -4,6 +4,7 @@ from collections import Counter
 from contextlib import ExitStack
 from pathlib import Path
 from typing import Iterable, Iterator, Mapping
+from nlpo_toolkit.backends import NLPBackendInfo
 
 from .analysis_cache import (
     AnalysisCacheGroupResult,
@@ -13,6 +14,7 @@ from .analysis_cache import (
     get_or_compute_analysis_records,
     prepared_text_sha256,
 )
+from .analysis_policy import AnalysisExtractionPolicy
 from .analysis_records import (
     AnalysisOptions,
     NLPAnalysisRecord,
@@ -198,17 +200,20 @@ def _analysis_cache_dir(context: RunContext) -> Path:
     return cache_dir.resolve()
 
 
-def _analysis_fingerprint(context: RunContext) -> AnalysisFingerprint:
-    package = context.backend_info.package
+def build_analysis_fingerprint(
+    *,
+    backend_info: NLPBackendInfo,
+    policy: AnalysisExtractionPolicy,
+) -> AnalysisFingerprint:
     return AnalysisFingerprint(
-        backend=context.backend_info.name,
-        language=context.backend_info.language,
-        model=context.backend_info.model,
-        package=package,
-        processors=("tokenize", "mwt", "pos", "lemma"),
-        chunk_size=200_000,
-        chunk_strategy="char_whitespace",
-        device=context.backend_info.device,
+        backend=backend_info.name,
+        language=backend_info.language,
+        model=backend_info.model,
+        package=backend_info.package,
+        processors=policy.processors,
+        chunk_size=policy.chunk_chars,
+        chunk_strategy=policy.chunk_strategy,
+        device=backend_info.device,
     )
 
 
@@ -236,7 +241,11 @@ def obtain_analysis_records(
     text: str,
     analysis_cache_stats: AnalysisCacheRunStats | None = None,
 ) -> tuple[Iterator[NLPAnalysisRecord], str, str]:
-    fingerprint = _analysis_fingerprint(context)
+    policy = context.extraction_policy
+    fingerprint = build_analysis_fingerprint(
+        backend_info=context.backend_info,
+        policy=policy,
+    )
     text_hash = prepared_text_sha256(text)
     cache_key = build_analysis_cache_key(
         prepared_text_sha256=text_hash,
@@ -253,7 +262,7 @@ def obtain_analysis_records(
             compute_records=lambda: iter_nlp_analysis_records_from_text(
                 text=text,
                 nlp=context.nlp,
-                chunk_chars=200_000,
+                policy=policy,
             ),
             lock_timeout_sec=context.plan.config.analysis_cache.lock_timeout_sec,
         )
@@ -263,7 +272,7 @@ def obtain_analysis_records(
         iter_nlp_analysis_records_from_text(
             text=text,
             nlp=context.nlp,
-            chunk_chars=200_000,
+            policy=policy,
         ),
         "disabled",
         cache_key,

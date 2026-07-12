@@ -19,7 +19,11 @@ from nlpo_toolkit.corpus_analysis.features import (
     safe_feature_name,
     write_feature_matrix,
 )
-from nlpo_toolkit.corpus_analysis.analysis_records import NLPAnalysisRecord
+from nlpo_toolkit.corpus_analysis.analysis_records import (
+    NLPAnalysisRecord,
+    iter_nlp_analysis_records_from_text,
+)
+from nlpo_toolkit.corpus_analysis.analysis_policy import AnalysisExtractionPolicy
 from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.config import NLPConfig
@@ -245,12 +249,49 @@ def test_build_feature_rows_chunks_through_shared_extractor() -> None:
     rows = build_feature_rows(
         [("g", [Path("a.txt")], "Rosa amat")],
         ChunkNLP(),
-        FeatureOptions(chunk_chars=5),
+        FeatureOptions(extraction_policy=AnalysisExtractionPolicy(chunk_chars=5)),
     )
 
     assert len(calls) == 2
     assert rows[0]["token_count"] == 2
     assert rows[0]["sentence_count"] == 2
+
+
+def test_count_and_features_share_chunk_boundaries() -> None:
+    policy = AnalysisExtractionPolicy(chunk_chars=5)
+
+    class RecordingNLP:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def __call__(self, text: str) -> NLPDocument:
+            self.calls.append(text)
+            token = text.strip()
+            return NLPDocument(
+                sentences=[
+                    NLPSentence(
+                        tokens=[NLPToken(token, token.lower(), "NOUN")],
+                        text=text,
+                    )
+                ],
+                text=text,
+            )
+
+    count_backend = RecordingNLP()
+    feature_backend = RecordingNLP()
+    list(
+        iter_nlp_analysis_records_from_text(
+            text="Rosa amat",
+            nlp=count_backend,
+            policy=policy,
+        )
+    )
+    build_feature_rows(
+        [("g", [Path("a.txt")], "Rosa amat")],
+        feature_backend,
+        FeatureOptions(extraction_policy=policy),
+    )
+    assert count_backend.calls == feature_backend.calls
 
 
 def test_build_feature_rows_mfw_lemma_and_token() -> None:

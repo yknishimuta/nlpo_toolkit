@@ -96,4 +96,5 @@ def prepare_run_context(
         backend_info=backend_info,
         splitter_nlp=splitter_nlp,
         roman_exceptions=roman_exceptions,
+        extraction_policy=dependencies.extraction_policy,
     )

@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from nlpo_toolkit.corpus_analysis.config import NLPConfig
+from nlpo_toolkit.corpus_analysis.analysis_policy import (
+    AnalysisExtractionPolicy,
+    DEFAULT_ANALYSIS_EXTRACTION_POLICY,
+)
 from nlpo_toolkit.interfaces import NLPBackend
 
 
@@ -38,7 +42,11 @@ class BuiltNLPBackend:
     info: NLPBackendInfo
 
 
-def create_nlp_backend(config: NLPConfig) -> BuiltNLPBackend:
+def create_nlp_backend(
+    config: NLPConfig,
+    *,
+    extraction_policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY,
+) -> BuiltNLPBackend:
     if config.backend == "stanza":
         from .stanza_backend import StanzaBackend
 
@@ -48,7 +56,7 @@ def create_nlp_backend(config: NLPConfig) -> BuiltNLPBackend:
             lang=config.language,
             package=package,
             use_gpu=use_gpu,
-            processors="tokenize,mwt,pos,lemma",
+            processors=",".join(extraction_policy.processors),
         )
         return BuiltNLPBackend(
             backend=backend,

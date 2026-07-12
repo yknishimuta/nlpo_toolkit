@@ -12,6 +12,7 @@ from nlpo_toolkit.corpus_analysis.analysis_records import (
     evaluate_analysis_record,
     iter_nlp_analysis_records_from_text,
 )
+from nlpo_toolkit.corpus_analysis.analysis_policy import AnalysisExtractionPolicy
 from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
 
 
@@ -246,7 +247,7 @@ def test_iter_nlp_analysis_records_from_text_preserves_offsets_and_global_indice
         iter_nlp_analysis_records_from_text(
             text="aa bb cc dd",
             nlp=_FakeBackend(),
-            chunk_chars=5,
+            policy=AnalysisExtractionPolicy(chunk_chars=5),
         )
     )
 

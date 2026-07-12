@@ -77,6 +77,7 @@ def test_run_context_contains_plan_and_runtime_state_only() -> None:
         "backend_info",
         "splitter_nlp",
         "roman_exceptions",
+        "extraction_policy",
     }
     assert not names & {
         "project_root",

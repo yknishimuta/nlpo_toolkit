@@ -15,6 +15,7 @@ from .analysis_records import (
     NLPAnalysisRecord,
     iter_nlp_analysis_records_from_text,
 )
+from .analysis_policy import AnalysisExtractionPolicy, DEFAULT_ANALYSIS_EXTRACTION_POLICY
 from .dependencies import FeatureDependencies
 from .corpus import prepare_corpora, run_preprocess_if_needed
 from .run_plan import build_corpus_plan
@@ -199,7 +200,7 @@ class FeatureOptions:
     include_basic: bool = True
     min_token_length: int = 0
     drop_roman_numerals: bool = False
-    chunk_chars: int = 200_000
+    extraction_policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY
 
 
 @dataclass(frozen=True)
@@ -231,7 +232,7 @@ def build_feature_rows(
                     iter_nlp_analysis_records_from_text(
                         text=text,
                         nlp=nlp,
-                        chunk_chars=options.chunk_chars,
+                        policy=options.extraction_policy,
                     )
                 ),
             )
@@ -349,6 +350,7 @@ def run_features(
         include_basic=include_basic,
         min_token_length=config.filters.min_token_length,
         drop_roman_numerals=config.filters.drop_roman_numerals,
+        extraction_policy=dependencies.extraction_policy,
     )
 
     nlp, _backend_info, _package = build_nlp_runtime(

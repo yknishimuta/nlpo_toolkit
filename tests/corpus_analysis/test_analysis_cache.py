@@ -17,6 +17,8 @@ from nlpo_toolkit.corpus_analysis.analysis_cache import (
     prune_analysis_cache,
     read_analysis_records,
 )
+from nlpo_toolkit.corpus_analysis.analysis_policy import DEFAULT_ANALYSIS_EXTRACTION_POLICY
+from nlpo_toolkit.corpus_analysis.analysis_policy import AnalysisExtractionPolicy
 from nlpo_toolkit.corpus_analysis import cache_storage
 from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis import runner as runner_mod
@@ -44,10 +46,21 @@ def _analysis_record(**overrides) -> NLPAnalysisRecord:
     return NLPAnalysisRecord(**data)
 
 
+def _fingerprint() -> AnalysisFingerprint:
+    policy = DEFAULT_ANALYSIS_EXTRACTION_POLICY
+    return AnalysisFingerprint(
+        backend="fake",
+        language="la",
+        processors=policy.processors,
+        chunk_size=policy.chunk_chars,
+        chunk_strategy=policy.chunk_strategy,
+    )
+
+
 def test_analysis_cache_payload_round_trip(tmp_path: Path) -> None:
     cache_dir = tmp_path / ".analysis_cache"
     text_hash = prepared_text_sha256("Rosa amat.")
-    fingerprint = AnalysisFingerprint(backend="fake", language="la")
+    fingerprint = _fingerprint()
     key = build_analysis_cache_key(prepared_text_sha256=text_hash, fingerprint=fingerprint)
     records = [
         _analysis_record(),
@@ -110,7 +123,13 @@ class FakeBackend:
         )
 
 
-def _run(tmp_path: Path, config_text: str, backend: FakeBackend) -> dict[str, int]:
+def _run(
+    tmp_path: Path,
+    config_text: str,
+    backend: FakeBackend,
+    *,
+    extraction_policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY,
+) -> dict[str, int]:
     (tmp_path / "input").mkdir(exist_ok=True)
     (tmp_path / "input" / "text.txt").write_text("Rosa Marcus xiv a", encoding="utf-8")
     config_path = tmp_path / "groups.config.yml"
@@ -124,6 +143,7 @@ def _run(tmp_path: Path, config_text: str, backend: FakeBackend) -> dict[str, in
                 backend=backend,
                 info=NLPBackendInfo(name="fake", language=config.language, package="package_a"),
             ),
+            extraction_policy=extraction_policy,
         ),
     )
     assert rc.exit_code == 0
@@ -171,6 +191,26 @@ filters:
     assert second_meta["analysis_cache"]["misses"] == 0
 
 
+def test_analysis_cache_policy_change_causes_miss(tmp_path: Path) -> None:
+    backend = FakeBackend()
+    config = """
+groups:
+  text: {files: [input/text.txt]}
+analysis_cache:
+  enabled: true
+  dir: .analysis_cache
+"""
+    first = AnalysisExtractionPolicy(chunk_chars=10)
+    second = AnalysisExtractionPolicy(chunk_chars=11)
+
+    _run(tmp_path, config, backend, extraction_policy=first)
+    calls_after_first = len(backend.calls)
+    _run(tmp_path, config, backend, extraction_policy=first)
+    assert len(backend.calls) == calls_after_first
+    _run(tmp_path, config, backend, extraction_policy=second)
+    assert len(backend.calls) > calls_after_first
+
+
 def test_corrupted_analysis_cache_is_recomputed(tmp_path: Path) -> None:
     backend = FakeBackend()
     config = """
@@ -197,7 +237,7 @@ analysis_cache:
 def test_prune_analysis_cache_removes_payload_metadata_pairs(tmp_path: Path) -> None:
     cache_dir = tmp_path / ".analysis_cache"
     text_hash = prepared_text_sha256("old")
-    fingerprint = AnalysisFingerprint(backend="fake", language="la")
+    fingerprint = _fingerprint()
     key = build_analysis_cache_key(prepared_text_sha256=text_hash, fingerprint=fingerprint)
     records, status, payload, meta = get_or_compute_analysis_records(
         cache_dir=cache_dir,
@@ -233,7 +273,7 @@ def test_prune_analysis_cache_removes_payload_metadata_pairs(tmp_path: Path) -> 
 def test_analysis_cache_releases_lock_when_compute_fails(tmp_path: Path) -> None:
     cache_dir = tmp_path / ".analysis_cache"
     text_hash = prepared_text_sha256("boom")
-    fingerprint = AnalysisFingerprint(backend="fake", language="la")
+    fingerprint = _fingerprint()
     key = build_analysis_cache_key(prepared_text_sha256=text_hash, fingerprint=fingerprint)
     lock_path = cache_lock_path(cache_dir.resolve(), key)
 

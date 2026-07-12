@@ -20,9 +20,6 @@ from .analysis_records import NLPAnalysisRecord
 ANALYSIS_CACHE_FORMAT = "nlpo-analysis-cache"
 ANALYSIS_CACHE_SCHEMA_VERSION = 1
 ANALYSIS_BEHAVIOR_VERSION = 1
-DEFAULT_CHUNK_SIZE = 200_000
-DEFAULT_CHUNK_STRATEGY = "char_whitespace"
-DEFAULT_PROCESSORS = ("tokenize", "mwt", "pos", "lemma")
 
 
 class AnalysisCacheError(ValueError):
@@ -33,13 +30,13 @@ class AnalysisCacheError(ValueError):
 class AnalysisFingerprint:
     backend: str
     language: str
+    processors: tuple[str, ...]
+    chunk_size: int
+    chunk_strategy: str
     model: str | None = None
     package: object | None = None
     model_revision: str | None = None
-    processors: tuple[str, ...] = DEFAULT_PROCESSORS
     backend_version: str | None = None
-    chunk_size: int = DEFAULT_CHUNK_SIZE
-    chunk_strategy: str = DEFAULT_CHUNK_STRATEGY
     adapter_version: int = ANALYSIS_BEHAVIOR_VERSION
     device: str | None = None
 

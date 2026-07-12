@@ -39,7 +39,8 @@ class StanzaBackend:
         lang: str = "la",
         package: str = "perseus",
         use_gpu: bool = False,
-        processors: str = "tokenize,mwt,pos,lemma"
+        *,
+        processors: str,
     ):
         try:
             import stanza

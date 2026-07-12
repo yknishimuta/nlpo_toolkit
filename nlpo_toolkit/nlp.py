@@ -90,7 +90,8 @@ def should_drop_roman_numeral(
 
 def build_stanza_pipeline(
     lang: str = "la",
-    processors: str = "tokenize,mwt,pos,lemma",
+    *,
+    processors: str,
     package: str = "perseus",
     use_gpu: bool = False,
 ) -> NLPBackend:
@@ -114,6 +115,8 @@ def build_sentence_splitter(language: str, stanza_package: str, cpu_only: bool):
 
 def iter_char_chunks(text: str, chunk_chars: int) -> Iterable[str]:
     """Splits the text based on a target character count (adjusted at whitespaces to avoid splitting words)"""
+    if not isinstance(chunk_chars, int) or isinstance(chunk_chars, bool) or chunk_chars <= 0:
+        raise ValueError("chunk_chars must be a positive integer")
     start = 0
     text_len = len(text)
     while start < text_len:

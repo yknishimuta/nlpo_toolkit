@@ -6,6 +6,10 @@ from dataclasses import dataclass, field
 
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.config import AppConfig, ensure_app_config
+from nlpo_toolkit.corpus_analysis.analysis_policy import (
+    AnalysisExtractionPolicy,
+    DEFAULT_ANALYSIS_EXTRACTION_POLICY,
+)
 from nlpo_toolkit.corpus_analysis.runner_types import BackendFactory, RunnerDependencies
 from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
 
@@ -78,6 +82,7 @@ def runner_dependencies(
     backend_factory: BackendFactory,
     *,
     cleaner=object(),
+    extraction_policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY,
 ) -> RunnerDependencies:
     def canonical_loader(path) -> AppConfig:
         return ensure_app_config(load_config(path))
@@ -86,4 +91,5 @@ def runner_dependencies(
         load_config=canonical_loader,
         backend_factory=backend_factory,
         cleaner=cleaner,
+        extraction_policy=extraction_policy,
     )

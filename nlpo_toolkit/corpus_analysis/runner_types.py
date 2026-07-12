@@ -9,6 +9,7 @@ from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 
 from .config import AppConfig, NLPConfig
 from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner
+from .analysis_policy import AnalysisExtractionPolicy, DEFAULT_ANALYSIS_EXTRACTION_POLICY
 from .run_plan import RunPlan
 
 
@@ -24,6 +25,7 @@ class RunnerDependencies:
     cleaner: CleanerRunner | None = None
     cleaner_loader: CleanerLoader = load_default_cleaner
     sentence_splitter_factory: SentenceSplitterFactory | None = None
+    extraction_policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY
 
 
 @dataclass(frozen=True)
@@ -33,6 +35,7 @@ class RunContext:
     backend_info: NLPBackendInfo
     splitter_nlp: Any | None
     roman_exceptions: frozenset[str]
+    extraction_policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY
 
 
 @dataclass(frozen=True)

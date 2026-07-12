@@ -13,9 +13,13 @@ from typing import Any, Callable, Collection, Iterable, Iterator, Sequence
 
 from nlpo_toolkit.nlp import (
     effective_roman_exceptions,
-    iter_char_chunks,
     resolve_roman_exceptions,
     should_drop_roman_numeral,
+)
+from .analysis_policy import (
+    AnalysisExtractionPolicy,
+    DEFAULT_ANALYSIS_EXTRACTION_POLICY,
+    iter_analysis_chunks,
 )
 
 __all__ = [
@@ -133,7 +137,7 @@ def iter_nlp_analysis_records_from_text(
     *,
     text: str,
     nlp: Callable[[str], Any],
-    chunk_chars: int = 200_000,
+    policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY,
 ) -> Iterator[NLPAnalysisRecord]:
     if not text:
         return
@@ -141,7 +145,7 @@ def iter_nlp_analysis_records_from_text(
     global_index = 0
     chunk_base_offset = 0
 
-    for chunk_index, chunk in enumerate(iter_char_chunks(text, chunk_chars=chunk_chars)):
+    for chunk_index, chunk in enumerate(iter_analysis_chunks(text, policy=policy)):
         doc = nlp(chunk)
         emitted = 0
         for record in iter_nlp_analysis_records(
@@ -224,7 +228,7 @@ def iter_token_records(
     roman_exceptions: Collection[str] | None = None,
     ref_tag_detector: Callable[[str], str] | None = None,
     ref_tag_counter: Counter[str] | None = None,
-    chunk_chars: int = 200_000,
+    extraction_policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY,
 ) -> Iterator[TokenRecord]:
     options = AnalysisOptions(
         group=group,
@@ -240,7 +244,7 @@ def iter_token_records(
     for record in iter_nlp_analysis_records_from_text(
         text=text,
         nlp=nlp,
-        chunk_chars=chunk_chars,
+        policy=extraction_policy,
     ):
         yield evaluate_analysis_record(record, options=options)
 
