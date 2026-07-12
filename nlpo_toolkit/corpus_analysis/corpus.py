@@ -9,6 +9,7 @@ from typing import Iterable, Mapping, Sequence
 
 from .config import AppConfig, GroupConfig
 from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner, run_cleaner
+from .corpus_errors import CorpusPreparationError
 from .io_utils import expand_globs, read_concat
 from .normalizer import normalize_text
 from .preprocess import expand_cleaned_dir_placeholders, resolve_cleaner_output_dir
@@ -45,10 +46,6 @@ class ResolvedCorpora:
 @dataclass(frozen=True)
 class CleanerPlan:
     config_path: Path
-
-
-class CorpusPreparationError(ValueError):
-    pass
 
 
 def resolve_project_path(project_root: Path, raw: object) -> Path:
@@ -260,7 +257,7 @@ def prepare_corpus_text(
     config: AppConfig,
     ref_tag_patterns: Sequence[RefTagPattern] = (),
 ) -> PreparedCorpus:
-    raw_text = read_concat(list(work_item.files))
+    raw_text = read_concat(work_item.files)
     prepared_text = normalize_text(raw_text, config)
     ref_tag_counts: Counter[str] = Counter()
     if config.ref_tags.enabled:

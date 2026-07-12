@@ -6,6 +6,7 @@ from pathlib import Path
 
 from ..archive import ArchiveOptions, RunArchiveError, create_run_archive
 from ..cleaner_runtime import CleanerError
+from ..corpus_errors import CorpusPreparationError
 from ..dependencies import default_runner_dependencies
 from ..dry_run import dry_run_count_vocabula
 from ..runner import run
@@ -42,7 +43,7 @@ def run_count_vocabula(
             error_on_empty_group=error_on_empty_group,
             auto_single_cleaned=auto_single_cleaned,
         )
-    except (CleanerError, FileNotFoundError) as exc:
+    except (CleanerError, CorpusPreparationError, FileNotFoundError) as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
         return 1
     except ValueError as exc:

@@ -7,7 +7,7 @@ from nlpo_toolkit.backends import NLPBackendInfo
 from nlpo_toolkit.nlp import load_roman_exceptions
 
 from .config import AppConfig
-from .corpus import resolve_project_path, run_preprocess_if_needed
+from .corpus import prepare_corpora, resolve_project_path, run_preprocess_if_needed
 from .run_plan import build_run_plan, ensure_out_dir
 from .runner_types import BackendFactory, RunContext, RunnerDependencies
 
@@ -77,6 +77,11 @@ def prepare_run_context(
         cleaner_loader=dependencies.cleaner_loader,
         preprocess_fn=run_preprocess_if_needed,
     )
+    prepared_corpora = prepare_corpora(
+        work_items=plan.work_items,
+        config=plan.config,
+        project_root=plan.project_root,
+    )
     ensure_out_dir(plan.out_dir)
     nlp, backend_info, package = initialize_nlp_runtime(
         config=plan.config,
@@ -92,6 +97,7 @@ def prepare_run_context(
     )
     return RunContext(
         plan=plan,
+        prepared_corpora=prepared_corpora,
         nlp=nlp,
         backend_info=backend_info,
         splitter_nlp=splitter_nlp,

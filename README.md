@@ -568,6 +568,8 @@ nlpo ngram \
 Config input uses the same corpus planning and preparation path as `count` and
 `features`, including cleaner execution, grouping mode, per-file and
 auto-single-cleaned resolution, text normalization, and reference-tag removal.
+All configured corpus files must be readable as UTF-8; if any file cannot be
+read, preparation fails and no partial corpus is analyzed.
 Token artifact input bypasses config loading, cleaner execution, and corpus
 planning; it reads the existing validated artifact directly. Config input
 supports `--field token`; use `--tokens` with an artifact for lemma n-grams.

@@ -22,7 +22,7 @@ from .analysis_records import (
     iter_nlp_analysis_records_from_text,
 )
 from .config import TraceConfig
-from .corpus import PreparedCorpus, prepare_corpora, sanitize_label
+from .corpus import PreparedCorpus, sanitize_label
 from .diagnostic_trace import DiagnosticTraceWriter
 from .outputs import (
     FrequencyOutputPaths,
@@ -484,11 +484,7 @@ def analyze_corpora(
     dependencies: RunnerDependencies,
 ) -> AnalysisResults:
     plan = context.plan
-    prepared_corpora = prepare_corpora(
-        work_items=plan.work_items,
-        config=plan.config,
-        project_root=plan.project_root,
-    )
+    prepared_corpora = context.prepared_corpora
     trace_paths: dict[str, Path] = {}
     if plan.config.trace.enabled:
         trace_paths = build_trace_paths(

@@ -353,11 +353,6 @@ def run_features(
         extraction_policy=dependencies.extraction_policy,
     )
 
-    nlp, _backend_info, _package = build_nlp_runtime(
-        config=config,
-        backend_factory=dependencies.backend_factory,
-    )
-
     groups_texts: list[tuple[str, list[Path], str]] = []
     for corpus in prepare_corpora(
         work_items=plan.work_items,
@@ -365,6 +360,11 @@ def run_features(
         project_root=plan.project_root,
     ):
         groups_texts.append((corpus.label, list(corpus.files), corpus.prepared_text))
+
+    nlp, _backend_info, _package = build_nlp_runtime(
+        config=config,
+        backend_factory=dependencies.backend_factory,
+    )
 
     rows = build_feature_rows(groups_texts, nlp, options)
     write_feature_matrix(rows, out=out, format=output_format)

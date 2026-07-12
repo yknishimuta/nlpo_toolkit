@@ -9,6 +9,7 @@ from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 
 from .config import AppConfig, NLPConfig
 from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner
+from .corpus import PreparedCorpus
 from .analysis_policy import AnalysisExtractionPolicy, DEFAULT_ANALYSIS_EXTRACTION_POLICY
 from .run_plan import RunPlan
 
@@ -31,6 +32,7 @@ class RunnerDependencies:
 @dataclass(frozen=True)
 class RunContext:
     plan: RunPlan
+    prepared_corpora: tuple[PreparedCorpus, ...]
     nlp: Any
     backend_info: NLPBackendInfo
     splitter_nlp: Any | None

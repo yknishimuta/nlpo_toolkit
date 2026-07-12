@@ -8,7 +8,6 @@ import pytest
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.config import ensure_app_config
 from nlpo_toolkit.corpus_analysis.corpus import (
-    CorpusPreparationError,
     CorpusWorkItem,
     build_corpus_work_items,
     cleaned_txt_files,
@@ -18,6 +17,10 @@ from nlpo_toolkit.corpus_analysis.corpus import (
     resolve_auto_single_cleaned_group,
     resolve_corpus_work_items,
     resolve_group_files,
+)
+from nlpo_toolkit.corpus_analysis.corpus_errors import (
+    CorpusPreparationError,
+    CorpusReadError,
 )
 from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis.dependencies import (
@@ -189,6 +192,32 @@ def test_missing_ref_tag_file_is_error(tmp_path: Path) -> None:
             config=cfg,
             project_root=tmp_path,
         )
+
+
+def test_prepare_corpus_text_fails_before_normalization_on_read_error(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import nlpo_toolkit.corpus_analysis.corpus as corpus_mod
+
+    valid = tmp_path / "valid.txt"
+    missing = tmp_path / "missing.txt"
+    valid.write_text("alpha", encoding="utf-8")
+    normalize_calls = []
+
+    def unexpected_normalize(*args, **kwargs):
+        normalize_calls.append((args, kwargs))
+        raise AssertionError("normalization must not run")
+
+    monkeypatch.setattr(corpus_mod, "normalize_text", unexpected_normalize)
+
+    with pytest.raises(CorpusReadError, match="missing.txt"):
+        prepare_corpus_text(
+            work_item=CorpusWorkItem("test", (valid, missing)),
+            config=_config({"groups": {"test": {"files": []}}}),
+        )
+
+    assert normalize_calls == []
 
 
 def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Path, monkeypatch) -> None:
