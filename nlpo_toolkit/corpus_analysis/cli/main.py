@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Sequence
+from typing import TextIO
 
 from . import cache, compare, concordance, count, features, ngram
 from .common import CLIContext, CommandHandler
@@ -26,9 +27,21 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    stdout: TextIO | None = None,
+    stderr: TextIO | None = None,
+) -> int:
     parser = build_parser()
     argv_list = list(argv) if argv is not None else sys.argv[1:]
     args = parser.parse_args(argv_list)
     handler: CommandHandler = args.handler
-    return handler(args, CLIContext(argv=("nlpo", *argv_list)))
+    return handler(
+        args,
+        CLIContext(
+            argv=("nlpo", *argv_list),
+            stdout=stdout if stdout is not None else sys.stdout,
+            stderr=stderr if stderr is not None else sys.stderr,
+        ),
+    )

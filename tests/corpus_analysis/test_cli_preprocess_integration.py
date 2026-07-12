@@ -100,11 +100,11 @@ def test_preprocess_cleaner_integration_fixed(tmp_path):
     )
 
     # --- Act
-    rc = execute_count_command(
+    result = execute_count_command(
         CountRequest(project_root=script_dir, config_path=groups_cfg_path),
         dependencies=dependencies,
     )
-    assert rc == 0
+    assert result.successful is True
     assert cleaner_called["ok"] is True
 
     # --- Assert outputs

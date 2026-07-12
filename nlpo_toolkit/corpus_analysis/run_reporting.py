@@ -297,4 +297,5 @@ def build_run_result(
         ),
         summary_path=report.summary_path.resolve(),
         metadata_path=report.metadata_path.resolve(),
+        partition_mismatches=partitions.mismatches,
     )

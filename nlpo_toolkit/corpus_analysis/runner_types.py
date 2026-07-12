@@ -54,6 +54,7 @@ class RunResult:
     config_files: tuple[ReferencedConfigFile, ...]
     summary_path: Path
     metadata_path: Path
+    partition_mismatches: tuple[tuple[str, str, int, int], ...] = ()
 
     @property
     def generated_outputs(self) -> tuple[Path, ...]:
@@ -96,6 +97,7 @@ class PartitionRunResult:
     metadata: tuple[Mapping[str, object], ...]
     generated_outputs: tuple[Path, ...]
     exit_code: int
+    mismatches: tuple[tuple[str, str, int, int], ...] = ()
 
 
 @dataclass(frozen=True)

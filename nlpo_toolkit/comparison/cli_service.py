@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import csv
-import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any
 
 from nlpo_toolkit.comparison import (
     ComparisonEngineError,
@@ -136,68 +135,39 @@ def sort_compare_rows(
     return sorted(rows, key=lambda row: (key(row), str(row["term"])), reverse=not ascending)
 
 
-def _format_value(value: Any) -> Any:
-    if isinstance(value, float):
-        if value.is_integer():
-            return str(int(value))
-        return f"{value:.12g}"
-    return value
-
-
 def _fieldnames(rows: list[dict[str, Any]]) -> list[str]:
     if not rows:
         return ["term"]
     return list(rows[0].keys())
 
 
-def write_compare_output(
-    rows: list[dict[str, Any]],
-    out: Path | TextIO | None = None,
-    format: str = "csv",
-) -> None:
-    if format not in {"csv", "tsv"}:
-        raise CompareError("--format must be csv or tsv")
-    delimiter = "," if format == "csv" else "\t"
-    close = False
-    if out is None:
-        f = sys.stdout
-    elif hasattr(out, "write"):
-        f = out  # type: ignore[assignment]
-    else:
-        path = Path(out)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        f = path.open("w", encoding="utf-8", newline="")
-        close = True
-
-    try:
-        writer = csv.DictWriter(f, fieldnames=_fieldnames(rows), delimiter=delimiter)
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({k: _format_value(v) for k, v in row.items()})
-    finally:
-        if close:
-            f.close()
+@dataclass(frozen=True)
+class CompareRequest:
+    inputs: tuple[Path, ...]
+    labels: tuple[str, ...] | None = None
+    metric: str = "log-ratio"
+    smoothing: float = 0.5
+    min_total_count: float = 1
+    top: int | None = None
+    sort: str | None = None
+    ascending: bool = False
+    key_column: str | None = None
+    count_column: str | None = None
 
 
-def run_compare(
-    *,
-    inputs: list[Path],
-    labels: list[str] | None = None,
-    out: Path | None = None,
-    output_format: str = "csv",
-    metric: str = "log-ratio",
-    smoothing: float = 0.5,
-    min_total_count: float = 1,
-    top: int | None = None,
-    sort: str | None = None,
-    ascending: bool = False,
-    key_column: str | None = None,
-    count_column: str | None = None,
-) -> int:
+@dataclass(frozen=True)
+class CompareCommandResult:
+    rows: tuple[dict[str, Any], ...]
+    columns: tuple[str, ...]
+
+
+def execute_compare_command(request: CompareRequest) -> CompareCommandResult:
+    inputs = list(request.inputs)
+    labels = list(request.labels) if request.labels is not None else None
     if len(inputs) < 2:
         raise CompareError("--inputs requires at least two frequency CSV files")
-    if metric not in METRICS:
-        raise CompareError(f"Unsupported metric: {metric}")
+    if request.metric not in METRICS:
+        raise CompareError(f"Unsupported metric: {request.metric}")
     if labels is not None and len(labels) != len(inputs):
         raise CompareError("--labels must have the same length as --inputs")
     effective_labels = labels or labels_from_paths(inputs)
@@ -205,8 +175,8 @@ def run_compare(
         load_frequency_table(
             path,
             label=label,
-            key_column=key_column,
-            count_column=count_column,
+            key_column=request.key_column,
+            count_column=request.count_column,
         )
         for path, label in zip(inputs, effective_labels)
     ]
@@ -217,19 +187,18 @@ def run_compare(
                 tables[1],
                 options=PairwiseComparisonOptions(
                     scale=1.0,
-                    min_total_count=min_total_count,
-                    zero_handling=ZeroHandling(ZeroHandlingMode.ADDITIVE, smoothing),
+                    min_total_count=request.min_total_count,
+                    zero_handling=ZeroHandling(ZeroHandlingMode.ADDITIVE, request.smoothing),
                 ),
             )
             rows = _render_pair_rows(result)
         else:
-            result = compare_many(tables, scale=1.0, min_total_count=min_total_count)
+            result = compare_many(tables, scale=1.0, min_total_count=request.min_total_count)
             rows = _render_many_rows(result)
     except ComparisonEngineError as exc:
         raise CompareError(str(exc)) from exc
-    sort_key = sort or ("abs-log-ratio" if len(inputs) == 2 else "range-relative")
-    rows = sort_compare_rows(rows, sort_key=sort_key, ascending=ascending)
-    if top is not None:
-        rows = rows[:top]
-    write_compare_output(rows, out=out, format=output_format)
-    return 0
+    sort_key = request.sort or ("abs-log-ratio" if len(inputs) == 2 else "range-relative")
+    rows = sort_compare_rows(rows, sort_key=sort_key, ascending=request.ascending)
+    if request.top is not None:
+        rows = rows[: request.top]
+    return CompareCommandResult(rows=tuple(rows), columns=tuple(_fieldnames(rows)))

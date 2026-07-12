@@ -127,7 +127,7 @@ def test_count_cli_uses_run_result_without_reloading_config_or_manifest(
         run_analysis=lambda **_kwargs: result,
         archive_creator=create_run_archive,
     )
-    rc = execute_count_command(
+    command_result = execute_count_command(
         CountRequest(
             project_root=tmp_path,
             config_path=result.plan.config_path,
@@ -136,9 +136,10 @@ def test_count_cli_uses_run_result_without_reloading_config_or_manifest(
         dependencies=dependencies,
     )
 
-    assert rc == 0
+    assert command_result.successful is True
+    assert command_result.archive is not None
     assert (tmp_path / "runs" / "cli-result" / "manifest.json").exists()
-    assert "included input files: 0" in capsys.readouterr().out
+    assert capsys.readouterr().out == ""
 
 
 def test_count_cli_does_not_archive_nonzero_run_result(
@@ -150,7 +151,7 @@ def test_count_cli_does_not_archive_nonzero_run_result(
         run_analysis=lambda **_kwargs: result,
         archive_creator=create_run_archive,
     )
-    rc = execute_count_command(
+    command_result = execute_count_command(
         CountRequest(
             project_root=tmp_path,
             config_path=result.plan.config_path,
@@ -159,5 +160,6 @@ def test_count_cli_does_not_archive_nonzero_run_result(
         dependencies=dependencies,
     )
 
-    assert rc == 1
+    assert command_result.successful is False
+    assert command_result.archive is None
     assert not (tmp_path / "runs" / "must-not-exist").exists()

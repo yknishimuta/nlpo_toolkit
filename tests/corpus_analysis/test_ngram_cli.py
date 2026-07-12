@@ -18,7 +18,7 @@ from nlpo_toolkit.corpus_analysis.ngram import (
     build_ngrams_from_rows,
     iter_config_token_rows,
     read_token_artifact_rows,
-    write_ngrams_from_config,
+    execute_config_ngram_command,
 )
 from nlpo_toolkit.corpus_analysis.token_artifact import (
     TokenArtifactMetadata,
@@ -303,7 +303,7 @@ def test_config_ngram_uses_canonical_corpus_plan_with_overrides(tmp_path, monkey
         lambda **_kwargs: (PreparedCorpus("text", (), "raw", "alpha beta", Counter()),),
     )
 
-    rc = write_ngrams_from_config(
+    result = execute_config_ngram_command(
         request=ConfigNgramRequest(
             project_root=tmp_path,
             config_path=config_path,
@@ -312,8 +312,6 @@ def test_config_ngram_uses_canonical_corpus_plan_with_overrides(tmp_path, monkey
             by_group=False,
             min_count=1,
             top=None,
-            output_format="tsv",
-            out_path=tmp_path / "ngrams.tsv",
             group_by_file=True,
             auto_single_cleaned=True,
             error_on_empty_group=True,
@@ -328,7 +326,7 @@ def test_config_ngram_uses_canonical_corpus_plan_with_overrides(tmp_path, monkey
         ),
     )
 
-    assert rc == 0
+    assert result.rows
     assert len(calls) == 1
     assert calls[0]["project_root"] == tmp_path
     assert calls[0]["config_path"] == config_path
@@ -348,7 +346,7 @@ def test_config_ngram_rejects_lemma_before_planning(tmp_path, monkeypatch):
     )
 
     with pytest.raises(NgramError, match="Config input supports --field token only"):
-        write_ngrams_from_config(
+        execute_config_ngram_command(
             request=ConfigNgramRequest(
                 project_root=tmp_path,
                 config_path=tmp_path / "groups.yml",
@@ -357,8 +355,6 @@ def test_config_ngram_rejects_lemma_before_planning(tmp_path, monkeypatch):
                 by_group=False,
                 min_count=1,
                 top=None,
-                output_format="tsv",
-                out_path=None,
             ),
             dependencies=ConfigNgramDependencies(
                 planning=CorpusPlanningDependencies(

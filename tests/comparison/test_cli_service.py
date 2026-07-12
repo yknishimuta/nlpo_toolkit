@@ -7,11 +7,42 @@ from pathlib import Path
 
 from nlpo_toolkit.comparison.cli_service import (
     CompareError,
+    CompareCommandResult,
+    CompareRequest,
     compare_frequency_tables,
-    run_compare,
-    write_compare_output,
+    execute_compare_command,
 )
 from nlpo_toolkit.comparison.frequency_io import detect_columns, load_frequency_csv
+from nlpo_toolkit.corpus_analysis.cli.output import write_compare_result
+
+
+def run_compare(**kwargs):
+    out = kwargs.pop("out", None)
+    output_format = kwargs.pop("output_format", "csv")
+    result = execute_compare_command(
+        CompareRequest(
+            inputs=tuple(kwargs.pop("inputs")),
+            labels=(
+                tuple(kwargs.pop("labels"))
+                if kwargs.get("labels") is not None
+                else kwargs.pop("labels", None)
+            ),
+            **kwargs,
+        )
+    )
+    if out is not None:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with out.open("w", encoding="utf-8", newline="") as stream:
+            write_compare_result(result, stream=stream, output_format=output_format)
+    return 0
+
+
+def write_compare_output(rows, *, out, format):
+    result = CompareCommandResult(
+        rows=tuple(rows),
+        columns=tuple(rows[0]) if rows else ("term",),
+    )
+    write_compare_result(result, stream=out, output_format=format)
 
 
 def _write_csv(path: Path, header: str, rows: list[str]) -> Path:

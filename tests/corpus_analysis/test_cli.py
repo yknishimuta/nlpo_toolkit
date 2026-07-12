@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.cli import count as count_cli
@@ -15,9 +16,13 @@ def _capture_count_request(monkeypatch, *, exit_code: int = 0):
         request: CountRequest,
         *,
         dependencies: CountCommandDependencies,
-    ) -> int:
+    ):
         calls.append((request, dependencies))
-        return exit_code
+        return SimpleNamespace(
+            successful=exit_code == 0,
+            archive=None,
+            run=SimpleNamespace(partition_mismatches=()),
+        )
 
     monkeypatch.setattr(
         count_cli,
@@ -49,7 +54,7 @@ def test_count_cli_builds_canonical_request(tmp_path, monkeypatch) -> None:
         ]
     )
 
-    assert rc == 7
+    assert rc == 1
     request, dependencies = calls[0]
     assert request.project_root == tmp_path.resolve()
     assert request.config_path == (tmp_path / "custom.yml").resolve()
@@ -64,16 +69,16 @@ def test_count_cli_builds_canonical_request(tmp_path, monkeypatch) -> None:
     assert isinstance(dependencies, CountCommandDependencies)
 
 
-def test_count_cli_default_request_and_dry_run(tmp_path, monkeypatch) -> None:
+def test_count_cli_default_request(tmp_path, monkeypatch) -> None:
     calls = _capture_count_request(monkeypatch)
 
     rc = cli.main(
-        ["count", "--dry-run", "--project-root", str(tmp_path)]
+        ["count", "--project-root", str(tmp_path)]
     )
 
     assert rc == 0
     request, _dependencies = calls[0]
     assert request.config_path == tmp_path / "config" / "groups.config.yml"
-    assert request.dry_run is True
+    assert request.dry_run is False
     assert request.archive_run is False
     assert request.group_by_file is False

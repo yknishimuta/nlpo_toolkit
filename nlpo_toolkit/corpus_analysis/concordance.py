@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import csv
-import sys
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TextIO
 
 from .analysis_records import TokenRecord
 from .token_artifact import TokenArtifactError, read_token_records
@@ -16,11 +14,18 @@ class ConcordanceError(ValueError):
     pass
 
 
-def _open_output(path: Path | None) -> tuple[TextIO, bool]:
-    if path is None:
-        return sys.stdout, False
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path.open("w", encoding="utf-8", newline=""), True
+@dataclass(frozen=True)
+class ConcordanceRequest:
+    tokens_path: Path
+    keys: tuple[str, ...]
+    field: str
+    window: int
+
+
+@dataclass(frozen=True)
+class ConcordanceCommandResult:
+    columns: tuple[str, ...]
+    rows: tuple[dict[str, str], ...]
 
 
 def _field_value(record: TokenRecord, field: str) -> str:
@@ -137,31 +142,11 @@ def build_concordance_rows(
     return output_columns, rows
 
 
-def write_concordance(
-    *,
-    tokens_path: Path,
-    keys: list[str],
-    field: str,
-    window: int,
-    output_format: str,
-    out_path: Path | None = None,
-) -> int:
-    if output_format not in {"tsv", "csv"}:
-        raise ConcordanceError("output format must be 'tsv' or 'csv'.")
-
+def build_concordance(request: ConcordanceRequest) -> ConcordanceCommandResult:
     columns, rows = build_concordance_rows(
-        tokens_path=tokens_path,
-        keys=keys,
-        field=field,
-        window=window,
+        tokens_path=request.tokens_path,
+        keys=list(request.keys),
+        field=request.field,
+        window=request.window,
     )
-    delimiter = "\t" if output_format == "tsv" else ","
-    out, should_close = _open_output(out_path)
-    try:
-        writer = csv.DictWriter(out, fieldnames=columns, delimiter=delimiter)
-        writer.writeheader()
-        writer.writerows(rows)
-    finally:
-        if should_close:
-            out.close()
-    return 0
+    return ConcordanceCommandResult(columns=tuple(columns), rows=tuple(rows))

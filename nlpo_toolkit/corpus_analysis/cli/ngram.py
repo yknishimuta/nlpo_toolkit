@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 from ..cleaner_runtime import CleanerError
@@ -9,10 +8,12 @@ from ..dependencies import default_config_ngram_dependencies
 from ..ngram import (
     ConfigNgramRequest,
     NgramError,
-    write_ngrams_from_config,
-    write_ngrams_from_tokens,
+    TokenNgramRequest,
+    execute_config_ngram_command,
+    execute_token_ngram_command,
 )
 from .common import CLIContext, resolve_config_path, resolve_project_root, set_handler
+from .output import open_cli_output, present_error, write_ngram_result
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:
@@ -78,36 +79,39 @@ def register(subparsers: argparse._SubParsersAction) -> None:
 def execute(args: argparse.Namespace, context: CLIContext) -> int:
     try:
         if args.tokens is not None:
-            return write_ngrams_from_tokens(
-                tokens_path=args.tokens,
-                n=args.n,
-                field=args.field,
-                by_group=bool(args.by_group),
-                min_count=args.min_count,
-                top=args.top,
-                output_format=args.format,
-                out_path=args.out,
+            result = execute_token_ngram_command(
+                TokenNgramRequest(
+                    tokens_path=args.tokens,
+                    n=args.n,
+                    field=args.field,
+                    by_group=bool(args.by_group),
+                    min_count=args.min_count,
+                    top=args.top,
+                )
             )
-
-        project_root = resolve_project_root(args.project_root)
-        config_path = resolve_config_path(project_root=project_root, config_path=args.config)
-        return write_ngrams_from_config(
-            request=ConfigNgramRequest(
-                project_root=project_root,
-                config_path=config_path,
-                n=args.n,
-                field=args.field,
-                by_group=bool(args.by_group),
-                min_count=args.min_count,
-                top=args.top,
-                output_format=args.format,
-                out_path=args.out,
-                group_by_file=bool(args.group_by_file),
-                auto_single_cleaned=bool(args.auto_single_cleaned),
-                error_on_empty_group=bool(args.error_on_empty_group),
-            ),
-            dependencies=default_config_ngram_dependencies(),
-        )
+        else:
+            project_root = resolve_project_root(args.project_root)
+            config_path = resolve_config_path(
+                project_root=project_root, config_path=args.config
+            )
+            result = execute_config_ngram_command(
+                request=ConfigNgramRequest(
+                    project_root=project_root,
+                    config_path=config_path,
+                    n=args.n,
+                    field=args.field,
+                    by_group=bool(args.by_group),
+                    min_count=args.min_count,
+                    top=args.top,
+                    group_by_file=bool(args.group_by_file),
+                    auto_single_cleaned=bool(args.auto_single_cleaned),
+                    error_on_empty_group=bool(args.error_on_empty_group),
+                ),
+                dependencies=default_config_ngram_dependencies(),
+            )
+        with open_cli_output(path=args.out, stdout=context.stdout) as stream:
+            write_ngram_result(result, stream=stream, output_format=args.format)
+        return 0
     except (CleanerError, NgramError, ValueError, FileNotFoundError) as exc:
-        print(f"[ERROR] {exc}", file=sys.stderr)
+        present_error(exc, stderr=context.stderr)
         return 1

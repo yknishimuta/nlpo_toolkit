@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import csv
 import re
 import string
-import sys
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Sequence, TextIO
+from typing import Any, Iterable, Sequence
 
 from nlpo_toolkit.nlp import should_drop_roman_numeral
 
@@ -207,8 +205,6 @@ class FeatureOptions:
 class FeatureRequest:
     project_root: Path
     config_path: Path
-    out_path: Path | None = None
-    output_format: str = "csv"
     field: str = "lemma"
     mfw: int = 0
     include_upos: bool = True
@@ -224,6 +220,11 @@ class PreparedFeatureCorpus:
     files: tuple[Path, ...]
     text: str
     records: tuple[NLPAnalysisRecord, ...]
+
+
+@dataclass(frozen=True)
+class FeatureCommandResult:
+    rows: tuple[dict[str, Any], ...]
 
 
 def build_feature_rows(
@@ -282,54 +283,11 @@ def build_feature_rows(
     return rows
 
 
-def _fieldnames(rows: list[dict[str, Any]]) -> list[str]:
-    names: list[str] = []
-    for row in rows:
-        for key in row:
-            if key not in names:
-                names.append(key)
-    return names or ["group"]
-
-
-def _format_value(value: Any) -> Any:
-    if isinstance(value, float):
-        if value.is_integer():
-            return str(int(value))
-        return f"{value:.12g}"
-    return value
-
-
-def write_feature_matrix(rows: list[dict[str, Any]], out: Path | TextIO | None, format: str) -> None:
-    if format not in {"csv", "tsv"}:
-        raise FeatureError("--format must be csv or tsv")
-    delimiter = "," if format == "csv" else "\t"
-    close = False
-    if out is None:
-        f = sys.stdout
-    elif hasattr(out, "write"):
-        f = out  # type: ignore[assignment]
-    else:
-        path = Path(out)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        f = path.open("w", encoding="utf-8", newline="")
-        close = True
-
-    try:
-        fieldnames = _fieldnames(rows)
-        writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=delimiter)
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({k: _format_value(row.get(k, "")) for k in fieldnames})
-    finally:
-        if close:
-            f.close()
-
-
 def execute_feature_command(
     request: FeatureRequest,
     *,
     dependencies: FeatureCommandDependencies,
-) -> int:
+) -> FeatureCommandResult:
     try:
         plan = build_corpus_plan(
             project_root=request.project_root,
@@ -368,10 +326,4 @@ def execute_feature_command(
         backend_factory=dependencies.analysis.backend_factory,
     )
 
-    rows = build_feature_rows(groups_texts, nlp, options)
-    write_feature_matrix(
-        rows,
-        out=request.out_path,
-        format=request.output_format,
-    )
-    return 0
+    return FeatureCommandResult(rows=tuple(build_feature_rows(groups_texts, nlp, options)))

@@ -285,11 +285,10 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
         cleaner_loader=lambda: pytest.fail("cleaner loader must not be called"),
     )
     features_mod.execute_feature_command(
-        FeatureRequest(
-            project_root=tmp_path,
-            config_path=config_path,
-            out_path=tmp_path / "features.csv",
-        ),
+            FeatureRequest(
+                project_root=tmp_path,
+                config_path=config_path,
+            ),
         dependencies=FeatureCommandDependencies(
             planning=planning,
             analysis=AnalysisDependencies(
@@ -310,7 +309,7 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
         return original_iter_rows(corpora)
 
     monkeypatch.setattr(ngram_mod, "iter_config_token_rows", capture_config_rows)
-    ngram_mod.write_ngrams_from_config(
+    ngram_mod.execute_config_ngram_command(
         request=ConfigNgramRequest(
             project_root=tmp_path,
             config_path=config_path,
@@ -319,8 +318,6 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
             by_group=True,
             min_count=1,
             top=None,
-            output_format="tsv",
-            out_path=tmp_path / "ngrams.tsv",
         ),
         dependencies=ConfigNgramDependencies(
             planning=planning,

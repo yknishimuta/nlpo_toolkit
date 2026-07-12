@@ -6,7 +6,7 @@ import pytest
 
 from nlpo_toolkit.corpus_analysis.count_command import CountRequest
 from nlpo_toolkit.corpus_analysis.dependencies import CorpusPlanningDependencies
-from nlpo_toolkit.corpus_analysis.dry_run import execute_dry_run
+from nlpo_toolkit.corpus_analysis.dry_run import DiagnosticLevel, execute_dry_run
 from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis.config import ConfigError
 
@@ -19,7 +19,7 @@ def _execute_dry_run(
     error_on_empty_group: bool = False,
     auto_single_cleaned: bool = False,
 ) -> int:
-    return execute_dry_run(
+    result = execute_dry_run(
         request=CountRequest(
             project_root=project_root,
             config_path=config_path,
@@ -35,6 +35,14 @@ def _execute_dry_run(
             ),
         ),
     )
+    prefixes = {
+        DiagnosticLevel.OK: "[OK]",
+        DiagnosticLevel.WARNING: "[WARN]",
+        DiagnosticLevel.ERROR: "[ERROR]",
+    }
+    for diagnostic in result.diagnostics:
+        print(f"{prefixes[diagnostic.level]} {diagnostic.message}")
+    return 0 if result.successful else 1
 
 
 def test_dry_run_reports_config_paths_matches_and_warnings(tmp_path: Path, capsys):

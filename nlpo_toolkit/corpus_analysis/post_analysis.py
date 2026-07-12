@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Mapping
 
@@ -40,6 +39,7 @@ def execute_partition_validations(
     metadata: list[Mapping[str, object]] = []
     generated_outputs: list[Path] = []
     exit_code = 0
+    mismatches: list[tuple[str, str, int, int]] = []
 
     for spec, result in zip(plan.partition_specs, partition_results):
         csv_name = f"partition_validation_{sanitize_partition_name(spec.name)}.csv"
@@ -51,10 +51,8 @@ def execute_partition_validations(
 
         if not result.exact_match:
             level = "ERROR" if spec.on_mismatch == "error" else "WARN"
-            print(
-                f"[{level}] partition {spec.name} mismatch: "
-                f"token_delta={result.token_delta} mismatched_items={result.mismatched_items}",
-                file=sys.stderr,
+            mismatches.append(
+                (spec.name, level, result.token_delta, result.mismatched_items)
             )
             if spec.on_mismatch == "error":
                 exit_code = 1
@@ -70,6 +68,7 @@ def execute_partition_validations(
         metadata=tuple(metadata),
         generated_outputs=tuple(generated_outputs),
         exit_code=exit_code,
+        mismatches=tuple(mismatches),
     )
 
 

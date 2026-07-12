@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
-from ..cache import CacheClearError, clear_cache
+from ..cache import CacheClearError, CacheClearRequest, clear_cache
 from .common import CLIContext, resolve_project_root, set_handler
+from .output import present_error
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:
@@ -33,7 +33,13 @@ def execute_clear(args: argparse.Namespace, context: CLIContext) -> int:
     if config_path is not None and not config_path.is_absolute():
         config_path = (project_root / config_path).resolve()
     try:
-        return clear_cache(project_root=project_root, config_path=config_path)
+        result = clear_cache(
+            CacheClearRequest(project_root=project_root, config_path=config_path)
+        )
+        display = result.cache_dir.relative_to(project_root).as_posix()
+        message = "cache cleared" if result.removed else "cache already clean"
+        print(f"[OK] {message}: {display}", file=context.stdout)
+        return 0
     except CacheClearError as exc:
-        print(f"[ERROR] {exc}", file=sys.stderr)
+        present_error(exc, stderr=context.stderr)
         return 1

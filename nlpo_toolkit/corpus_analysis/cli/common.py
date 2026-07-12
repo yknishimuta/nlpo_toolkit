@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, TextIO
 
 
 class CommandHandler(Protocol):
@@ -14,6 +14,8 @@ class CommandHandler(Protocol):
 @dataclass(frozen=True)
 class CLIContext:
     argv: tuple[str, ...]
+    stdout: TextIO
+    stderr: TextIO
 
 
 def resolve_project_root(path: Path) -> Path:

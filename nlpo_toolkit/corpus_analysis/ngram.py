@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import csv
 import re
-import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Iterator, TextIO
+from typing import Iterable, Iterator
 
 from .corpus import PreparedCorpus, prepare_corpora
 from .dependencies import ConfigNgramDependencies
@@ -23,13 +21,6 @@ class NgramError(ValueError):
 
 _HAS_WORD_CHAR_RE = re.compile(r"\w", re.UNICODE)
 _TOKEN_RE = re.compile(r"[^\W\d_]+", re.UNICODE)
-
-
-def _open_output(path: Path | None) -> tuple[TextIO, bool]:
-    if path is None:
-        return sys.stdout, False
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path.open("w", encoding="utf-8", newline=""), True
 
 
 def _normalize_item(value: object) -> str | None:
@@ -233,69 +224,46 @@ class ConfigNgramRequest:
     by_group: bool
     min_count: int
     top: int | None
-    output_format: str
-    out_path: Path | None
     group_by_file: bool = False
     auto_single_cleaned: bool = False
     error_on_empty_group: bool = False
 
 
-def write_ngram_rows(
-    rows: list[dict[str, str | int]],
-    *,
-    output_format: str,
-    out_path: Path | None,
-    by_group: bool,
-) -> int:
-    if output_format not in {"tsv", "csv"}:
-        raise NgramError("output format must be 'tsv' or 'csv'.")
-    columns = ["ngram", "count", "n", "field"]
-    if by_group:
-        columns.append("group")
-    delimiter = "\t" if output_format == "tsv" else ","
-    out, should_close = _open_output(out_path)
-    try:
-        writer = csv.DictWriter(out, fieldnames=columns, delimiter=delimiter)
-        writer.writeheader()
-        writer.writerows(rows)
-    finally:
-        if should_close:
-            out.close()
-    return 0
+@dataclass(frozen=True)
+class TokenNgramRequest:
+    tokens_path: Path
+    n: int
+    field: str
+    by_group: bool
+    min_count: int
+    top: int | None
 
 
-def write_ngrams_from_tokens(
-    *,
-    tokens_path: Path,
-    n: int,
-    field: str,
-    by_group: bool,
-    min_count: int,
-    top: int | None,
-    output_format: str,
-    out_path: Path | None,
-) -> int:
+@dataclass(frozen=True)
+class NgramCommandResult:
+    rows: tuple[dict[str, str | int], ...]
+    by_group: bool
+
+
+def execute_token_ngram_command(request: TokenNgramRequest) -> NgramCommandResult:
     rows = build_ngrams_from_rows(
-        read_token_artifact_rows(tokens_path, field, by_group=by_group),
-        n=n,
-        field=field,
-        by_group=by_group,
-        min_count=min_count,
-        top=top,
+        read_token_artifact_rows(
+            request.tokens_path, request.field, by_group=request.by_group
+        ),
+        n=request.n,
+        field=request.field,
+        by_group=request.by_group,
+        min_count=request.min_count,
+        top=request.top,
     )
-    return write_ngram_rows(
-        rows,
-        output_format=output_format,
-        out_path=out_path,
-        by_group=by_group,
-    )
+    return NgramCommandResult(rows=tuple(rows), by_group=request.by_group)
 
 
-def write_ngrams_from_config(
+def execute_config_ngram_command(
     *,
     request: ConfigNgramRequest,
     dependencies: ConfigNgramDependencies,
-) -> int:
+) -> NgramCommandResult:
     if request.field != "token":
         raise NgramError(
             "Config input supports --field token only. "
@@ -324,9 +292,4 @@ def write_ngrams_from_config(
         min_count=request.min_count,
         top=request.top,
     )
-    return write_ngram_rows(
-        rows,
-        output_format=request.output_format,
-        out_path=request.out_path,
-        by_group=request.by_group,
-    )
+    return NgramCommandResult(rows=tuple(rows), by_group=request.by_group)

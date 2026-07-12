@@ -9,6 +9,7 @@ import pytest
 from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.features import (
     FeatureError,
+    FeatureCommandResult,
     FeatureOptions,
     FeatureRequest,
     build_feature_rows,
@@ -18,8 +19,8 @@ from nlpo_toolkit.corpus_analysis.features import (
     select_mfw,
     execute_feature_command,
     safe_feature_name,
-    write_feature_matrix,
 )
+from nlpo_toolkit.corpus_analysis.cli.output import write_feature_result
 from nlpo_toolkit.corpus_analysis.analysis_records import (
     NLPAnalysisRecord,
     iter_nlp_analysis_records_from_text,
@@ -329,8 +330,9 @@ def test_write_feature_matrix_csv_and_tsv() -> None:
     csv_out = io.StringIO()
     tsv_out = io.StringIO()
 
-    write_feature_matrix(rows, csv_out, "csv")
-    write_feature_matrix(rows, tsv_out, "tsv")
+    result = FeatureCommandResult(rows=tuple(rows))
+    write_feature_result(result, stream=csv_out, output_format="csv")
+    write_feature_result(result, stream=tsv_out, output_format="tsv")
 
     assert "group,token_count,mean_token_length" in csv_out.getvalue()
     assert "group\ttoken_count\tmean_token_length" in tsv_out.getvalue()
@@ -342,16 +344,17 @@ def test_run_features_one_group_writes_csv(tmp_path: Path) -> None:
     config_path = _write_config(tmp_path)
     out = tmp_path / "output" / "features.csv"
 
-    rc = execute_feature_command(
+    result = execute_feature_command(
         FeatureRequest(
             project_root=tmp_path,
             config_path=config_path,
-            out_path=out,
         ),
         dependencies=_dependencies(),
     )
 
-    assert rc == 0
+    out.parent.mkdir()
+    with out.open("w", encoding="utf-8", newline="") as stream:
+        write_feature_result(result, stream=stream, output_format="csv")
     rows = list(csv.DictReader(out.open(encoding="utf-8")))
     assert len(rows) == 1
     assert rows[0]["group"] == "text"
@@ -371,11 +374,10 @@ def test_run_features_accepts_backend_factory(tmp_path: Path) -> None:
 
     base = _dependencies()
 
-    rc = execute_feature_command(
+    result = execute_feature_command(
         FeatureRequest(
             project_root=tmp_path,
             config_path=config_path,
-            out_path=out,
         ),
         dependencies=FeatureCommandDependencies(
             planning=base.planning,
@@ -386,7 +388,9 @@ def test_run_features_accepts_backend_factory(tmp_path: Path) -> None:
         ),
     )
 
-    assert rc == 0
+    out.parent.mkdir()
+    with out.open("w", encoding="utf-8", newline="") as stream:
+        write_feature_result(result, stream=stream, output_format="csv")
     assert len(calls) == 1
     assert calls[0].language == "la"
     rows = list(csv.DictReader(out.open(encoding="utf-8")))
@@ -414,14 +418,16 @@ def test_run_features_two_groups_two_rows(tmp_path: Path) -> None:
     )
     out = tmp_path / "features.csv"
 
-    execute_feature_command(
+    result = execute_feature_command(
         FeatureRequest(
             project_root=tmp_path,
             config_path=config_path,
-            out_path=out,
         ),
         dependencies=_dependencies(),
     )
+
+    with out.open("w", encoding="utf-8", newline="") as stream:
+        write_feature_result(result, stream=stream, output_format="csv")
 
     rows = list(csv.DictReader(out.open(encoding="utf-8")))
     assert [row["group"] for row in rows] == ["a", "b"]
@@ -434,15 +440,17 @@ def test_run_features_group_by_file(tmp_path: Path) -> None:
     config_path = _write_config(tmp_path)
     out = tmp_path / "features.csv"
 
-    execute_feature_command(
+    result = execute_feature_command(
         FeatureRequest(
             project_root=tmp_path,
             config_path=config_path,
-            out_path=out,
             group_by_file=True,
         ),
         dependencies=_dependencies(),
     )
+
+    with out.open("w", encoding="utf-8", newline="") as stream:
+        write_feature_result(result, stream=stream, output_format="csv")
 
     rows = list(csv.DictReader(out.open(encoding="utf-8")))
     assert [row["group"] for row in rows] == ["a", "b"]
@@ -473,16 +481,18 @@ def test_run_features_auto_single_cleaned(tmp_path: Path) -> None:
     )
     out = tmp_path / "features.csv"
 
-    execute_feature_command(
+    result = execute_feature_command(
         FeatureRequest(
             project_root=tmp_path,
             config_path=config_path,
-            out_path=out,
         ),
         dependencies=_dependencies(
             type("Clean", (), {"main": staticmethod(lambda _argv: 0)})
         ),
     )
+
+    with out.open("w", encoding="utf-8", newline="") as stream:
+        write_feature_result(result, stream=stream, output_format="csv")
 
     rows = list(csv.DictReader(out.open(encoding="utf-8")))
     assert rows[0]["group"] == "text"

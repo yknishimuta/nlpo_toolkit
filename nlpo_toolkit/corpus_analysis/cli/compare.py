@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
-from nlpo_toolkit.comparison.cli_service import CompareError, run_compare
+from nlpo_toolkit.comparison.cli_service import (
+    CompareError,
+    CompareRequest,
+    execute_compare_command,
+)
 
 from .common import CLIContext, set_handler
+from .output import open_cli_output, present_error, write_compare_result
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:
@@ -63,11 +67,10 @@ def register(subparsers: argparse._SubParsersAction) -> None:
 
 def execute(args: argparse.Namespace, context: CLIContext) -> int:
     try:
-        return run_compare(
-            inputs=list(args.inputs),
-            labels=list(args.labels) if args.labels is not None else None,
-            out=args.out,
-            output_format=args.format,
+        result = execute_compare_command(
+            CompareRequest(
+            inputs=tuple(args.inputs),
+            labels=tuple(args.labels) if args.labels is not None else None,
             metric=args.metric,
             smoothing=args.smoothing,
             min_total_count=args.min_total_count,
@@ -76,7 +79,11 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
             ascending=bool(args.ascending) and not bool(args.descending),
             key_column=args.key_column,
             count_column=args.count_column,
+            )
         )
+        with open_cli_output(path=args.out, stdout=context.stdout) as stream:
+            write_compare_result(result, stream=stream, output_format=args.format)
+        return 0
     except CompareError as exc:
-        print(f"[ERROR] {exc}", file=sys.stderr)
+        present_error(exc, stderr=context.stderr)
         return 1

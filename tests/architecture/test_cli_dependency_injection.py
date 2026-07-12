@@ -16,7 +16,7 @@ from nlpo_toolkit.corpus_analysis.dependencies import (
     RunnerDependencies,
 )
 from nlpo_toolkit.corpus_analysis.features import execute_feature_command
-from nlpo_toolkit.corpus_analysis.ngram import write_ngrams_from_config
+from nlpo_toolkit.corpus_analysis.ngram import execute_config_ngram_command
 from nlpo_toolkit.corpus_analysis.runner import run
 
 
@@ -32,7 +32,7 @@ FORBIDDEN_PARAMETERS = {
 
 
 def test_application_services_have_no_legacy_dependency_parameters() -> None:
-    for function in (run, execute_feature_command, write_ngrams_from_config):
+    for function in (run, execute_feature_command, execute_config_ngram_command):
         parameters = set(inspect.signature(function).parameters)
         assert parameters.isdisjoint(FORBIDDEN_PARAMETERS)
         assert "dependencies" in parameters

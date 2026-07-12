@@ -5,6 +5,7 @@ import ast
 from pathlib import Path
 
 import pytest
+from types import SimpleNamespace
 
 from nlpo_toolkit.corpus_analysis.cli import build_parser, main
 from nlpo_toolkit.corpus_analysis.cli import count as count_cli
@@ -48,9 +49,13 @@ def test_count_vocabula_command_is_not_registered() -> None:
 def test_main_dispatches_through_registered_handler(monkeypatch, tmp_path) -> None:
     calls = []
 
-    def fake_execute_count_command(request, *, dependencies) -> int:
+    def fake_execute_count_command(request, *, dependencies):
         calls.append((request, dependencies))
-        return 7
+        return SimpleNamespace(
+            successful=True,
+            archive=None,
+            run=SimpleNamespace(partition_mismatches=()),
+        )
 
     monkeypatch.setattr(
         count_cli,
@@ -60,7 +65,7 @@ def test_main_dispatches_through_registered_handler(monkeypatch, tmp_path) -> No
 
     rc = main(["count", "--project-root", str(tmp_path)])
 
-    assert rc == 7
+    assert rc == 0
     assert calls[0][0].project_root == tmp_path.resolve()
     assert calls[0][0].command_line == (
         "nlpo",

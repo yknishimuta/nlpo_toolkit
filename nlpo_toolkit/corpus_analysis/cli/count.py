@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 from ..count_command import CountCommandError, CountRequest, execute_count_command
 from ..dependencies import default_count_command_dependencies
+from ..dry_run import DiagnosticLevel, execute_dry_run
 from .common import (
     CLIContext,
     add_project_config_arguments,
@@ -13,6 +13,36 @@ from .common import (
     resolve_project_root,
     set_handler,
 )
+from .output import present_error
+
+
+def _present_dry_run(result, *, stdout) -> None:
+    prefixes = {
+        DiagnosticLevel.OK: "[OK]",
+        DiagnosticLevel.WARNING: "[WARN]",
+        DiagnosticLevel.ERROR: "[ERROR]",
+    }
+    for diagnostic in result.diagnostics:
+        print(f"{prefixes[diagnostic.level]} {diagnostic.message}", file=stdout)
+
+
+def _present_count_result(result, *, project_root: Path, stdout, stderr) -> None:
+    for name, level, token_delta, mismatched_items in result.run.partition_mismatches:
+        print(
+            f"[{level}] partition {name} mismatch: "
+            f"token_delta={token_delta} mismatched_items={mismatched_items}",
+            file=stderr,
+        )
+    archive = result.archive
+    if archive is None:
+        return
+    try:
+        run_dir = archive.run_dir.relative_to(project_root)
+    except ValueError:
+        run_dir = archive.run_dir
+    print(f"[ARCHIVE] saved run archive: {run_dir}", file=stdout)
+    print(f"[ARCHIVE] included input files: {archive.copied_input_count}", file=stdout)
+    print(f"[ARCHIVE] included cleaned files: {archive.copied_cleaned_count}", file=stdout)
 
 def register(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser(
@@ -96,10 +126,22 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
         dry_run=bool(args.dry_run),
     )
     try:
-        return execute_count_command(
-            request,
-            dependencies=default_count_command_dependencies(),
+        dependencies = default_count_command_dependencies()
+        if request.dry_run:
+            result = execute_dry_run(
+                request=request,
+                dependencies=dependencies.runner.planning,
+            )
+            _present_dry_run(result, stdout=context.stdout)
+            return 0 if result.successful else 1
+        result = execute_count_command(request, dependencies=dependencies)
+        _present_count_result(
+            result,
+            project_root=request.project_root,
+            stdout=context.stdout,
+            stderr=context.stderr,
         )
+        return 0 if result.successful else 1
     except CountCommandError as exc:
-        print(f"[ERROR] {exc}", file=sys.stderr)
+        present_error(exc, stderr=context.stderr)
         return 1

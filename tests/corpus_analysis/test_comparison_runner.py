@@ -260,7 +260,7 @@ def test_dry_run_reports_comparison_and_empty_reference(tmp_path: Path, capsys: 
         encoding="utf-8",
     )
 
-    rc = execute_dry_run(
+    result = execute_dry_run(
         request=CountRequest(
             project_root=project_root,
             config_path=config_path,
@@ -274,10 +274,13 @@ def test_dry_run_reports_comparison_and_empty_reference(tmp_path: Path, capsys: 
         ),
     )
 
-    out = capsys.readouterr().out
-    assert rc == 1
-    assert "[OK] comparison comparison_1: group_a=corpus_a group_b=corpus_b scale=10000 min_total_count=1" in out
-    assert "[ERROR] comparison comparison_2 references empty group: corpus_c" in out
+    assert result.successful is False
+    messages = [item.message for item in result.diagnostics]
+    assert (
+        "comparison comparison_1: group_a=corpus_a group_b=corpus_b "
+        "scale=10000 min_total_count=1"
+    ) in messages
+    assert "comparison comparison_2 references empty group: corpus_c" in messages
 
 
 def test_archive_includes_current_comparison_outputs_from_generated_outputs(

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 from ..cleaner_runtime import CleanerError
@@ -14,6 +13,7 @@ from .common import (
     resolve_project_root,
     set_handler,
 )
+from .output import open_cli_output, present_error, write_feature_result
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:
@@ -95,12 +95,10 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
     project_root = resolve_project_root(args.project_root)
     config_path = resolve_config_path(project_root=project_root, config_path=args.config)
     try:
-        return execute_feature_command(
+        result = execute_feature_command(
             FeatureRequest(
                 project_root=project_root,
                 config_path=config_path,
-                out_path=args.out,
-                output_format=args.format,
                 field=args.field,
                 mfw=args.mfw,
                 include_upos=bool(args.include_upos),
@@ -111,6 +109,9 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
             ),
             dependencies=default_feature_command_dependencies(),
         )
+        with open_cli_output(path=args.out, stdout=context.stdout) as stream:
+            write_feature_result(result, stream=stream, output_format=args.format)
+        return 0
     except (CleanerError, FeatureError, ValueError, FileNotFoundError) as exc:
-        print(f"[ERROR] {exc}", file=sys.stderr)
+        present_error(exc, stderr=context.stderr)
         return 1

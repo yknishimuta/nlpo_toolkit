@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .archive import ArchiveOptions, RunArchiveError
+from .archive import ArchiveOptions, RunArchiveError, RunArchiveResult
 from .cleaner_runtime import CleanerError
 from .corpus_errors import CorpusPreparationError
 from .dependencies import CountCommandDependencies
-from .dry_run import execute_dry_run
+from .runner_types import RunResult
 
 
 class CountCommandError(RuntimeError):
@@ -30,17 +30,21 @@ class CountRequest:
     dry_run: bool = False
 
 
+@dataclass(frozen=True)
+class CountCommandResult:
+    run: RunResult
+    archive: RunArchiveResult | None
+
+    @property
+    def successful(self) -> bool:
+        return self.run.exit_code == 0
+
+
 def execute_count_command(
     request: CountRequest,
     *,
     dependencies: CountCommandDependencies,
-) -> int:
-    if request.dry_run:
-        return execute_dry_run(
-            request=request,
-            dependencies=dependencies.runner.planning,
-        )
-
+) -> CountCommandResult:
     try:
         result = dependencies.run_analysis(
             project_root=request.project_root,
@@ -65,7 +69,7 @@ def execute_count_command(
         or config.archive.enabled
     )
     if result.exit_code != 0 or not should_archive:
-        return result.exit_code
+        return CountCommandResult(run=result, archive=None)
 
     runs_dir = (
         request.runs_dir
@@ -92,19 +96,4 @@ def execute_count_command(
     except (RunArchiveError, ValueError) as exc:
         raise CountCommandError(str(exc)) from exc
 
-    try:
-        display_run_dir = archive_result.run_dir.relative_to(
-            request.project_root
-        )
-    except ValueError:
-        display_run_dir = archive_result.run_dir
-    print(f"[ARCHIVE] saved run archive: {display_run_dir}")
-    print(
-        "[ARCHIVE] included input files: "
-        f"{archive_result.copied_input_count}"
-    )
-    print(
-        "[ARCHIVE] included cleaned files: "
-        f"{archive_result.copied_cleaned_count}"
-    )
-    return result.exit_code
+    return CountCommandResult(run=result, archive=archive_result)

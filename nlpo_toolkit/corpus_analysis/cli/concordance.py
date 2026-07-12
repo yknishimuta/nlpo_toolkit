@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
-from ..concordance import ConcordanceError, write_concordance
+from ..concordance import ConcordanceError, ConcordanceRequest, build_concordance
 from .common import CLIContext, set_handler
+from .output import open_cli_output, present_error, write_concordance_result
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:
@@ -46,14 +46,17 @@ def register(subparsers: argparse._SubParsersAction) -> None:
 
 def execute(args: argparse.Namespace, context: CLIContext) -> int:
     try:
-        return write_concordance(
-            tokens_path=args.tokens,
-            keys=list(args.keys),
-            field=args.field,
-            window=args.window,
-            output_format=args.format,
-            out_path=args.out,
+        result = build_concordance(
+            ConcordanceRequest(
+                tokens_path=args.tokens,
+                keys=tuple(args.keys),
+                field=args.field,
+                window=args.window,
+            )
         )
+        with open_cli_output(path=args.out, stdout=context.stdout) as stream:
+            write_concordance_result(result, stream=stream, output_format=args.format)
+        return 0
     except ConcordanceError as exc:
-        print(f"[ERROR] {exc}", file=sys.stderr)
+        present_error(exc, stderr=context.stderr)
         return 1

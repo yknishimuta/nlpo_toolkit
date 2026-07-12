@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +10,18 @@ import yaml
 
 class CacheClearError(ValueError):
     pass
+
+
+@dataclass(frozen=True)
+class CacheClearRequest:
+    project_root: Path
+    config_path: Path | None = None
+
+
+@dataclass(frozen=True)
+class CacheClearResult:
+    cache_dir: Path
+    removed: bool
 
 
 def _load_yaml_mapping(path: Path) -> dict[str, Any]:
@@ -31,13 +44,6 @@ def _cache_dir_from_config(path: Path) -> str | None:
     if not isinstance(cache_dir, str) or not cache_dir.strip():
         raise CacheClearError("analysis_cache.dir must be a non-empty string path.")
     return cache_dir
-
-
-def _display_path(project_root: Path, path: Path) -> str:
-    try:
-        return path.relative_to(project_root).as_posix()
-    except ValueError:
-        return str(path)
 
 
 def resolve_cache_dir(project_root: Path, config_path: Path | None = None) -> Path:
@@ -75,19 +81,16 @@ def resolve_cache_dir(project_root: Path, config_path: Path | None = None) -> Pa
     return cache_dir
 
 
-def clear_cache(project_root: Path, config_path: Path | None = None) -> int:
-    project_root = project_root.resolve()
-    cache_dir = resolve_cache_dir(project_root, config_path)
-    display = _display_path(project_root, cache_dir)
+def clear_cache(request: CacheClearRequest) -> CacheClearResult:
+    project_root = request.project_root.resolve()
+    cache_dir = resolve_cache_dir(project_root, request.config_path)
 
     if not cache_dir.exists() and not cache_dir.is_symlink():
-        print(f"[OK] cache already clean: {display}")
-        return 0
+        return CacheClearResult(cache_dir=cache_dir, removed=False)
 
     if cache_dir.is_symlink() or cache_dir.is_file():
         cache_dir.unlink()
     else:
         shutil.rmtree(cache_dir)
 
-    print(f"[OK] cache cleared: {display}")
-    return 0
+    return CacheClearResult(cache_dir=cache_dir, removed=True)
