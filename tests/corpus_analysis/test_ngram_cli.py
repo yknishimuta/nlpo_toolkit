@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 import csv
+from collections import Counter
+
+import pytest
 
 from nlpo_toolkit.corpus_analysis import cli
+from nlpo_toolkit.corpus_analysis.config import ensure_app_config, load_config
+from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
+from nlpo_toolkit.corpus_analysis.dependencies import ConfigNgramDependencies
 from nlpo_toolkit.corpus_analysis.ngram import (
+    ConfigNgramRequest,
+    NgramError,
     build_ngrams_from_rows,
+    iter_config_token_rows,
     read_token_artifact_rows,
+    write_ngrams_from_config,
 )
 from nlpo_toolkit.corpus_analysis.token_artifact import (
     TokenArtifactMetadata,
@@ -241,3 +251,121 @@ def test_ngram_cli_rejects_tsv_without_artifact_metadata(tmp_path, capsys):
 
     assert rc == 1
     assert "metadata" in capsys.readouterr().err
+
+
+def test_iter_config_token_rows_uses_prepared_text_and_preserves_group_boundary():
+    corpora = (
+        PreparedCorpus("g1", (), "uod TAG vir", "quod vir", Counter()),
+        PreparedCorpus("g2", (), "raw", "arma virum", Counter()),
+    )
+
+    rows = list(iter_config_token_rows(corpora))
+
+    assert rows == [
+        {"group": "g1", "token": "quod"},
+        {"group": "g1", "token": "vir"},
+        {"group": "g2", "token": "arma"},
+        {"group": "g2", "token": "virum"},
+    ]
+    assert build_ngrams_from_rows(rows, n=2, field="token") == [
+        {"ngram": "arma virum", "count": 1, "n": 2, "field": "token"},
+        {"ngram": "quod vir", "count": 1, "n": 2, "field": "token"},
+    ]
+
+
+def test_config_ngram_uses_canonical_corpus_plan_with_overrides(tmp_path, monkeypatch):
+    import nlpo_toolkit.corpus_analysis.ngram as ngram_mod
+
+    config_path = tmp_path / "groups.yml"
+    config_path.write_text("groups:\n  text:\n    files: [input.txt]\n", encoding="utf-8")
+    config = ensure_app_config({"groups": {"text": {"files": ["input.txt"]}}})
+    calls = []
+
+    def fake_build_corpus_plan(**kwargs):
+        calls.append(kwargs)
+        return type(
+            "Plan",
+            (),
+            {
+                "project_root": tmp_path,
+                "config": config,
+                "work_items": (),
+            },
+        )()
+
+    monkeypatch.setattr(ngram_mod, "build_corpus_plan", fake_build_corpus_plan)
+    monkeypatch.setattr(
+        ngram_mod,
+        "prepare_corpora",
+        lambda **_kwargs: (PreparedCorpus("text", (), "raw", "alpha beta", Counter()),),
+    )
+
+    rc = write_ngrams_from_config(
+        request=ConfigNgramRequest(
+            project_root=tmp_path,
+            config_path=config_path,
+            n=2,
+            field="token",
+            by_group=False,
+            min_count=1,
+            top=None,
+            output_format="tsv",
+            out_path=tmp_path / "ngrams.tsv",
+            group_by_file=True,
+            auto_single_cleaned=True,
+            error_on_empty_group=True,
+        ),
+        dependencies=ConfigNgramDependencies(load_config=load_config),
+    )
+
+    assert rc == 0
+    assert len(calls) == 1
+    assert calls[0]["project_root"] == tmp_path
+    assert calls[0]["config_path"] == config_path
+    assert calls[0]["group_by_file"] is True
+    assert calls[0]["auto_single_cleaned"] is True
+    assert calls[0]["error_on_empty_group"] is True
+    assert calls[0]["preprocess_mode"] == "execute"
+
+
+def test_config_ngram_rejects_lemma_before_planning(tmp_path, monkeypatch):
+    import nlpo_toolkit.corpus_analysis.ngram as ngram_mod
+
+    monkeypatch.setattr(
+        ngram_mod,
+        "build_corpus_plan",
+        lambda **_kwargs: pytest.fail("plan must not be built"),
+    )
+
+    with pytest.raises(NgramError, match="Config input supports --field token only"):
+        write_ngrams_from_config(
+            request=ConfigNgramRequest(
+                project_root=tmp_path,
+                config_path=tmp_path / "groups.yml",
+                n=2,
+                field="lemma",
+                by_group=False,
+                min_count=1,
+                top=None,
+                output_format="tsv",
+                out_path=None,
+            ),
+            dependencies=ConfigNgramDependencies(load_config=load_config),
+        )
+
+
+def test_token_artifact_cli_does_not_create_config_dependencies(tmp_path, monkeypatch, capsys):
+    import nlpo_toolkit.corpus_analysis.cli.ngram as ngram_cli
+
+    artifact = tmp_path / "tokens.tsv"
+    _write_artifact(artifact)
+    monkeypatch.setattr(
+        ngram_cli,
+        "default_config_ngram_dependencies",
+        lambda: pytest.fail("config dependencies must not be created"),
+    )
+
+    rc = cli.main(["ngram", "--tokens", str(artifact), "--field", "token", "--n", "2"])
+
+    assert rc == 0
+    assert capsys.readouterr().out.splitlines()[0] == "ngram\tcount\tn\tfield"

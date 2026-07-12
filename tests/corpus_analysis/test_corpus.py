@@ -20,7 +20,11 @@ from nlpo_toolkit.corpus_analysis.corpus import (
     resolve_group_files,
 )
 from nlpo_toolkit.corpus_analysis.config import load_config
-from nlpo_toolkit.corpus_analysis.dependencies import FeatureDependencies
+from nlpo_toolkit.corpus_analysis.dependencies import (
+    ConfigNgramDependencies,
+    FeatureDependencies,
+)
+from nlpo_toolkit.corpus_analysis.ngram import ConfigNgramRequest
 from nlpo_toolkit.corpus_analysis.runner_types import RunnerDependencies
 from tests.corpus_analysis.fake_nlp import FakeNLPBackend, fake_backend_factory
 
@@ -255,22 +259,30 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
         ),
     )
 
-    def capture_rows_from_text(text: str, group: str):
-        received["ngram"] = text
-        return [{"group": group, "token": "item_a"}]
+    original_iter_rows = ngram_mod.iter_config_token_rows
 
-    monkeypatch.setattr(ngram_mod, "_rows_from_text", capture_rows_from_text)
+    def capture_config_rows(corpora):
+        corpora = tuple(corpora)
+        received["ngram"] = corpora[0].prepared_text
+        return original_iter_rows(corpora)
+
+    monkeypatch.setattr(ngram_mod, "iter_config_token_rows", capture_config_rows)
     ngram_mod.write_ngrams_from_config(
-        project_root=tmp_path,
-        config_path=config_path,
-        n=1,
-        field="token",
-        by_group=True,
-        min_count=1,
-        top=None,
-        output_format="tsv",
-        out_path=tmp_path / "ngrams.tsv",
-        clean_mod=object(),
+        request=ConfigNgramRequest(
+            project_root=tmp_path,
+            config_path=config_path,
+            n=1,
+            field="token",
+            by_group=True,
+            min_count=1,
+            top=None,
+            output_format="tsv",
+            out_path=tmp_path / "ngrams.tsv",
+        ),
+        dependencies=ConfigNgramDependencies(
+            load_config=load_config,
+            cleaner=object(),
+        ),
     )
 
     assert received["count"] == received["features"] == received["ngram"]

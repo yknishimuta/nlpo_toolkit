@@ -5,7 +5,13 @@ import sys
 from pathlib import Path
 
 from ..cleaner_runtime import CleanerError
-from ..ngram import NgramError, write_ngrams_from_config, write_ngrams_from_tokens
+from ..dependencies import default_config_ngram_dependencies
+from ..ngram import (
+    ConfigNgramRequest,
+    NgramError,
+    write_ngrams_from_config,
+    write_ngrams_from_tokens,
+)
 from .common import CLIContext, resolve_config_path, resolve_project_root, set_handler
 
 
@@ -51,6 +57,21 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         default=None,
         help="Output file path. Defaults to standard output.",
     )
+    parser.add_argument(
+        "--group-by-file",
+        action="store_true",
+        help="Process each configured input file as a separate n-gram group.",
+    )
+    parser.add_argument(
+        "--auto-single-cleaned",
+        action="store_true",
+        help="Use the only .txt file in cleaned_dir; fail if zero or multiple files exist.",
+    )
+    parser.add_argument(
+        "--error-on-empty-group",
+        action="store_true",
+        help="Fail when any configured group matches zero files.",
+    )
     set_handler(parser, execute)
 
 
@@ -71,15 +92,21 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
         project_root = resolve_project_root(args.project_root)
         config_path = resolve_config_path(project_root=project_root, config_path=args.config)
         return write_ngrams_from_config(
-            project_root=project_root,
-            config_path=config_path,
-            n=args.n,
-            field=args.field,
-            by_group=bool(args.by_group),
-            min_count=args.min_count,
-            top=args.top,
-            output_format=args.format,
-            out_path=args.out,
+            request=ConfigNgramRequest(
+                project_root=project_root,
+                config_path=config_path,
+                n=args.n,
+                field=args.field,
+                by_group=bool(args.by_group),
+                min_count=args.min_count,
+                top=args.top,
+                output_format=args.format,
+                out_path=args.out,
+                group_by_file=bool(args.group_by_file),
+                auto_single_cleaned=bool(args.auto_single_cleaned),
+                error_on_empty_group=bool(args.error_on_empty_group),
+            ),
+            dependencies=default_config_ngram_dependencies(),
         )
     except (CleanerError, NgramError, ValueError, FileNotFoundError) as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)

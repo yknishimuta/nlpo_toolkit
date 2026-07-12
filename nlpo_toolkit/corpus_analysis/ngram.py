@@ -6,12 +6,13 @@ import csv
 import re
 import sys
 from collections import Counter, defaultdict
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, TextIO
+from typing import Iterable, Iterator, TextIO
 
-from .config import load_config
-from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner
-from .corpus import prepare_corpora, resolve_corpus_work_items, run_preprocess_if_needed
+from .corpus import PreparedCorpus, prepare_corpora
+from .dependencies import ConfigNgramDependencies
+from .run_plan import build_corpus_plan
 from .analysis_records import TokenRecord
 from .token_artifact import TokenArtifactError, read_token_records
 
@@ -215,40 +216,28 @@ def read_token_artifact_rows(
     )
 
 
-def _rows_from_text(text: str, group: str) -> list[dict[str, str]]:
-    return [
-        {"group": group, "token": match.group(0)}
-        for match in _TOKEN_RE.finditer(text)
-    ]
+def iter_config_token_rows(
+    corpora: Iterable[PreparedCorpus],
+) -> Iterator[dict[str, str]]:
+    for corpus in corpora:
+        for match in _TOKEN_RE.finditer(corpus.prepared_text):
+            yield {"group": corpus.label, "token": match.group(0)}
 
 
-def read_config_text_rows(
-    project_root: Path,
-    config_path: Path,
-    *,
-    clean_mod: CleanerRunner | None = None,
-    cleaner_loader: CleanerLoader = load_default_cleaner,
-) -> list[dict[str, str]]:
-    cfg = load_config(config_path)
-    rows: list[dict[str, str]] = []
-    cleaned_dir = run_preprocess_if_needed(
-        config=cfg,
-        project_root=project_root,
-        cleaner=clean_mod,
-        cleaner_loader=cleaner_loader,
-    )
-    resolved = resolve_corpus_work_items(
-        config=cfg,
-        project_root=project_root,
-        cleaned_dir=cleaned_dir,
-    )
-    for corpus in prepare_corpora(
-        work_items=resolved.work_items,
-        config=cfg,
-        project_root=project_root,
-    ):
-        rows.extend(_rows_from_text(corpus.prepared_text, corpus.label))
-    return rows
+@dataclass(frozen=True)
+class ConfigNgramRequest:
+    project_root: Path
+    config_path: Path
+    n: int
+    field: str
+    by_group: bool
+    min_count: int
+    top: int | None
+    output_format: str
+    out_path: Path | None
+    group_by_file: bool = False
+    auto_single_cleaned: bool = False
+    error_on_empty_group: bool = False
 
 
 def write_ngram_rows(
@@ -304,39 +293,42 @@ def write_ngrams_from_tokens(
 
 def write_ngrams_from_config(
     *,
-    project_root: Path,
-    config_path: Path,
-    n: int,
-    field: str,
-    by_group: bool,
-    min_count: int,
-    top: int | None,
-    output_format: str,
-    out_path: Path | None,
-    clean_mod: CleanerRunner | None = None,
-    cleaner_loader: CleanerLoader = load_default_cleaner,
+    request: ConfigNgramRequest,
+    dependencies: ConfigNgramDependencies,
 ) -> int:
-    if field != "token":
+    if request.field != "token":
         raise NgramError(
-            "Config input currently supports --field token only. "
+            "Config input supports --field token only. "
             "Use --tokens with a token artifact for lemma n-grams."
         )
+    plan = build_corpus_plan(
+        project_root=request.project_root,
+        script_dir=None,
+        config_path=request.config_path,
+        group_by_file=request.group_by_file,
+        auto_single_cleaned=request.auto_single_cleaned,
+        error_on_empty_group=request.error_on_empty_group,
+        load_config_fn=dependencies.load_config,
+        preprocess_mode="execute",
+        cleaner=dependencies.cleaner,
+        cleaner_loader=dependencies.cleaner_loader,
+    )
+    corpora = prepare_corpora(
+        work_items=plan.work_items,
+        config=plan.config,
+        project_root=plan.project_root,
+    )
     rows = build_ngrams_from_rows(
-        read_config_text_rows(
-            project_root,
-            config_path,
-            clean_mod=clean_mod,
-            cleaner_loader=cleaner_loader,
-        ),
-        n=n,
-        field=field,
-        by_group=by_group,
-        min_count=min_count,
-        top=top,
+        iter_config_token_rows(corpora),
+        n=request.n,
+        field=request.field,
+        by_group=request.by_group,
+        min_count=request.min_count,
+        top=request.top,
     )
     return write_ngram_rows(
         rows,
-        output_format=output_format,
-        out_path=out_path,
-        by_group=by_group,
+        output_format=request.output_format,
+        out_path=request.out_path,
+        by_group=request.by_group,
     )

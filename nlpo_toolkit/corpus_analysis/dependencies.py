@@ -22,6 +22,13 @@ class FeatureDependencies:
     extraction_policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY
 
 
+@dataclass(frozen=True)
+class ConfigNgramDependencies:
+    load_config: ConfigLoader
+    cleaner: CleanerRunner | None = None
+    cleaner_loader: CleanerLoader = load_default_cleaner
+
+
 def _create_sentence_splitter(config: NLPConfig):
     return build_sentence_splitter(
         config.language,
@@ -64,4 +71,16 @@ def default_feature_dependencies(
         cleaner=cleaner,
         cleaner_loader=cleaner_loader,
         extraction_policy=extraction_policy,
+    )
+
+
+def default_config_ngram_dependencies(
+    *,
+    cleaner: CleanerRunner | None = None,
+    cleaner_loader: CleanerLoader = load_default_cleaner,
+) -> ConfigNgramDependencies:
+    return ConfigNgramDependencies(
+        load_config=load_config,
+        cleaner=cleaner,
+        cleaner_loader=cleaner_loader,
     )

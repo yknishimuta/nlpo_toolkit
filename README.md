@@ -565,12 +565,12 @@ nlpo ngram \
   --out output/ngram_text.tsv
 ```
 
-Config input uses the same corpus preparation layer as `count-vocabula` and
-`features`: cleaner preprocessing, grouping mode, `{cleaned_dir}` expansion,
-text normalization, and reference tag removal are applied before token n-grams
-are counted. Token artifact input reads the existing validated artifact directly
-and does not re-run cleaner or text normalization. Config input supports
-`--field token`; use `--tokens` with an artifact for lemma n-grams.
+Config input uses the same corpus planning and preparation path as `count` and
+`features`, including cleaner execution, grouping mode, per-file and
+auto-single-cleaned resolution, text normalization, and reference-tag removal.
+Token artifact input bypasses config loading, cleaner execution, and corpus
+planning; it reads the existing validated artifact directly. Config input
+supports `--field token`; use `--tokens` with an artifact for lemma n-grams.
 
 Output columns are `ngram`, `count`, `n`, and `field`. When `--by-group` is
 used, `group` is added.
