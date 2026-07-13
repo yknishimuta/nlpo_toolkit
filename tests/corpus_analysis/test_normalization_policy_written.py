@@ -2,7 +2,11 @@ import json
 from pathlib import Path
 
 from nlpo_toolkit.corpus_analysis.runner import run
-from tests.corpus_analysis.fake_nlp import fake_backend_factory, runner_dependencies
+from tests.corpus_analysis.fake_nlp import (
+    corpus_request,
+    fake_backend_factory,
+    runner_dependencies,
+)
 
 
 def test_normalization_policy_is_written_to_summary_and_run_meta(tmp_path):
@@ -50,8 +54,7 @@ def test_normalization_policy_is_written_to_summary_and_run_meta(tmp_path):
     )
     # Act
     result = run(
-        project_root=script_dir,
-        config_path=config_path,
+        corpus_request(script_dir, config_path),
         dependencies=dependencies,
     )
     assert result.exit_code == 0

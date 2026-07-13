@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.corpus_analysis.fake_nlp import corpus_request
+
 from pathlib import Path
 import csv
 
@@ -74,8 +76,7 @@ def test_dictcheck_enabled_creates_known_unknown(tmp_path, monkeypatch):
 
     monkeypatch.setattr(nlp_mod, "load_vocab", recording_loader)
     result = run(
-        project_root=script_dir,
-        config_path=config_path,
+        corpus_request(script_dir, config_path),
         dependencies=dependencies,
     )
     assert result.exit_code == 0
@@ -138,7 +139,6 @@ def test_dictcheck_enabled_requires_wordlist(tmp_path):
     )
     with pytest.raises(ValueError, match=r"dictcheck\.wordlist"):
         run(
-            project_root=script_dir,
-            config_path=config_path,
+            corpus_request(script_dir, config_path),
             dependencies=dependencies,
         )

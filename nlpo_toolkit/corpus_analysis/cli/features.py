@@ -8,9 +8,10 @@ from ..dependencies import default_feature_command_dependencies
 from ..features import FeatureError, FeatureRequest, execute_feature_command
 from .common import (
     CLIContext,
+    add_empty_group_argument,
+    add_grouping_override_arguments,
     add_project_config_arguments,
-    resolve_config_path,
-    resolve_project_root,
+    build_corpus_preparation_request,
     set_handler,
 )
 from .output import open_cli_output, present_error, write_feature_result
@@ -73,39 +74,20 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         action="store_false",
         help="Disable basic text statistics.",
     )
-    parser.add_argument(
-        "--group-by-file",
-        action="store_true",
-        help="Write one feature row per input file instead of one row per configured group.",
-    )
-    parser.add_argument(
-        "--auto-single-cleaned",
-        action="store_true",
-        help="Use the only .txt file in cleaned_dir as the feature target; fail if zero or multiple files exist.",
-    )
-    parser.add_argument(
-        "--error-on-empty-group",
-        action="store_true",
-        help="Fail when any configured group matches zero files.",
-    )
+    add_grouping_override_arguments(parser)
+    add_empty_group_argument(parser)
     set_handler(parser, execute)
 
 
 def execute(args: argparse.Namespace, context: CLIContext) -> int:
-    project_root = resolve_project_root(args.project_root)
-    config_path = resolve_config_path(project_root=project_root, config_path=args.config)
     try:
         result = execute_feature_command(
             FeatureRequest(
-                project_root=project_root,
-                config_path=config_path,
+                corpus=build_corpus_preparation_request(args),
                 field=args.field,
                 mfw=args.mfw,
                 include_upos=bool(args.include_upos),
                 include_basic=bool(args.include_basic),
-                group_by_file=bool(args.group_by_file),
-                auto_single_cleaned=bool(args.auto_single_cleaned),
-                error_on_empty_group=bool(args.error_on_empty_group),
             ),
             dependencies=default_feature_command_dependencies(),
         )

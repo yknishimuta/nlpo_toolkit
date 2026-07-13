@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.corpus_analysis.fake_nlp import corpus_request
+
 import csv
 import json
 from pathlib import Path
@@ -42,8 +44,7 @@ def _run(tmp_path: Path, config_text: str, backend: FakeBackend) -> int:
     config_path = tmp_path / "groups.config.yml"
     config_path.write_text(config_text, encoding="utf-8")
     return runner_mod.run(
-        project_root=tmp_path,
-        config_path=config_path,
+        corpus_request(tmp_path, config_path),
         dependencies=runner_dependencies(
             load_config,
             lambda config: BuiltNLPBackend(

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.corpus_analysis.fake_nlp import corpus_request
+
 from pathlib import Path
 
 import pytest
@@ -35,12 +37,7 @@ def test_prepare_run_context_validates_plan_before_nlp_initialization(tmp_path: 
 
     with pytest.raises(ValueError, match="comparison ab references empty group: a"):
         prepare_run_context(
-            project_root=tmp_path,
-            script_dir=None,
-            config_path=config_path,
-            group_by_file=None,
-            auto_single_cleaned=False,
-            error_on_empty_group=False,
+            corpus_request(tmp_path, config_path),
             dependencies=deps,
         )
 

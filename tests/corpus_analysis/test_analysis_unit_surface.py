@@ -2,7 +2,11 @@ import csv
 from pathlib import Path
 
 from nlpo_toolkit.corpus_analysis.runner import run
-from tests.corpus_analysis.fake_nlp import fake_backend_factory, runner_dependencies
+from tests.corpus_analysis.fake_nlp import (
+    corpus_request,
+    fake_backend_factory,
+    runner_dependencies,
+)
 
 
 def test_analysis_unit_surface_writes_word_frequency_and_passes_use_lemma_false(tmp_path):
@@ -44,8 +48,7 @@ def test_analysis_unit_surface_writes_word_frequency_and_passes_use_lemma_false(
     )
     # --- Act ---
     result = run(
-        project_root=script_dir,
-        config_path=config_path,
+        corpus_request(script_dir, config_path),
         dependencies=dependencies,
     )
     assert result.exit_code == 0

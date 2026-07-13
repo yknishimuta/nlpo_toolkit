@@ -9,6 +9,7 @@ from .config_references import ConfigReferenceError
 from .corpus_errors import CorpusPreparationError
 from .dependencies import CountCommandDependencies
 from .runner_types import RunResult
+from .requests import CorpusPreparationRequest
 
 
 class CountCommandError(RuntimeError):
@@ -17,18 +18,13 @@ class CountCommandError(RuntimeError):
 
 @dataclass(frozen=True)
 class CountRequest:
-    project_root: Path
-    config_path: Path
+    corpus: CorpusPreparationRequest
     command_line: tuple[str, ...] = ()
-    group_by_file: bool = False
-    auto_single_cleaned: bool = False
-    error_on_empty_group: bool = False
     archive_run: bool = False
     run_name: str | None = None
     runs_dir: Path | None = None
     include_input: bool = False
     include_cleaned: bool = False
-    dry_run: bool = False
 
 
 @dataclass(frozen=True)
@@ -48,12 +44,8 @@ def execute_count_command(
 ) -> CountCommandResult:
     try:
         result = dependencies.run_analysis(
-            project_root=request.project_root,
-            config_path=request.config_path,
-            group_by_file=request.group_by_file,
+            request.corpus,
             dependencies=dependencies.runner,
-            error_on_empty_group=request.error_on_empty_group,
-            auto_single_cleaned=request.auto_single_cleaned,
         )
     except (
         CleanerError,

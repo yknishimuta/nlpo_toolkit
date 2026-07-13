@@ -21,6 +21,7 @@ from .config import AppConfig, NLPConfig, load_config
 if TYPE_CHECKING:
     from .archive import ArchiveOptions, RunArchiveResult
     from .runner_types import RunResult
+    from .requests import CorpusPreparationRequest
 
 
 ConfigLoader = Callable[[Path], AppConfig]
@@ -33,13 +34,9 @@ ArchiveCreator = Callable[["RunResult", "ArchiveOptions"], "RunArchiveResult"]
 class CountRunner(Protocol):
     def __call__(
         self,
+        request: CorpusPreparationRequest,
         *,
-        project_root: Path,
-        config_path: Path,
-        group_by_file: bool,
         dependencies: RunnerDependencies,
-        error_on_empty_group: bool,
-        auto_single_cleaned: bool,
     ) -> RunResult: ...
 
 

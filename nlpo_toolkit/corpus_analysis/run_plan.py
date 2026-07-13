@@ -20,6 +20,7 @@ from .corpus import (
 )
 from .dependencies import CorpusPlanningDependencies
 from .partition_models import PartitionSpec
+from .requests import CorpusPreparationRequest
 
 
 @dataclass(frozen=True)
@@ -180,20 +181,16 @@ def _inspect_cleaner_plan(
 
 
 def build_analysis_plan(
+    request: CorpusPreparationRequest,
     *,
-    project_root: Path | None,
-    script_dir: Path | None,
-    config_path: Path,
-    group_by_file: bool | None,
-    auto_single_cleaned: bool,
-    error_on_empty_group: bool,
     dependencies: CorpusPlanningDependencies,
     preprocess_mode: Literal["inspect", "execute"],
+    script_dir: Path | None = None,
 ) -> AnalysisPlan:
     resolved_root, resolved_config = resolve_run_paths(
-        project_root=project_root,
+        project_root=request.project_root,
         script_dir=script_dir,
-        config_path=config_path,
+        config_path=request.config_path,
     )
     config = dependencies.load_config(resolved_config)
     if not config.groups:
@@ -224,9 +221,9 @@ def build_analysis_plan(
         config=config,
         project_root=resolved_root,
         cleaned_dir=cleaned_dir,
-        group_by_file=bool(group_by_file),
-        auto_single_cleaned=auto_single_cleaned,
-        error_on_empty_group=error_on_empty_group,
+        group_by_file=request.grouping_override == "per_file",
+        auto_single_cleaned=request.grouping_override == "auto_single_cleaned",
+        error_on_empty_group=request.error_on_empty_group,
     )
     return AnalysisPlan(
         project_root=resolved_root,
@@ -263,24 +260,16 @@ def validate_count_plan(
 
 
 def build_count_plan(
+    request: CorpusPreparationRequest,
     *,
-    project_root: Path | None,
-    script_dir: Path | None,
-    config_path: Path,
-    group_by_file: bool | None,
-    auto_single_cleaned: bool,
-    error_on_empty_group: bool,
     dependencies: CorpusPlanningDependencies,
     preprocess_mode: Literal["inspect", "execute"],
     validate_references: bool = True,
+    script_dir: Path | None = None,
 ) -> AnalysisPlan:
     plan = build_analysis_plan(
-        project_root=project_root,
+        request,
         script_dir=script_dir,
-        config_path=config_path,
-        group_by_file=group_by_file,
-        auto_single_cleaned=auto_single_cleaned,
-        error_on_empty_group=error_on_empty_group,
         dependencies=dependencies,
         preprocess_mode=preprocess_mode,
     )

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.corpus_analysis.fake_nlp import corpus_request
+
 import json
 from pathlib import Path
 
@@ -62,8 +64,8 @@ def test_run_minimal_success(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(run_reporting_mod, "write_run_meta", lambda meta, out_dir: meta_calls.append((meta, Path(out_dir))))
 
     rc = runner_mod.run(
+        corpus_request(script_dir, config_path),
         script_dir=script_dir,
-        config_path=config_path,
         dependencies=runner_dependencies(
             load_config_fn,
             fake_backend_factory(
@@ -114,8 +116,8 @@ def test_run_analysis_unit_surface_uses_surface_form(tmp_path: Path, monkeypatch
     )
 
     rc = runner_mod.run(
+        corpus_request(script_dir, config_path),
         script_dir=script_dir,
-        config_path=config_path,
         dependencies=runner_dependencies(
             load_config_fn,
             fake_backend_factory([("X", "lemma_x", "NOUN")]),
@@ -143,8 +145,8 @@ def test_run_dictcheck_requires_wordlist(tmp_path: Path, monkeypatch):
 
     with pytest.raises(ValueError):
         runner_mod.run(
+            corpus_request(script_dir, config_path),
             script_dir=script_dir,
-            config_path=config_path,
             dependencies=runner_dependencies(
                 load_config_fn,
                 fake_backend_factory([("a", "a", "NOUN")]),
@@ -177,8 +179,8 @@ def test_run_dictcheck_writes_known_unknown(tmp_path: Path, monkeypatch):
                         lambda path, c, header: calls.append(Path(path).name))
 
     rc = runner_mod.run(
+        corpus_request(script_dir, config_path),
         script_dir=script_dir,
-        config_path=config_path,
         dependencies=runner_dependencies(
             load_config_fn,
             fake_backend_factory(
@@ -227,8 +229,8 @@ def test_run_applies_filter_options_in_record_pipeline(tmp_path: Path, monkeypat
     )
 
     rc = runner_mod.run(
+        corpus_request(script_dir, config_path),
         script_dir=script_dir,
-        config_path=config_path,
         dependencies=runner_dependencies(
             load_config_fn,
             fake_backend_factory(
@@ -272,8 +274,7 @@ def test_run_group_by_file_writes_one_csv_per_input_file(tmp_path: Path, monkeyp
     monkeypatch.setattr(run_reporting_mod, "write_run_meta", lambda meta, out_dir: meta_calls.append(meta))
 
     rc = runner_mod.run(
-        project_root=project_root,
-        config_path=config_path,
+        corpus_request(project_root, config_path),
         dependencies=runner_dependencies(load_config_fn, fake_backend_factory()),
     )
 
@@ -313,9 +314,7 @@ def test_run_group_by_file_cli_override(tmp_path: Path, monkeypatch):
     )
 
     rc = runner_mod.run(
-        project_root=project_root,
-        config_path=config_path,
-        group_by_file=True,
+        corpus_request(project_root, config_path, group_by_file=True),
         dependencies=runner_dependencies(load_config_fn, fake_backend_factory()),
     )
 
@@ -342,8 +341,7 @@ def test_run_meta_records_generated_outputs_and_actual_group_files(tmp_path: Pat
 
 
     rc = runner_mod.run(
-        project_root=project_root,
-        config_path=config_path,
+        corpus_request(project_root, config_path),
         dependencies=runner_dependencies(load_config_fn, fake_backend_factory()),
     )
 
@@ -365,10 +363,8 @@ def test_run_error_on_empty_group(tmp_path: Path, monkeypatch):
 
     with pytest.raises(ValueError, match="No files matched"):
         runner_mod.run(
-            project_root=project_root,
-            config_path=config_path,
+            corpus_request(project_root, config_path, error_on_empty_group=True),
             dependencies=runner_dependencies(load_config_fn, fake_backend_factory()),
-            error_on_empty_group=True,
         )
 
 
@@ -391,8 +387,7 @@ def test_run_auto_single_cleaned_records_selected_file(tmp_path: Path, monkeypat
         }
 
     rc = runner_mod.run(
-        project_root=project_root,
-        config_path=config_path,
+        corpus_request(project_root, config_path),
         dependencies=runner_dependencies(
             load_config_fn,
             fake_backend_factory(),
@@ -424,8 +419,7 @@ def test_run_auto_single_cleaned_errors_on_zero_files(tmp_path: Path, monkeypatc
 
     with pytest.raises(ValueError, match="no \\.txt files"):
         runner_mod.run(
-            project_root=project_root,
-            config_path=config_path,
+            corpus_request(project_root, config_path),
             dependencies=runner_dependencies(
                 load_config_fn,
                 fake_backend_factory(),
@@ -456,8 +450,7 @@ def test_run_auto_single_cleaned_errors_on_multiple_files(tmp_path: Path, monkey
 
     with pytest.raises(ValueError, match="expected exactly one"):
         runner_mod.run(
-            project_root=project_root,
-            config_path=config_path,
+            corpus_request(project_root, config_path),
             dependencies=runner_dependencies(
                 load_config_fn,
                 fake_backend_factory(),

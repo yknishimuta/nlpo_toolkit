@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.corpus_analysis.fake_nlp import corpus_request
+
 import csv
 import json
 from collections import Counter
@@ -31,8 +33,7 @@ def _run(
     config_path.write_text("dummy", encoding="utf-8")
 
     return runner_mod.run(
-        project_root=tmp_path,
-        config_path=config_path,
+        corpus_request(tmp_path, config_path),
         dependencies=runner_dependencies(
             lambda _p: cfg,
             fake_backend_factory(backend=_backend_for_counters(counter_by_text)),
@@ -199,8 +200,7 @@ def test_runner_rejects_empty_partition_reference_even_without_empty_group_flag(
 
     with pytest.raises(ValueError, match="Partition full_split references empty group: part_b"):
         runner_mod.run(
-            project_root=tmp_path,
-            config_path=config_path,
+            corpus_request(tmp_path, config_path),
             dependencies=runner_dependencies(
                 lambda _p: _base_cfg(),
                 fake_backend_factory(),

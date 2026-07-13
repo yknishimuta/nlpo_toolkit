@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from tests.corpus_analysis.fake_nlp import corpus_request
 from pathlib import Path
 
 from nlpo_toolkit.corpus_analysis.dictcheck import split_frequency_csv
@@ -59,8 +61,7 @@ def test_runner_loads_planned_lemma_normalization_path(
 
     monkeypatch.setattr(dictcheck_mod, "load_lemma_normalize_map", recording_loader)
     result = run(
-        project_root=tmp_path,
-        config_path=config_path,
+        corpus_request(tmp_path, config_path),
         dependencies=runner_dependencies(
             lambda _path: {
                 "groups": {"text": {"files": ["input/a.txt"]}},

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.corpus_analysis.fake_nlp import corpus_request
+
 import csv
 import json
 from pathlib import Path
@@ -12,9 +14,7 @@ from tests.corpus_analysis.fake_nlp import fake_backend_factory, runner_dependen
 
 def _run(project_root: Path, config_path: Path, *, group_by_file: bool = False) -> int:
     return runner_mod.run(
-        project_root=project_root,
-        config_path=config_path,
-        group_by_file=group_by_file,
+        corpus_request(project_root, config_path, group_by_file=group_by_file),
         dependencies=runner_dependencies(load_config, fake_backend_factory()),
     )
 

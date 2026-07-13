@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.corpus_analysis.fake_nlp import corpus_request
+
 from collections import Counter
 from pathlib import Path
 
@@ -293,8 +295,7 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
             return super().__call__(text)
 
     runner_mod.run(
-        project_root=tmp_path,
-        config_path=config_path,
+        corpus_request(tmp_path, config_path),
         dependencies=runner_dependencies(
             load_config,
             fake_backend_factory(
@@ -314,8 +315,7 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
     )
     features_mod.execute_feature_command(
             FeatureRequest(
-                project_root=tmp_path,
-                config_path=config_path,
+                corpus_request(tmp_path, config_path),
             ),
         dependencies=FeatureCommandDependencies(
             planning=planning,
@@ -339,10 +339,8 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
     monkeypatch.setattr(ngram_mod, "iter_config_token_rows", capture_config_rows)
     ngram_mod.execute_config_ngram_command(
         request=ConfigNgramRequest(
-            project_root=tmp_path,
-            config_path=config_path,
+            corpus_request(tmp_path, config_path),
             n=1,
-            field="token",
             by_group=True,
             min_count=1,
             top=None,

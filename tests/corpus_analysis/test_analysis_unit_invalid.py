@@ -3,7 +3,11 @@ from pathlib import Path
 import pytest
 
 from nlpo_toolkit.corpus_analysis.runner import run
-from tests.corpus_analysis.fake_nlp import fake_backend_factory, runner_dependencies
+from tests.corpus_analysis.fake_nlp import (
+    corpus_request,
+    fake_backend_factory,
+    runner_dependencies,
+)
 
 
 def test_analysis_unit_invalid_raises_value_error(tmp_path):
@@ -41,7 +45,6 @@ def test_analysis_unit_invalid_raises_value_error(tmp_path):
     )
     with pytest.raises(ValueError, match=r"analysis_unit"):
         run(
-            project_root=script_dir,
-            config_path=config_path,
+            corpus_request(script_dir, config_path),
             dependencies=dependencies,
         )

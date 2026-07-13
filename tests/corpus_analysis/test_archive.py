@@ -18,6 +18,7 @@ from nlpo_toolkit.corpus_analysis.config_references import (
     ResolvedConfigFiles,
 )
 from nlpo_toolkit.corpus_analysis.count_command import CountRequest, execute_count_command
+from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
 from nlpo_toolkit.corpus_analysis.dependencies import (
     CountCommandDependencies,
     default_runner_dependencies,
@@ -134,13 +135,12 @@ def test_count_cli_uses_run_result_without_reloading_config_or_manifest(
     result = make_run_result(tmp_path)
     dependencies = CountCommandDependencies(
         runner=default_runner_dependencies(),
-        run_analysis=lambda **_kwargs: result,
+        run_analysis=lambda *_args, **_kwargs: result,
         archive_creator=create_run_archive,
     )
     command_result = execute_count_command(
         CountRequest(
-            project_root=tmp_path,
-            config_path=result.plan.config_path,
+            corpus=CorpusPreparationRequest(tmp_path, result.plan.config_path),
             run_name="cli-result",
         ),
         dependencies=dependencies,
@@ -158,13 +158,12 @@ def test_count_cli_does_not_archive_nonzero_run_result(
     result = replace(make_run_result(tmp_path), exit_code=1)
     dependencies = CountCommandDependencies(
         runner=default_runner_dependencies(),
-        run_analysis=lambda **_kwargs: result,
+        run_analysis=lambda *_args, **_kwargs: result,
         archive_creator=create_run_archive,
     )
     command_result = execute_count_command(
         CountRequest(
-            project_root=tmp_path,
-            config_path=result.plan.config_path,
+            corpus=CorpusPreparationRequest(tmp_path, result.plan.config_path),
             run_name="must-not-exist",
         ),
         dependencies=dependencies,

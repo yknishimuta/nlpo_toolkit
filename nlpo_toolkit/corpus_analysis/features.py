@@ -18,6 +18,7 @@ from .dependencies import FeatureCommandDependencies
 from .corpus import prepare_corpora
 from .config_references import ConfigReferenceError
 from .run_plan import build_analysis_plan
+from .requests import CorpusPreparationRequest
 from .runtime import build_nlp_runtime
 
 
@@ -204,15 +205,11 @@ class FeatureOptions:
 
 @dataclass(frozen=True)
 class FeatureRequest:
-    project_root: Path
-    config_path: Path
+    corpus: CorpusPreparationRequest
     field: str = "lemma"
     mfw: int = 0
     include_upos: bool = True
     include_basic: bool = True
-    group_by_file: bool = False
-    auto_single_cleaned: bool = False
-    error_on_empty_group: bool = False
 
 
 @dataclass(frozen=True)
@@ -291,12 +288,7 @@ def execute_feature_command(
 ) -> FeatureCommandResult:
     try:
         plan = build_analysis_plan(
-            project_root=request.project_root,
-            script_dir=None,
-            config_path=request.config_path,
-            group_by_file=request.group_by_file,
-            auto_single_cleaned=request.auto_single_cleaned,
-            error_on_empty_group=request.error_on_empty_group,
+            request.corpus,
             dependencies=dependencies.planning,
             preprocess_mode="execute",
         )

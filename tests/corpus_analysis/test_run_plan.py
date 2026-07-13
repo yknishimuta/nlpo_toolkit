@@ -20,6 +20,7 @@ from nlpo_toolkit.corpus_analysis.run_plan import (
     build_count_plan,
     validate_count_plan,
 )
+from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
 from nlpo_toolkit.corpus_analysis.config_references import ConfigReferenceError
 from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 
@@ -211,12 +212,7 @@ def test_build_count_plan_inspects_cleaner_once(tmp_path: Path) -> None:
     )
 
     plan = build_count_plan(
-        project_root=tmp_path,
-        script_dir=None,
-        config_path=config_path,
-        group_by_file=False,
-        auto_single_cleaned=False,
-        error_on_empty_group=False,
+        CorpusPreparationRequest(project_root=tmp_path, config_path=config_path),
         dependencies=dependencies,
         preprocess_mode="inspect",
     )
@@ -235,12 +231,7 @@ def test_build_count_plan_has_no_output_directory_side_effect(tmp_path: Path) ->
     _write_config(config_path)
 
     plan = build_count_plan(
-        project_root=tmp_path,
-        script_dir=None,
-        config_path=config_path,
-        group_by_file=None,
-        auto_single_cleaned=False,
-        error_on_empty_group=False,
+        CorpusPreparationRequest(project_root=tmp_path, config_path=config_path),
         dependencies=_loader({**_base_groups(), "out_dir": "output"}),
         preprocess_mode="inspect",
     )
@@ -264,12 +255,7 @@ def test_build_analysis_plan_returns_canonical_effective_mode(
     _write_config(config_path)
 
     plan = build_analysis_plan(
-        project_root=tmp_path,
-        script_dir=None,
-        config_path=config_path,
-        group_by_file=True,
-        auto_single_cleaned=False,
-        error_on_empty_group=False,
+        CorpusPreparationRequest(project_root=tmp_path, config_path=config_path, grouping_override="per_file"),
         dependencies=_loader(_base_groups()),
         preprocess_mode="inspect",
     )
@@ -294,12 +280,7 @@ def test_cli_auto_mode_overrides_per_file_mode(tmp_path: Path) -> None:
     _write_config(config_path)
 
     plan = build_analysis_plan(
-        project_root=tmp_path,
-        script_dir=None,
-        config_path=config_path,
-        group_by_file=True,
-        auto_single_cleaned=True,
-        error_on_empty_group=False,
+        CorpusPreparationRequest(project_root=tmp_path, config_path=config_path, grouping_override="auto_single_cleaned"),
         dependencies=_loader(
             {
                 "preprocess": {"kind": "cleaner", "config": "config/cleaner.yml"},
@@ -341,12 +322,7 @@ def test_build_analysis_plan_defers_count_specific_validation(
     )
 
     plan = build_analysis_plan(
-        project_root=tmp_path,
-        script_dir=None,
-        config_path=config_path,
-        group_by_file=True,
-        auto_single_cleaned=False,
-        error_on_empty_group=False,
+        CorpusPreparationRequest(project_root=tmp_path, config_path=config_path, grouping_override="per_file"),
         dependencies=dependencies,
         preprocess_mode="inspect",
     )
@@ -363,24 +339,32 @@ def test_build_count_plan_returns_same_analysis_plan_object(
     import nlpo_toolkit.corpus_analysis.run_plan as plan_module
 
     expected = _direct_plan(tmp_path)
+    request = CorpusPreparationRequest(
+        project_root=tmp_path, config_path=tmp_path / "groups.yml"
+    )
+    received: list[CorpusPreparationRequest] = []
+
+    def fake_build_analysis_plan(
+        actual_request: CorpusPreparationRequest, **_kwargs
+    ) -> AnalysisPlan:
+        received.append(actual_request)
+        return expected
+
     monkeypatch.setattr(
         plan_module,
         "build_analysis_plan",
-        lambda **_kwargs: expected,
+        fake_build_analysis_plan,
     )
 
     actual = plan_module.build_count_plan(
-        project_root=tmp_path,
-        script_dir=None,
-        config_path=tmp_path / "groups.yml",
-        group_by_file=False,
-        auto_single_cleaned=False,
-        error_on_empty_group=False,
+        request,
         dependencies=_loader(_base_groups()),
         preprocess_mode="inspect",
     )
 
     assert actual is expected
+    assert received == [request]
+    assert received[0] is request
     assert actual.config_files is expected.config_files
 
 
@@ -402,12 +386,7 @@ def test_inspect_mode_does_not_run_cleaner(tmp_path: Path) -> None:
             raise AssertionError("cleaner must not run in inspect mode")
 
     plan = build_count_plan(
-        project_root=tmp_path,
-        script_dir=None,
-        config_path=config_path,
-        group_by_file=None,
-        auto_single_cleaned=False,
-        error_on_empty_group=False,
+        CorpusPreparationRequest(project_root=tmp_path, config_path=config_path),
         dependencies=_loader(
             {
                 "preprocess": {"kind": "cleaner", "config": "config/cleaner.yml"},
@@ -440,12 +419,7 @@ def test_execute_mode_runs_cleaner_before_resolving_groups(tmp_path: Path) -> No
             (cleaned / "made.txt").write_text("cleaned", encoding="utf-8")
 
     plan = build_count_plan(
-        project_root=tmp_path,
-        script_dir=None,
-        config_path=config_path,
-        group_by_file=None,
-        auto_single_cleaned=False,
-        error_on_empty_group=False,
+        CorpusPreparationRequest(project_root=tmp_path, config_path=config_path),
         dependencies=_loader(
             {
                 "preprocess": {"kind": "cleaner", "config": "config/cleaner.yml"},
@@ -495,22 +469,12 @@ def test_inspect_and_execute_match_when_cleaned_files_already_exist(tmp_path: Pa
             return None
 
     inspect_plan = build_count_plan(
-        project_root=tmp_path,
-        script_dir=None,
-        config_path=config_path,
-        group_by_file=None,
-        auto_single_cleaned=False,
-        error_on_empty_group=False,
+        CorpusPreparationRequest(project_root=tmp_path, config_path=config_path),
         dependencies=_loader(data),
         preprocess_mode="inspect",
     )
     execute_plan = build_count_plan(
-        project_root=tmp_path,
-        script_dir=None,
-        config_path=config_path,
-        group_by_file=None,
-        auto_single_cleaned=False,
-        error_on_empty_group=False,
+        CorpusPreparationRequest(project_root=tmp_path, config_path=config_path),
         dependencies=_loader(data, cleaner=NoopCleaner),
         preprocess_mode="execute",
     )
@@ -535,12 +499,7 @@ def test_yaml_per_file_mode_rejects_partition_and_comparison(tmp_path: Path) -> 
 
     with pytest.raises(ValueError, match="validations.partitions"):
         build_count_plan(
-            project_root=tmp_path,
-            script_dir=None,
-            config_path=config_path,
-            group_by_file=False,
-            auto_single_cleaned=False,
-            error_on_empty_group=False,
+            CorpusPreparationRequest(project_root=tmp_path, config_path=config_path),
             dependencies=_loader(
                 {
                     "groups": groups,
@@ -557,12 +516,7 @@ def test_yaml_per_file_mode_rejects_partition_and_comparison(tmp_path: Path) -> 
 
     with pytest.raises(ValueError, match="comparisons"):
         build_count_plan(
-            project_root=tmp_path,
-            script_dir=None,
-            config_path=config_path,
-            group_by_file=False,
-            auto_single_cleaned=False,
-            error_on_empty_group=False,
+            CorpusPreparationRequest(project_root=tmp_path, config_path=config_path),
             dependencies=_loader(
                 {
                     "groups": {"a": {"files": ["input/a.txt"]}, "b": {"files": ["input/b.txt"]}},
@@ -579,12 +533,7 @@ def test_cli_group_by_file_rejects_partition(tmp_path: Path) -> None:
     _write_config(config_path)
     with pytest.raises(ValueError, match="validations.partitions"):
         build_count_plan(
-            project_root=tmp_path,
-            script_dir=None,
-            config_path=config_path,
-            group_by_file=True,
-            auto_single_cleaned=False,
-            error_on_empty_group=False,
+            CorpusPreparationRequest(project_root=tmp_path, config_path=config_path, grouping_override="per_file"),
             dependencies=_loader(
                 {
                     "groups": {
@@ -619,12 +568,7 @@ def test_auto_single_cleaned_selects_one_and_ignores_dotfiles(tmp_path: Path) ->
     _write_config(config_path)
 
     plan = build_count_plan(
-        project_root=tmp_path,
-        script_dir=None,
-        config_path=config_path,
-        group_by_file=None,
-        auto_single_cleaned=False,
-        error_on_empty_group=False,
+        CorpusPreparationRequest(project_root=tmp_path, config_path=config_path),
         dependencies=_loader(
             {
                 "groups": {"text": {"files": ["{cleaned_dir}/*.txt"]}},
@@ -658,12 +602,7 @@ def test_auto_single_cleaned_rejects_zero_and_multiple_files(tmp_path: Path) -> 
 
     with pytest.raises(ValueError, match="no .txt files"):
         build_count_plan(
-            project_root=tmp_path,
-            script_dir=None,
-            config_path=config_path,
-            group_by_file=None,
-            auto_single_cleaned=False,
-            error_on_empty_group=False,
+            CorpusPreparationRequest(project_root=tmp_path, config_path=config_path),
             dependencies=_loader(data),
             preprocess_mode="inspect",
         )
@@ -672,12 +611,7 @@ def test_auto_single_cleaned_rejects_zero_and_multiple_files(tmp_path: Path) -> 
     (cleaned / "b.txt").write_text("b", encoding="utf-8")
     with pytest.raises(ValueError, match="expected exactly one"):
         build_count_plan(
-            project_root=tmp_path,
-            script_dir=None,
-            config_path=config_path,
-            group_by_file=None,
-            auto_single_cleaned=False,
-            error_on_empty_group=False,
+            CorpusPreparationRequest(project_root=tmp_path, config_path=config_path),
             dependencies=_loader(data),
             preprocess_mode="inspect",
         )
@@ -691,12 +625,7 @@ def test_empty_group_policy_and_spec_references(tmp_path: Path) -> None:
     _write_config(config_path)
 
     plan = build_count_plan(
-        project_root=tmp_path,
-        script_dir=None,
-        config_path=config_path,
-        group_by_file=None,
-        auto_single_cleaned=False,
-        error_on_empty_group=False,
+        CorpusPreparationRequest(project_root=tmp_path, config_path=config_path),
         dependencies=_loader({"groups": {"empty": {"files": ["input/no_match*.txt"]}}}),
         preprocess_mode="inspect",
     )
@@ -704,24 +633,14 @@ def test_empty_group_policy_and_spec_references(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="No files matched"):
         build_count_plan(
-            project_root=tmp_path,
-            script_dir=None,
-            config_path=config_path,
-            group_by_file=None,
-            auto_single_cleaned=False,
-            error_on_empty_group=True,
+            CorpusPreparationRequest(project_root=tmp_path, config_path=config_path, error_on_empty_group=True),
             dependencies=_loader({"groups": {"empty": {"files": ["input/no_match*.txt"]}}}),
             preprocess_mode="inspect",
         )
 
     with pytest.raises(ValueError, match="Partition split references empty group: part_b"):
         build_count_plan(
-            project_root=tmp_path,
-            script_dir=None,
-            config_path=config_path,
-            group_by_file=None,
-            auto_single_cleaned=False,
-            error_on_empty_group=False,
+            CorpusPreparationRequest(project_root=tmp_path, config_path=config_path),
             dependencies=_loader(
                 {
                     "groups": {
@@ -748,12 +667,7 @@ def test_comparison_empty_reference_fails_plan(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="comparison ab references empty group: b"):
         build_count_plan(
-            project_root=tmp_path,
-            script_dir=None,
-            config_path=config_path,
-            group_by_file=None,
-            auto_single_cleaned=False,
-            error_on_empty_group=False,
+            CorpusPreparationRequest(project_root=tmp_path, config_path=config_path),
             dependencies=_loader(
                 {
                     "groups": {
@@ -797,12 +711,7 @@ def test_prepare_run_context_validates_plan_before_nlp_initialization(tmp_path: 
 
     with pytest.raises(ValueError, match="comparison ab references empty group: a"):
         prepare_run_context(
-            project_root=tmp_path,
-            script_dir=None,
-            config_path=config_path,
-            group_by_file=None,
-            auto_single_cleaned=False,
-            error_on_empty_group=False,
+            CorpusPreparationRequest(project_root=tmp_path, config_path=config_path),
             dependencies=deps,
         )
 
@@ -841,12 +750,7 @@ def test_missing_non_cleaner_reference_fails_before_cleaner_execution(
 
     with pytest.raises(ConfigReferenceError, match="dictcheck.lemma_normalize"):
         build_count_plan(
-            project_root=tmp_path,
-            script_dir=None,
-            config_path=config_path,
-            group_by_file=False,
-            auto_single_cleaned=False,
-            error_on_empty_group=False,
+            CorpusPreparationRequest(project_root=tmp_path, config_path=config_path),
             dependencies=dependencies,
             preprocess_mode="execute",
         )

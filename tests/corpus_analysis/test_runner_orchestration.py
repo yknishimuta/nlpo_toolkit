@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.corpus_analysis.fake_nlp import corpus_request
+
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -20,7 +22,7 @@ def test_run_orchestrates_steps_in_order(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(
         runner_mod.runtime,
         "prepare_run_context",
-        lambda **kwargs: calls.append("prepare") or context,
+        lambda *_args, **_kwargs: calls.append("prepare") or context,
     )
     monkeypatch.setattr(
         runner_mod.analysis_pipeline,
@@ -49,8 +51,7 @@ def test_run_orchestrates_steps_in_order(monkeypatch, tmp_path: Path) -> None:
     )
 
     rc = runner_mod.run(
-        project_root=tmp_path,
-        config_path=tmp_path / "config.yml",
+        corpus_request(tmp_path, tmp_path / "config.yml"),
         dependencies=runner_dependencies(
             lambda _path: ensure_app_config(
                 {"groups": {"text": {"files": ["input/*.txt"]}}}

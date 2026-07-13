@@ -66,7 +66,7 @@ def test_main_dispatches_through_registered_handler(monkeypatch, tmp_path) -> No
     rc = main(["count", "--project-root", str(tmp_path)])
 
     assert rc == 0
-    assert calls[0][0].project_root == tmp_path.resolve()
+    assert calls[0][0].corpus.project_root == tmp_path.resolve()
     assert calls[0][0].command_line == (
         "nlpo",
         "count",

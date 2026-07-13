@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.corpus_analysis.fake_nlp import corpus_request
+
 import csv
 import json
 from pathlib import Path
@@ -60,8 +62,7 @@ def _write_project(
 
 def _run(project_root: Path, config_path: Path, backend: FakeNLPBackend) -> None:
     rc = runner_mod.run(
-        project_root=project_root,
-        config_path=config_path,
+        corpus_request(project_root, config_path),
         dependencies=runner_dependencies(
             load_config,
             fake_backend_factory(backend=backend),

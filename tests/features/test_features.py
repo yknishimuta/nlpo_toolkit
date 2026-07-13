@@ -20,6 +20,7 @@ from nlpo_toolkit.corpus_analysis.features import (
     execute_feature_command,
     safe_feature_name,
 )
+from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
 from nlpo_toolkit.corpus_analysis.cli.output import write_feature_result
 from nlpo_toolkit.corpus_analysis.analysis_records import (
     NLPAnalysisRecord,
@@ -346,8 +347,7 @@ def test_run_features_one_group_writes_csv(tmp_path: Path) -> None:
 
     result = execute_feature_command(
         FeatureRequest(
-            project_root=tmp_path,
-            config_path=config_path,
+            corpus=CorpusPreparationRequest(tmp_path, config_path),
         ),
         dependencies=_dependencies(),
     )
@@ -376,8 +376,7 @@ def test_run_features_accepts_backend_factory(tmp_path: Path) -> None:
 
     result = execute_feature_command(
         FeatureRequest(
-            project_root=tmp_path,
-            config_path=config_path,
+            corpus=CorpusPreparationRequest(tmp_path, config_path),
         ),
         dependencies=FeatureCommandDependencies(
             planning=base.planning,
@@ -420,8 +419,7 @@ def test_run_features_two_groups_two_rows(tmp_path: Path) -> None:
 
     result = execute_feature_command(
         FeatureRequest(
-            project_root=tmp_path,
-            config_path=config_path,
+            corpus=CorpusPreparationRequest(tmp_path, config_path),
         ),
         dependencies=_dependencies(),
     )
@@ -442,9 +440,9 @@ def test_run_features_group_by_file(tmp_path: Path) -> None:
 
     result = execute_feature_command(
         FeatureRequest(
-            project_root=tmp_path,
-            config_path=config_path,
-            group_by_file=True,
+            corpus=CorpusPreparationRequest(
+                tmp_path, config_path, grouping_override="per_file"
+            ),
         ),
         dependencies=_dependencies(),
     )
@@ -474,9 +472,9 @@ def test_features_does_not_apply_count_partition_validation(tmp_path: Path) -> N
 
     result = execute_feature_command(
         FeatureRequest(
-            project_root=tmp_path,
-            config_path=config_path,
-            group_by_file=True,
+            corpus=CorpusPreparationRequest(
+                tmp_path, config_path, grouping_override="per_file"
+            ),
         ),
         dependencies=_dependencies(),
     )
@@ -510,8 +508,7 @@ def test_run_features_auto_single_cleaned(tmp_path: Path) -> None:
 
     result = execute_feature_command(
         FeatureRequest(
-            project_root=tmp_path,
-            config_path=config_path,
+            corpus=CorpusPreparationRequest(tmp_path, config_path),
         ),
         dependencies=_dependencies(
             type("Clean", (), {"main": staticmethod(lambda _argv: 0)})
@@ -552,8 +549,7 @@ def test_run_features_auto_single_cleaned_errors_on_multiple(tmp_path: Path) -> 
     with pytest.raises(ValueError, match="expected exactly one"):
         execute_feature_command(
             FeatureRequest(
-                project_root=tmp_path,
-                config_path=config_path,
+                corpus=CorpusPreparationRequest(tmp_path, config_path),
             ),
             dependencies=_dependencies(
                 type("Clean", (), {"main": staticmethod(lambda _argv: 0)})

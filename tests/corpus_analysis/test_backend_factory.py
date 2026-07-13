@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.corpus_analysis.fake_nlp import corpus_request
+
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -293,8 +295,7 @@ def test_runner_uses_backend_factory_and_records_metadata(tmp_path: Path, monkey
 
 
     rc = runner_mod.run(
-        project_root=tmp_path,
-        config_path=config_path,
+        corpus_request(tmp_path, config_path),
         dependencies=runner_dependencies(load_config_fn, fake_factory),
     )
 
@@ -325,8 +326,7 @@ def test_backend_factory_failure_has_no_fallback(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError, match="backend initialization failed"):
         runner_mod.run(
-            project_root=tmp_path,
-            config_path=config_path,
+            corpus_request(tmp_path, config_path),
             dependencies=runner_dependencies(load_config_fn, failing_factory),
         )
 

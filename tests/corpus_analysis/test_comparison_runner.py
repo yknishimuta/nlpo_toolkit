@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.corpus_analysis.fake_nlp import corpus_request
+
 import csv
 import json
 from collections import Counter
@@ -9,10 +11,10 @@ import pytest
 
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
 from nlpo_toolkit.corpus_analysis.archive import ArchiveOptions, create_run_archive
-from nlpo_toolkit.corpus_analysis.count_command import CountRequest
 from nlpo_toolkit.corpus_analysis.dependencies import CorpusPlanningDependencies
 from nlpo_toolkit.corpus_analysis.dry_run import execute_dry_run
 from nlpo_toolkit.corpus_analysis.config import load_config
+from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
 from tests.corpus_analysis.fake_nlp import FakeNLPBackend, fake_backend_factory, runner_dependencies
 
 
@@ -47,8 +49,7 @@ def _run_with_config(
     )
 
     return runner_mod.run(
-        project_root=project_root,
-        config_path=config_path,
+        corpus_request(project_root, config_path),
         dependencies=runner_dependencies(
             lambda _p: cfg,
             fake_backend_factory(backend=backend),
@@ -229,9 +230,7 @@ def test_runner_rejects_group_by_file_with_comparisons(
 
     with pytest.raises(ValueError, match="comparisons cannot be used"):
         runner_mod.run(
-            project_root=tmp_path,
-            config_path=config_path,
-            group_by_file=True,
+            corpus_request(tmp_path, config_path, group_by_file=True),
             dependencies=runner_dependencies(
                 lambda _p: cfg,
                 fake_backend_factory([("item_a", "item_a", "NOUN")]),
@@ -261,11 +260,7 @@ def test_dry_run_reports_comparison_and_empty_reference(tmp_path: Path, capsys: 
     )
 
     result = execute_dry_run(
-        request=CountRequest(
-            project_root=project_root,
-            config_path=config_path,
-            dry_run=True,
-        ),
+        request=CorpusPreparationRequest(project_root, config_path),
         dependencies=CorpusPlanningDependencies(
             load_config=load_config,
             cleaner_loader=lambda: pytest.fail(

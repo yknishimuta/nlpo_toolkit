@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.corpus_analysis.fake_nlp import corpus_request
+
 from pathlib import Path
 
 from nlpo_toolkit.corpus_analysis.runner import run
@@ -52,8 +54,7 @@ def test_dictcheck_disabled_does_not_create_known_unknown(tmp_path):
     )
     # --- Act ---
     result = run(
-        project_root=script_dir,
-        config_path=config_path,
+        corpus_request(script_dir, config_path),
         dependencies=dependencies,
     )
     assert result.exit_code == 0

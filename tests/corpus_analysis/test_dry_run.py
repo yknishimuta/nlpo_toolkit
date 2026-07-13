@@ -4,13 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from nlpo_toolkit.corpus_analysis.count_command import CountRequest
 from nlpo_toolkit.corpus_analysis.dependencies import CorpusPlanningDependencies
 from nlpo_toolkit.corpus_analysis.dry_run import DiagnosticLevel, execute_dry_run
 from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis.config import ConfigError
 from nlpo_toolkit.corpus_analysis.config_references import ConfigReferenceError
 from nlpo_toolkit.corpus_analysis.run_plan import build_count_plan
+from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
 
 
 def _execute_dry_run(
@@ -21,14 +21,17 @@ def _execute_dry_run(
     error_on_empty_group: bool = False,
     auto_single_cleaned: bool = False,
 ) -> int:
+    grouping_override = (
+        "auto_single_cleaned"
+        if auto_single_cleaned
+        else "per_file" if group_by_file else None
+    )
     result = execute_dry_run(
-        request=CountRequest(
+        request=CorpusPreparationRequest(
             project_root=project_root,
             config_path=config_path,
-            group_by_file=group_by_file,
+            grouping_override=grouping_override,
             error_on_empty_group=error_on_empty_group,
-            auto_single_cleaned=auto_single_cleaned,
-            dry_run=True,
         ),
         dependencies=CorpusPlanningDependencies(
             load_config=load_config,
@@ -157,7 +160,7 @@ def test_dry_run_error_on_empty_group(tmp_path: Path, capsys):
 
     out = capsys.readouterr().out
     assert rc == 1
-    assert "[ERROR] group empty matched files: 0" in out
+    assert "[ERROR] No files matched for group(s): empty" in out
 
 
 def test_dry_run_auto_single_cleaned_reports_selected_file(tmp_path: Path, capsys):
@@ -321,10 +324,9 @@ def test_dry_run_and_normal_planning_report_same_missing_reference(
     )
 
     dry_result = execute_dry_run(
-        request=CountRequest(
+        request=CorpusPreparationRequest(
             project_root=tmp_path,
             config_path=config_path,
-            dry_run=True,
         ),
         dependencies=dependencies,
     )
@@ -336,12 +338,7 @@ def test_dry_run_and_normal_planning_report_same_missing_reference(
 
     with pytest.raises(ConfigReferenceError) as normal:
         build_count_plan(
-            project_root=tmp_path,
-            script_dir=None,
-            config_path=config_path,
-            group_by_file=False,
-            auto_single_cleaned=False,
-            error_on_empty_group=False,
+            CorpusPreparationRequest(tmp_path, config_path),
             dependencies=dependencies,
             preprocess_mode="execute",
         )
@@ -371,10 +368,9 @@ def test_dry_run_does_not_hide_programmer_errors(
 
     with pytest.raises(type(error), match=str(error)):
         execute_dry_run(
-            request=CountRequest(
+            request=CorpusPreparationRequest(
                 project_root=tmp_path,
                 config_path=config_path,
-                dry_run=True,
             ),
             dependencies=CorpusPlanningDependencies(
                 load_config=broken_loader,

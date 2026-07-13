@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Mapping
+from typing import Any, Mapping
 
 import yaml
 
@@ -12,9 +12,7 @@ from .config import ConfigError
 from .config_references import ConfigReferenceError
 from .corpus_errors import CorpusPreparationError
 from .run_plan import AnalysisPlan, AnalysisPlanError, build_count_plan
-
-if TYPE_CHECKING:
-    from .count_command import CountRequest
+from .requests import CorpusPreparationRequest
 
 
 class DuplicateKeyLoader(yaml.SafeLoader):
@@ -178,8 +176,8 @@ def _render_spec_diagnostics(plan: AnalysisPlan) -> list[DryRunDiagnostic]:
 
 
 def execute_dry_run(
+    request: CorpusPreparationRequest,
     *,
-    request: CountRequest,
     dependencies: CorpusPlanningDependencies,
 ) -> DryRunResult:
     project_root = Path(request.project_root).resolve()
@@ -206,12 +204,7 @@ def execute_dry_run(
 
     try:
         plan = build_count_plan(
-            project_root=project_root,
-            script_dir=None,
-            config_path=config_path,
-            group_by_file=request.group_by_file,
-            auto_single_cleaned=request.auto_single_cleaned,
-            error_on_empty_group=False,
+            request,
             dependencies=CorpusPlanningDependencies(
                 load_config=lambda _path: cfg,
                 cleaner_loader=dependencies.cleaner_loader,
@@ -243,10 +236,6 @@ def execute_dry_run(
             )
         for line in render_analysis_plan(plan, project_root=project_root):
             add(DiagnosticLevel.OK, line)
-        if request.error_on_empty_group:
-            for group_name, files in plan.group_files.items():
-                if not files:
-                    add(DiagnosticLevel.ERROR, f"group {group_name} matched files: 0")
         diagnostics.extend(_render_spec_diagnostics(plan))
         add(DiagnosticLevel.OK, f"output dir: {_display_path(plan.out_dir, project_root)}")
         for reference in plan.config_files.references:

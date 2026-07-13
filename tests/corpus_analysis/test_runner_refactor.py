@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.corpus_analysis.fake_nlp import corpus_request
+
 from collections import Counter
 from pathlib import Path
 
@@ -95,12 +97,7 @@ def test_prepare_run_context_resolves_per_file_work_items(tmp_path: Path) -> Non
     deps = runner_dependencies(load_config, _backend_factory)
 
     context = prepare_run_context(
-        project_root=tmp_path,
-        script_dir=None,
-        config_path=config_path,
-        group_by_file=True,
-        auto_single_cleaned=False,
-        error_on_empty_group=False,
+        corpus_request(tmp_path, config_path, group_by_file=True),
         dependencies=deps,
     )
 
@@ -143,12 +140,7 @@ def test_analyze_one_corpus_writes_expected_outputs_from_record_pipeline(tmp_pat
 
     deps = runner_dependencies(load_config, _backend_factory)
     context = prepare_run_context(
-        project_root=tmp_path,
-        script_dir=None,
-        config_path=config_path,
-        group_by_file=False,
-        auto_single_cleaned=False,
-        error_on_empty_group=False,
+        corpus_request(tmp_path, config_path),
         dependencies=deps,
     )
     corpus = PreparedCorpus(
@@ -190,12 +182,7 @@ def test_summary_lines_and_metadata_include_existing_fields(tmp_path: Path) -> N
 
     deps = runner_dependencies(load_config, _backend_factory)
     context = prepare_run_context(
-        project_root=tmp_path,
-        script_dir=None,
-        config_path=config_path,
-        group_by_file=False,
-        auto_single_cleaned=False,
-        error_on_empty_group=False,
+        corpus_request(tmp_path, config_path),
         dependencies=deps,
     )
     analysis = AnalysisResults(

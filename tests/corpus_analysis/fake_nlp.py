@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.config import AppConfig, ensure_app_config
@@ -17,12 +18,34 @@ from nlpo_toolkit.corpus_analysis.dependencies import (
     CountCommandDependencies,
     RunnerDependencies,
 )
+from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
 from nlpo_toolkit.corpus_analysis.archive import create_run_archive
 from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
 from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 
 
 TokenSpec = tuple[str, str | None, str]
+
+
+def corpus_request(
+    project_root: Path,
+    config_path: Path,
+    *,
+    group_by_file: bool = False,
+    auto_single_cleaned: bool = False,
+    error_on_empty_group: bool = False,
+) -> CorpusPreparationRequest:
+    grouping_override = (
+        "auto_single_cleaned"
+        if auto_single_cleaned
+        else "per_file" if group_by_file else None
+    )
+    return CorpusPreparationRequest(
+        project_root=project_root,
+        config_path=config_path,
+        grouping_override=grouping_override,
+        error_on_empty_group=error_on_empty_group,
+    )
 
 
 @dataclass

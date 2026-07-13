@@ -63,6 +63,14 @@ nlpo count \
   --group-by-file
 ```
 
+`--group-by-file` and `--auto-single-cleaned` are mutually exclusive.
+
+Internally, Count, Features, config-input N-gram, and dry-run share the frozen
+`CorpusPreparationRequest` DTO. Command requests compose this DTO, and its
+single `grouping_override` value represents CLI grouping overrides. Config-input
+N-grams always use tokens; dry-run is an independent use case rather than a
+Count request mode.
+
 To validate the config without running preprocessing or NLP, use `--dry-run`:
 
 ```bash

@@ -15,12 +15,12 @@ from nlpo_toolkit.corpus_analysis.dependencies import (
 )
 from nlpo_toolkit.corpus_analysis.ngram import (
     ConfigNgramRequest,
-    NgramError,
     build_ngrams_from_rows,
     iter_config_token_rows,
     read_token_artifact_rows,
     execute_config_ngram_command,
 )
+from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
 from nlpo_toolkit.corpus_analysis.token_artifact import (
     TokenArtifactMetadata,
     TokenArtifactWriter,
@@ -285,8 +285,8 @@ def test_config_ngram_uses_canonical_analysis_plan_with_overrides(tmp_path, monk
     config = ensure_app_config({"groups": {"text": {"files": ["input.txt"]}}})
     calls = []
 
-    def fake_build_analysis_plan(**kwargs):
-        calls.append(kwargs)
+    def fake_build_analysis_plan(request, **kwargs):
+        calls.append((request, kwargs))
         return type(
             "Plan",
             (),
@@ -307,16 +307,16 @@ def test_config_ngram_uses_canonical_analysis_plan_with_overrides(tmp_path, monk
 
     result = execute_config_ngram_command(
         request=ConfigNgramRequest(
-            project_root=tmp_path,
-            config_path=config_path,
+            corpus=CorpusPreparationRequest(
+                tmp_path,
+                config_path,
+                grouping_override="auto_single_cleaned",
+                error_on_empty_group=True,
+            ),
             n=2,
-            field="token",
             by_group=False,
             min_count=1,
             top=None,
-            group_by_file=True,
-            auto_single_cleaned=True,
-            error_on_empty_group=True,
         ),
         dependencies=ConfigNgramDependencies(
             planning=CorpusPlanningDependencies(
@@ -330,43 +330,12 @@ def test_config_ngram_uses_canonical_analysis_plan_with_overrides(tmp_path, monk
 
     assert result.rows
     assert len(calls) == 1
-    assert calls[0]["project_root"] == tmp_path
-    assert calls[0]["config_path"] == config_path
-    assert calls[0]["group_by_file"] is True
-    assert calls[0]["auto_single_cleaned"] is True
-    assert calls[0]["error_on_empty_group"] is True
-    assert calls[0]["preprocess_mode"] == "execute"
-
-
-def test_config_ngram_rejects_lemma_before_planning(tmp_path, monkeypatch):
-    import nlpo_toolkit.corpus_analysis.ngram as ngram_mod
-
-    monkeypatch.setattr(
-        ngram_mod,
-        "build_analysis_plan",
-        lambda **_kwargs: pytest.fail("plan must not be built"),
-    )
-
-    with pytest.raises(NgramError, match="Config input supports --field token only"):
-        execute_config_ngram_command(
-            request=ConfigNgramRequest(
-                project_root=tmp_path,
-                config_path=tmp_path / "groups.yml",
-                n=2,
-                field="lemma",
-                by_group=False,
-                min_count=1,
-                top=None,
-            ),
-            dependencies=ConfigNgramDependencies(
-                planning=CorpusPlanningDependencies(
-                    load_config=load_config,
-                    cleaner_loader=lambda: pytest.fail(
-                        "cleaner loader must not be called"
-                    ),
-                ),
-            ),
-        )
+    assert calls[0][0] is not None
+    assert calls[0][0].project_root == tmp_path
+    assert calls[0][0].config_path == config_path
+    assert calls[0][0].grouping_override == "auto_single_cleaned"
+    assert calls[0][0].error_on_empty_group is True
+    assert calls[0][1]["preprocess_mode"] == "execute"
 
 
 def test_config_ngram_does_not_apply_count_partition_validation(tmp_path) -> None:
@@ -386,14 +355,13 @@ def test_config_ngram_does_not_apply_count_partition_validation(tmp_path) -> Non
 
     result = execute_config_ngram_command(
         request=ConfigNgramRequest(
-            project_root=tmp_path,
-            config_path=config_path,
+            corpus=CorpusPreparationRequest(
+                tmp_path, config_path, grouping_override="per_file"
+            ),
             n=2,
-            field="token",
             by_group=False,
             min_count=1,
             top=None,
-            group_by_file=True,
         ),
         dependencies=ConfigNgramDependencies(
             planning=CorpusPlanningDependencies(
@@ -418,8 +386,42 @@ def test_token_artifact_cli_does_not_create_config_dependencies(tmp_path, monkey
         "default_config_ngram_dependencies",
         lambda: pytest.fail("config dependencies must not be created"),
     )
+    monkeypatch.setattr(
+        ngram_cli,
+        "build_corpus_preparation_request",
+        lambda _args: pytest.fail("corpus request must not be created"),
+    )
 
     rc = cli.main(["ngram", "--tokens", str(artifact), "--field", "token", "--n", "2"])
 
     assert rc == 0
     assert capsys.readouterr().out.splitlines()[0] == "ngram\tcount\tn\tfield"
+
+
+def test_config_ngram_cli_always_uses_token_field(tmp_path, capsys) -> None:
+    (tmp_path / "input.txt").write_text("Alpha beta", encoding="utf-8")
+    config_path = tmp_path / "groups.yml"
+    config_path.write_text(
+        "groups:\n  text: {files: [input.txt]}\n",
+        encoding="utf-8",
+    )
+
+    rc = cli.main(
+        [
+            "ngram",
+            "--project-root",
+            str(tmp_path),
+            "--config",
+            str(config_path),
+            "--field",
+            "lemma",
+            "--n",
+            "2",
+        ]
+    )
+
+    assert rc == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "ngram\tcount\tn\tfield",
+        "alpha beta\t1\t2\ttoken",
+    ]

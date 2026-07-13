@@ -6,6 +6,7 @@ import csv
 
 from nlpo_toolkit.corpus_analysis.count_command import CountRequest, execute_count_command
 from nlpo_toolkit.corpus_analysis.config import load_config
+from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
 from tests.corpus_analysis.fake_nlp import count_command_dependencies, fake_backend_factory
 
 # Dummy stanza-like objects
@@ -101,7 +102,7 @@ def test_preprocess_cleaner_integration_fixed(tmp_path):
 
     # --- Act
     result = execute_count_command(
-        CountRequest(project_root=script_dir, config_path=groups_cfg_path),
+        CountRequest(corpus=CorpusPreparationRequest(script_dir, groups_cfg_path)),
         dependencies=dependencies,
     )
     assert result.successful is True

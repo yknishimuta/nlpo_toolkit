@@ -1,31 +1,23 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 from . import analysis_pipeline, post_analysis, run_reporting, runtime
 from .dependencies import RunnerDependencies
 from .runner_types import RunResult
+from .requests import CorpusPreparationRequest
 
 
 def run(
+    request: CorpusPreparationRequest,
     *,
-    project_root: Path | None = None,
-    script_dir: Path | None = None,
-    config_path: Path,
-    group_by_file: Optional[bool] = None,
     dependencies: RunnerDependencies,
-    error_on_empty_group: bool = False,
-    auto_single_cleaned: bool = False,
+    script_dir: Path | None = None,
 ) -> RunResult:
     """Core runner. Dependencies are injectable for CLI and tests."""
     context = runtime.prepare_run_context(
-        project_root=project_root,
+        request,
         script_dir=script_dir,
-        config_path=config_path,
-        group_by_file=group_by_file,
-        auto_single_cleaned=auto_single_cleaned,
-        error_on_empty_group=error_on_empty_group,
         dependencies=dependencies,
     )
     analysis = analysis_pipeline.analyze_corpora(context)

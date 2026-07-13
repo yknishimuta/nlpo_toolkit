@@ -12,6 +12,7 @@ from .corpus import PreparedCorpus, prepare_corpora
 from .config_references import ConfigReferenceError
 from .dependencies import ConfigNgramDependencies
 from .run_plan import build_analysis_plan
+from .requests import CorpusPreparationRequest
 from .analysis_records import TokenRecord
 from .token_artifact import TokenArtifactError, read_token_records
 
@@ -218,16 +219,11 @@ def iter_config_token_rows(
 
 @dataclass(frozen=True)
 class ConfigNgramRequest:
-    project_root: Path
-    config_path: Path
+    corpus: CorpusPreparationRequest
     n: int
-    field: str
     by_group: bool
     min_count: int
     top: int | None
-    group_by_file: bool = False
-    auto_single_cleaned: bool = False
-    error_on_empty_group: bool = False
 
 
 @dataclass(frozen=True)
@@ -265,19 +261,9 @@ def execute_config_ngram_command(
     request: ConfigNgramRequest,
     dependencies: ConfigNgramDependencies,
 ) -> NgramCommandResult:
-    if request.field != "token":
-        raise NgramError(
-            "Config input supports --field token only. "
-            "Use --tokens with a token artifact for lemma n-grams."
-        )
     try:
         plan = build_analysis_plan(
-            project_root=request.project_root,
-            script_dir=None,
-            config_path=request.config_path,
-            group_by_file=request.group_by_file,
-            auto_single_cleaned=request.auto_single_cleaned,
-            error_on_empty_group=request.error_on_empty_group,
+            request.corpus,
             dependencies=dependencies.planning,
             preprocess_mode="execute",
         )
@@ -291,7 +277,7 @@ def execute_config_ngram_command(
     rows = build_ngrams_from_rows(
         iter_config_token_rows(corpora),
         n=request.n,
-        field=request.field,
+        field="token",
         by_group=request.by_group,
         min_count=request.min_count,
         top=request.top,

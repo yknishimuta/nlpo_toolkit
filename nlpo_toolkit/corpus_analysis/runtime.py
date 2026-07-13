@@ -10,6 +10,7 @@ from .config import AppConfig
 from .corpus import prepare_corpora
 from .dependencies import BackendFactory, RunnerDependencies
 from .run_plan import AnalysisPlan, build_count_plan, ensure_out_dir
+from .requests import CorpusPreparationRequest
 from .runner_types import RunContext
 
 
@@ -54,22 +55,14 @@ def load_roman_exceptions_for_run(
 
 
 def prepare_run_context(
+    request: CorpusPreparationRequest,
     *,
-    project_root: Path | None,
-    script_dir: Path | None,
-    config_path: Path,
-    group_by_file: bool | None,
-    auto_single_cleaned: bool,
-    error_on_empty_group: bool,
     dependencies: RunnerDependencies,
+    script_dir: Path | None = None,
 ) -> RunContext:
     plan = build_count_plan(
-        project_root=project_root,
+        request,
         script_dir=script_dir,
-        config_path=config_path,
-        group_by_file=group_by_file,
-        auto_single_cleaned=auto_single_cleaned,
-        error_on_empty_group=error_on_empty_group,
         dependencies=dependencies.planning,
         preprocess_mode="execute",
     )

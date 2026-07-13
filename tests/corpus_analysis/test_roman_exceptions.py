@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.corpus_analysis.fake_nlp import corpus_request
+
 import csv
 from pathlib import Path
 
@@ -52,8 +54,7 @@ def test_runner_integration_uses_roman_exception_file_in_final_csv(tmp_path: Pat
 
 
     rc = runner_mod.run(
-        project_root=tmp_path,
-        config_path=config_path,
+        corpus_request(tmp_path, config_path),
         dependencies=runner_dependencies(
             load_config_fn,
             fake_backend_factory(
@@ -105,8 +106,7 @@ def test_runner_loads_roman_exceptions_once_for_multiple_groups(tmp_path: Path, 
     monkeypatch.setattr(runtime_mod, "load_roman_exceptions", fake_loader)
 
     rc = runner_mod.run(
-        project_root=tmp_path,
-        config_path=config_path,
+        corpus_request(tmp_path, config_path),
         dependencies=runner_dependencies(
             load_config_fn,
             fake_backend_factory([("xiv", "xiv", "NOUN"), ("iv", "iv", "NOUN")]),

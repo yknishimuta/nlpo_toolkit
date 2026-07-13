@@ -8,9 +8,10 @@ from ..dependencies import default_count_command_dependencies
 from ..dry_run import DiagnosticLevel, execute_dry_run
 from .common import (
     CLIContext,
+    add_empty_group_argument,
+    add_grouping_override_arguments,
     add_project_config_arguments,
-    resolve_config_path,
-    resolve_project_root,
+    build_corpus_preparation_request,
     set_handler,
 )
 from .output import present_error
@@ -59,11 +60,7 @@ def _configure_parser(parser: argparse.ArgumentParser) -> None:
         project_root_help="Project root used to resolve relative paths in the config.",
         config_help="YAML config path. Defaults to <project-root>/config/groups.config.yml.",
     )
-    parser.add_argument(
-        "--group-by-file",
-        action="store_true",
-        help="Write one frequency CSV per input file instead of one CSV per configured group.",
-    )
+    add_grouping_override_arguments(parser)
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -95,49 +92,33 @@ def _configure_parser(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Copy input files into the run archive.",
     )
-    parser.add_argument(
-        "--error-on-empty-group",
-        action="store_true",
-        help="Fail when any configured group matches zero files.",
-    )
-    parser.add_argument(
-        "--auto-single-cleaned",
-        action="store_true",
-        help="Use the only .txt file in cleaned_dir as the count target; fail if zero or multiple files exist.",
-    )
+    add_empty_group_argument(parser)
 
 
 def execute(args: argparse.Namespace, context: CLIContext) -> int:
-    project_root = resolve_project_root(args.project_root)
-    config_path = resolve_config_path(project_root=project_root, config_path=args.config)
-
-    request = CountRequest(
-        project_root=project_root,
-        config_path=config_path,
-        command_line=tuple(context.argv),
-        group_by_file=bool(args.group_by_file),
-        archive_run=bool(args.archive_run),
-        run_name=args.run_name,
-        runs_dir=args.runs_dir,
-        include_cleaned=bool(args.include_cleaned),
-        include_input=bool(args.include_input),
-        error_on_empty_group=bool(args.error_on_empty_group),
-        auto_single_cleaned=bool(args.auto_single_cleaned),
-        dry_run=bool(args.dry_run),
-    )
+    corpus_request = build_corpus_preparation_request(args)
     try:
         dependencies = default_count_command_dependencies()
-        if request.dry_run:
+        if args.dry_run:
             result = execute_dry_run(
-                request=request,
+                corpus_request,
                 dependencies=dependencies.runner.planning,
             )
             _present_dry_run(result, stdout=context.stdout)
             return 0 if result.successful else 1
+        request = CountRequest(
+            corpus=corpus_request,
+            command_line=tuple(context.argv),
+            archive_run=bool(args.archive_run),
+            run_name=args.run_name,
+            runs_dir=args.runs_dir,
+            include_cleaned=bool(args.include_cleaned),
+            include_input=bool(args.include_input),
+        )
         result = execute_count_command(request, dependencies=dependencies)
         _present_count_result(
             result,
-            project_root=request.project_root,
+            project_root=request.corpus.project_root,
             stdout=context.stdout,
             stderr=context.stderr,
         )
