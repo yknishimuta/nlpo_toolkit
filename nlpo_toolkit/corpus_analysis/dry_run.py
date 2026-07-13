@@ -9,7 +9,7 @@ import yaml
 
 from .dependencies import CorpusPlanningDependencies
 from .config import ConfigError
-from .corpus import resolve_project_path
+from .config_references import ConfigReferenceError
 from .corpus_errors import CorpusPreparationError
 from .run_plan import RunPlan, RunPlanError, build_run_plan
 
@@ -220,7 +220,7 @@ def execute_dry_run(
             preprocess_mode="inspect",
             validate_references=False,
         )
-    except (RunPlanError, CorpusPreparationError) as exc:
+    except (ConfigReferenceError, RunPlanError, CorpusPreparationError) as exc:
         add(DiagnosticLevel.ERROR, str(exc))
     else:
         cleaner_inspection = plan.cleaner_inspection
@@ -249,32 +249,16 @@ def execute_dry_run(
                     add(DiagnosticLevel.ERROR, f"group {group_name} matched files: 0")
         diagnostics.extend(_render_spec_diagnostics(plan))
         add(DiagnosticLevel.OK, f"output dir: {_display_path(plan.out_dir, project_root)}")
+        for reference in plan.config_files.references:
+            if reference.kind == "root_config":
+                continue
+            add(
+                DiagnosticLevel.OK,
+                f"{reference.kind} found: "
+                f"{_display_path(reference.path, project_root)}",
+            )
 
     for key in duplicate_keys:
         add(DiagnosticLevel.WARNING, f"duplicate YAML key: {key}")
-
-    if cfg.dictcheck.enabled:
-        wordlist = cfg.dictcheck.wordlist
-        if wordlist:
-            wordlist_path = resolve_project_path(project_root, wordlist)
-            if wordlist_path.exists():
-                add(DiagnosticLevel.OK, "dictcheck wordlist found")
-            else:
-                add(
-                    DiagnosticLevel.ERROR,
-                    f"dictcheck wordlist missing: {_display_path(wordlist_path, project_root)}",
-                )
-
-    if cfg.ref_tags.enabled:
-        patterns = cfg.ref_tags.patterns
-        if patterns:
-            patterns_path = resolve_project_path(project_root, patterns)
-            if patterns_path.exists():
-                add(DiagnosticLevel.OK, "ref_tags patterns found")
-            else:
-                add(
-                    DiagnosticLevel.ERROR,
-                    f"ref_tags patterns missing: {_display_path(patterns_path, project_root)}",
-                )
 
     return DryRunResult(diagnostics=tuple(diagnostics))

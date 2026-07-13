@@ -147,13 +147,8 @@ def split_known_unknown(
 
 def _load_lemma_normalization_map(context: RunContext) -> Mapping[str, str] | None:
     plan = context.plan
-    norm_map_rel_path = plan.config.dictcheck.lemma_normalize
-    if not norm_map_rel_path:
-        return None
-    norm_map_path = Path(str(norm_map_rel_path))
-    if not norm_map_path.is_absolute():
-        norm_map_path = (plan.project_root / norm_map_path).resolve()
-    if not norm_map_path.exists():
+    norm_map_path = plan.config_files.path("dictcheck.lemma_normalize")
+    if norm_map_path is None:
         return None
     from .dictcheck import load_lemma_normalize_map
 
@@ -394,22 +389,17 @@ def write_dictcheck_outputs(
     frequency_paths: FrequencyOutputPaths | None = None,
 ) -> DictCheckOutput | None:
     plan = context.plan
-    wordlist = plan.config.dictcheck.wordlist
-    if plan.config.dictcheck.enabled and not wordlist:
+    wordlist_path = plan.config_files.path("dictcheck.wordlist")
+    if plan.config.dictcheck.enabled and wordlist_path is None:
         raise ValueError(
             f"dictcheck.wordlist is required when dictcheck.enabled=true (analysis_unit={plan.analysis_unit})"
         )
     if not plan.config.dictcheck.enabled:
         return None
 
-    wl_path = Path(str(wordlist))
-    if not wl_path.is_absolute():
-        wl_path = (plan.project_root / wl_path).resolve()
-    known_words = (
-        x.strip()
-        for x in wl_path.read_text(encoding="utf-8").splitlines()
-        if x.strip()
-    )
+    from nlpo_toolkit.nlp import load_vocab
+
+    known_words = load_vocab(wordlist_path)
     known_counter, unknown_counter = split_known_unknown(counter, known_words)
 
     paths = frequency_paths or build_frequency_output_paths(plan.out_dir, label)

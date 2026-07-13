@@ -46,3 +46,21 @@ def test_archive_and_preprocess_do_not_parse_cleaner_yaml() -> None:
         source = path.read_text(encoding="utf-8")
         assert "yaml" not in source
         assert "resolve_cleaner_output_dir" not in source
+
+
+def test_config_reference_consumers_do_not_resolve_config_strings() -> None:
+    forbidden = {
+        Path("nlpo_toolkit/corpus_analysis/runtime.py"): "resolve_project_path",
+        Path("nlpo_toolkit/corpus_analysis/analysis_pipeline.py"): "plan.config.dictcheck.lemma_normalize",
+        Path("nlpo_toolkit/corpus_analysis/corpus.py"): "resolve_project_path(project_root, config.ref_tags.patterns)",
+    }
+    for path, text in forbidden.items():
+        assert text not in path.read_text(encoding="utf-8")
+
+
+def test_run_reporting_does_not_rebuild_config_inventory() -> None:
+    source = Path("nlpo_toolkit/corpus_analysis/run_reporting.py").read_text(
+        encoding="utf-8"
+    )
+    assert "resolve_config_files" not in source
+    assert "build_config_file_inventory" not in source

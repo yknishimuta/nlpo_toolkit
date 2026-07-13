@@ -765,6 +765,12 @@ the config can be checked before running NLP.
 `dictcheck.wordlist` is recorded in `manifest.json` with its path, size, and
 SHA-256 hash, but is not copied into `config_snapshot/` by default.
 
+All explicitly configured file references are resolved and checked while the
+run plan is built, before cleaner execution, output creation, or NLP startup.
+This check is strict even when the related feature is disabled. For example, a
+configured but missing `dictcheck.lemma_normalize` file is now an error instead
+of silently disabling lemma normalization. Dry runs apply the same checks.
+
 ## Configuration Roles
 
 `nlpo_toolkit` uses several configuration files at different stages of the

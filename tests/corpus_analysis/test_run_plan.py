@@ -14,6 +14,7 @@ from nlpo_toolkit.corpus_analysis.dependencies import (
 from nlpo_toolkit.corpus_analysis.runtime import prepare_run_context
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.run_plan import build_run_plan
+from nlpo_toolkit.corpus_analysis.config_references import ConfigReferenceError
 from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 
 
@@ -90,6 +91,8 @@ def test_build_run_plan_inspects_cleaner_once(tmp_path: Path) -> None:
     assert calls == [cleaner_path.resolve()]
     assert plan.cleaner_inspection is not None
     assert plan.cleaner_inspection.input_files == ((input_dir / "a.txt").resolve(),)
+    assert plan.config_files.path("root_config") == config_path.resolve()
+    assert plan.config_files.path("preprocess.config") == cleaner_path.resolve()
 
 
 def test_build_run_plan_has_no_output_directory_side_effect(tmp_path: Path) -> None:
@@ -542,3 +545,48 @@ def test_prepare_run_context_validates_plan_before_nlp_initialization(tmp_path: 
         )
 
     assert calls == []
+
+
+def test_missing_non_cleaner_reference_fails_before_cleaner_execution(
+    tmp_path: Path,
+) -> None:
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input" / "a.txt").write_text("a", encoding="utf-8")
+    cleaner_path = config_dir / "cleaner.yml"
+    cleaner_path.write_text(
+        "kind: scholastic_text\ninput: ../input\noutput: ../cleaned\n",
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "groups.yml"
+    _write_config(config_path)
+    cleaner_calls: list[object] = []
+
+    class UnexpectedCleaner:
+        @staticmethod
+        def main(argv):
+            cleaner_calls.append(argv)
+
+    dependencies = _loader(
+        {
+            "preprocess": {"kind": "cleaner", "config": "config/cleaner.yml"},
+            "groups": {"text": {"files": ["{cleaned_dir}/*.txt"]}},
+            "dictcheck": {"lemma_normalize": "config/missing.tsv"},
+        },
+        cleaner=UnexpectedCleaner,
+    )
+
+    with pytest.raises(ConfigReferenceError, match="dictcheck.lemma_normalize"):
+        build_run_plan(
+            project_root=tmp_path,
+            script_dir=None,
+            config_path=config_path,
+            group_by_file=False,
+            auto_single_cleaned=False,
+            error_on_empty_group=False,
+            dependencies=dependencies,
+            preprocess_mode="execute",
+        )
+
+    assert cleaner_calls == []

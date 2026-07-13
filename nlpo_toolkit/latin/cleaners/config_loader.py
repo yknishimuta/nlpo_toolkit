@@ -115,11 +115,6 @@ def inspect_cleaner_config(path: str | Path) -> CleanerConfigInspection:
         )
         if reference is not None
     )
-    for reference in references:
-        if reference.required and not reference.path.is_file():
-            raise CleanerConfigValidationError(
-                f"Cleaner referenced file not found: {reference.path}"
-            )
     return CleanerConfigInspection(
         config=config,
         input_files=resolve_cleaner_input_files(config.input_path),

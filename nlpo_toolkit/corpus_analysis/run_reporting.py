@@ -17,7 +17,6 @@ from .runner_types import (
     RunResult,
     deduplicate_resolved_paths,
 )
-from .config_references import build_config_file_inventory
 
 
 @dataclass(frozen=True)
@@ -289,12 +288,7 @@ def build_run_result(
         cleaned_files=cleaned_files,
         output_files=output_files,
         trace_files=trace_files,
-        config_files=build_config_file_inventory(
-            config=plan.config,
-            config_path=plan.config_path,
-            project_root=plan.project_root,
-            cleaner_inspection=plan.cleaner_inspection,
-        ),
+        config_files=plan.config_files.references,
         summary_path=report.summary_path.resolve(),
         metadata_path=report.metadata_path.resolve(),
         partition_mismatches=partitions.mismatches,

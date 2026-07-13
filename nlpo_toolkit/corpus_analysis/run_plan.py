@@ -7,7 +7,9 @@ from typing import Literal, Mapping, Sequence
 from nlpo_toolkit.comparison.configured import ComparisonSpec
 from nlpo_toolkit.cleaner_contracts import CleanerConfigInspection
 from .config import AppConfig
+from .config_references import ResolvedConfigFiles, resolve_config_files
 from .corpus import (
+    CleanerPlan,
     CorpusWorkItem,
     execute_preprocess,
     inspect_preprocess,
@@ -30,6 +32,7 @@ class CorpusPlan:
     work_items: tuple[CorpusWorkItem, ...]
     group_files: Mapping[str, tuple[Path, ...]]
     cleaner_inspection: CleanerConfigInspection | None = None
+    config_files: ResolvedConfigFiles = ResolvedConfigFiles()
 
 
 @dataclass(frozen=True)
@@ -51,6 +54,7 @@ class RunPlan:
     use_lemma: bool
     csv_header: tuple[str, str]
     cleaner_inspection: CleanerConfigInspection | None = None
+    config_files: ResolvedConfigFiles = ResolvedConfigFiles()
 
 
 class RunPlanError(ValueError):
@@ -146,28 +150,18 @@ def validate_comparison_group_references(
                 raise RunPlanError(f"comparison {spec.name} references empty group: {name}")
 
 
-def _resolve_cleaned_dir(
+def _inspect_cleaner_plan(
     *,
     config: AppConfig,
     project_root: Path,
-    preprocess_mode: Literal["inspect", "execute"],
     dependencies: CorpusPlanningDependencies,
-) -> tuple[Path | None, CleanerConfigInspection | None]:
+) -> tuple[CleanerPlan | None, CleanerConfigInspection | None]:
     plan = resolve_cleaner_plan(
         config,
         project_root,
         inspector=dependencies.cleaner_inspector,
     )
-    if preprocess_mode == "inspect":
-        return inspect_preprocess(plan), plan.inspection if plan is not None else None
-    if preprocess_mode == "execute":
-        if plan is None:
-            return None, None
-        return (
-            execute_preprocess(plan, cleaner_loader=dependencies.cleaner_loader),
-            plan.inspection,
-        )
-    raise ValueError("preprocess_mode must be 'inspect' or 'execute'")
+    return plan, plan.inspection if plan is not None else None
 
 
 def build_run_plan(
@@ -229,6 +223,7 @@ def build_run_plan(
         use_lemma=use_lemma,
         csv_header=csv_header,
         cleaner_inspection=corpus_plan.cleaner_inspection,
+        config_files=corpus_plan.config_files,
     )
 
 
@@ -257,12 +252,26 @@ def build_corpus_plan(
         group_by_file=group_by_file,
         auto_single_cleaned=auto_single_cleaned,
     )
-    cleaned_dir, cleaner_inspection = _resolve_cleaned_dir(
+    cleaner_plan, cleaner_inspection = _inspect_cleaner_plan(
         config=config,
         project_root=resolved_root,
-        preprocess_mode=preprocess_mode,
         dependencies=dependencies,
     )
+    config_files = resolve_config_files(
+        config=config,
+        config_path=resolved_config,
+        project_root=resolved_root,
+        cleaner_inspection=cleaner_inspection,
+    )
+    if preprocess_mode == "inspect":
+        cleaned_dir = inspect_preprocess(cleaner_plan)
+    elif preprocess_mode == "execute":
+        cleaned_dir = execute_preprocess(
+            cleaner_plan,
+            cleaner_loader=dependencies.cleaner_loader,
+        )
+    else:
+        raise ValueError("preprocess_mode must be 'inspect' or 'execute'")
     resolved = resolve_corpus_work_items(
         config=config,
         project_root=resolved_root,
@@ -282,4 +291,5 @@ def build_corpus_plan(
         work_items=tuple(resolved.work_items),
         group_files=resolved.group_files,
         cleaner_inspection=cleaner_inspection,
+        config_files=config_files,
     )

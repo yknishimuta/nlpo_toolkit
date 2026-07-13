@@ -7,6 +7,7 @@ import pytest
 
 from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.config import ensure_app_config, load_config
+from nlpo_toolkit.corpus_analysis.config_references import ResolvedConfigFiles
 from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
 from nlpo_toolkit.corpus_analysis.dependencies import (
     ConfigNgramDependencies,
@@ -291,8 +292,9 @@ def test_config_ngram_uses_canonical_corpus_plan_with_overrides(tmp_path, monkey
             (),
             {
                 "project_root": tmp_path,
-                "config": config,
-                "work_items": (),
+                    "config": config,
+                    "work_items": (),
+                    "config_files": ResolvedConfigFiles(),
             },
         )()
 

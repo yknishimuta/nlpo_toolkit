@@ -9,6 +9,7 @@ from nlpo_toolkit.backends import NLPBackendInfo
 
 from .corpus import PreparedCorpus
 from .analysis_policy import AnalysisExtractionPolicy, DEFAULT_ANALYSIS_EXTRACTION_POLICY
+from .config_references import ConfigFileReference
 from .run_plan import RunPlan
 
 
@@ -21,14 +22,6 @@ class RunContext:
     splitter_nlp: Any | None
     roman_exceptions: frozenset[str]
     extraction_policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY
-
-
-@dataclass(frozen=True)
-class ReferencedConfigFile:
-    kind: str
-    path: Path
-    copy_to_snapshot: bool
-    snapshot_path: Path | None = None
 
 
 def deduplicate_resolved_paths(paths: Iterable[Path]) -> tuple[Path, ...]:
@@ -51,7 +44,7 @@ class RunResult:
     cleaned_files: tuple[Path, ...]
     output_files: tuple[Path, ...]
     trace_files: tuple[Path, ...]
-    config_files: tuple[ReferencedConfigFile, ...]
+    config_files: tuple[ConfigFileReference, ...]
     summary_path: Path
     metadata_path: Path
     partition_mismatches: tuple[tuple[str, str, int, int], ...] = ()

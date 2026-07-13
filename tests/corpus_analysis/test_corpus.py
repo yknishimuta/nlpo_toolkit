@@ -19,6 +19,10 @@ from nlpo_toolkit.corpus_analysis.corpus import (
     resolve_corpus_work_items,
     resolve_group_files,
 )
+from nlpo_toolkit.corpus_analysis.config_references import (
+    ConfigReferenceError,
+    resolve_config_files,
+)
 from nlpo_toolkit.corpus_analysis.corpus_errors import (
     CorpusPreparationError,
     CorpusReadError,
@@ -132,7 +136,9 @@ def test_auto_single_cleaned_success_and_errors(tmp_path: Path) -> None:
         resolve_auto_single_cleaned_group(cleaned_dir=cleaned_dir, group_name="corpus_a")
 
 
-def test_prepare_corpus_text_normalizes_and_counts_ref_tags(tmp_path: Path) -> None:
+def test_prepare_corpus_text_normalizes_and_counts_ref_tags(
+    tmp_path: Path, monkeypatch
+) -> None:
     text_path = tmp_path / "sample_text_a.txt"
     text_path.write_text("VITA ref. item_a", encoding="utf-8")
     ref_path = tmp_path / "ref_tags.txt"
@@ -145,10 +151,28 @@ def test_prepare_corpus_text_normalizes_and_counts_ref_tags(tmp_path: Path) -> N
         }
     )
 
+    root_config = tmp_path / "groups.yml"
+    root_config.write_text("groups: {}\n", encoding="utf-8")
+    config_files = resolve_config_files(
+        config=cfg,
+        config_path=root_config,
+        project_root=tmp_path,
+        cleaner_inspection=None,
+    )
+    import nlpo_toolkit.corpus_analysis.corpus as corpus_mod
+
+    original_loader = corpus_mod.load_ref_tag_patterns
+    loaded_paths: list[Path] = []
+
+    def recording_loader(path: Path):
+        loaded_paths.append(path)
+        return original_loader(path)
+
+    monkeypatch.setattr(corpus_mod, "load_ref_tag_patterns", recording_loader)
     prepared = prepare_corpora(
         work_items=(CorpusWorkItem("corpus_a", (text_path,)),),
         config=cfg,
-        project_root=tmp_path,
+        config_files=config_files,
     )[0]
 
     assert prepared.files == (text_path,)
@@ -156,6 +180,7 @@ def test_prepare_corpus_text_normalizes_and_counts_ref_tags(tmp_path: Path) -> N
     assert "ref." not in prepared.prepared_text
     assert "vita" in prepared.prepared_text
     assert prepared.ref_tag_counts == Counter({"ref": 1})
+    assert loaded_paths == [ref_path.resolve()]
 
 
 def test_prepare_corpus_text_uses_supplied_patterns_without_reload(tmp_path: Path, monkeypatch) -> None:
@@ -193,11 +218,14 @@ def test_missing_ref_tag_file_is_error(tmp_path: Path) -> None:
         }
     )
 
-    with pytest.raises(CorpusPreparationError, match="pattern file was not found"):
-        prepare_corpora(
-            work_items=(CorpusWorkItem("corpus_a", (text_path,)),),
+    root_config = tmp_path / "groups.yml"
+    root_config.write_text("groups: {}\n", encoding="utf-8")
+    with pytest.raises(ConfigReferenceError, match="ref_tags.patterns"):
+        resolve_config_files(
             config=cfg,
+            config_path=root_config,
             project_root=tmp_path,
+            cleaner_inspection=None,
         )
 
 

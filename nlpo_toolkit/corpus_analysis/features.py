@@ -16,6 +16,7 @@ from .analysis_records import (
 from .analysis_policy import AnalysisExtractionPolicy, DEFAULT_ANALYSIS_EXTRACTION_POLICY
 from .dependencies import FeatureCommandDependencies
 from .corpus import prepare_corpora
+from .config_references import ConfigReferenceError
 from .run_plan import build_corpus_plan
 from .runtime import build_nlp_runtime
 
@@ -299,7 +300,7 @@ def execute_feature_command(
             dependencies=dependencies.planning,
             preprocess_mode="execute",
         )
-    except FileNotFoundError as exc:
+    except (ConfigReferenceError, FileNotFoundError) as exc:
         raise FeatureError(str(exc)) from exc
     config = plan.config
 
@@ -317,7 +318,7 @@ def execute_feature_command(
     for corpus in prepare_corpora(
         work_items=plan.work_items,
         config=config,
-        project_root=plan.project_root,
+        config_files=plan.config_files,
     ):
         groups_texts.append((corpus.label, list(corpus.files), corpus.prepared_text))
 

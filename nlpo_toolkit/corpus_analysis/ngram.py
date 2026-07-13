@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Iterable, Iterator
 
 from .corpus import PreparedCorpus, prepare_corpora
+from .config_references import ConfigReferenceError
 from .dependencies import ConfigNgramDependencies
 from .run_plan import build_corpus_plan
 from .analysis_records import TokenRecord
@@ -269,20 +270,23 @@ def execute_config_ngram_command(
             "Config input supports --field token only. "
             "Use --tokens with a token artifact for lemma n-grams."
         )
-    plan = build_corpus_plan(
-        project_root=request.project_root,
-        script_dir=None,
-        config_path=request.config_path,
-        group_by_file=request.group_by_file,
-        auto_single_cleaned=request.auto_single_cleaned,
-        error_on_empty_group=request.error_on_empty_group,
-        dependencies=dependencies.planning,
-        preprocess_mode="execute",
-    )
+    try:
+        plan = build_corpus_plan(
+            project_root=request.project_root,
+            script_dir=None,
+            config_path=request.config_path,
+            group_by_file=request.group_by_file,
+            auto_single_cleaned=request.auto_single_cleaned,
+            error_on_empty_group=request.error_on_empty_group,
+            dependencies=dependencies.planning,
+            preprocess_mode="execute",
+        )
+    except ConfigReferenceError as exc:
+        raise NgramError(str(exc)) from exc
     corpora = prepare_corpora(
         work_items=plan.work_items,
         config=plan.config,
-        project_root=plan.project_root,
+        config_files=plan.config_files,
     )
     rows = build_ngrams_from_rows(
         iter_config_token_rows(corpora),

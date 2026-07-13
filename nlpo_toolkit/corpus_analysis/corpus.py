@@ -10,6 +10,7 @@ from typing import Iterable, Mapping, Sequence
 from nlpo_toolkit.cleaner_contracts import CleanerConfigError, CleanerConfigInspection
 
 from .config import AppConfig, GroupConfig
+from .config_references import ResolvedConfigFiles
 from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner, run_cleaner
 from .corpus_errors import CleanerInspectionError, CorpusPreparationError
 from .io_utils import expand_globs, read_concat
@@ -239,14 +240,17 @@ def resolve_corpus_work_items(
     )
 
 
-def resolve_ref_tag_patterns(config: AppConfig, project_root: Path) -> tuple[RefTagPattern, ...]:
+def resolve_ref_tag_patterns(
+    config: AppConfig,
+    config_files: ResolvedConfigFiles,
+) -> tuple[RefTagPattern, ...]:
     if not config.ref_tags.enabled:
         return ()
-    if not config.ref_tags.patterns:
-        raise CorpusPreparationError("ref_tags.patterns is required when ref_tags.enabled=true")
-    path = resolve_project_path(project_root, config.ref_tags.patterns)
-    if not path.exists():
-        raise CorpusPreparationError(f"ref_tags.enabled=true, but pattern file was not found: {path}")
+    path = config_files.path("ref_tags.patterns")
+    if path is None:
+        raise CorpusPreparationError(
+            "ref_tags.patterns is required when ref_tags.enabled=true"
+        )
     return tuple(load_ref_tag_patterns(path))
 
 
@@ -274,9 +278,9 @@ def prepare_corpora(
     *,
     work_items: Iterable[CorpusWorkItem],
     config: AppConfig,
-    project_root: Path,
+    config_files: ResolvedConfigFiles,
 ) -> tuple[PreparedCorpus, ...]:
-    ref_tag_patterns = resolve_ref_tag_patterns(config, project_root)
+    ref_tag_patterns = resolve_ref_tag_patterns(config, config_files)
     return tuple(
         prepare_corpus_text(
             work_item=work_item,

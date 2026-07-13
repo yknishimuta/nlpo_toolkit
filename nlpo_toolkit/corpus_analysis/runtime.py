@@ -7,9 +7,9 @@ from nlpo_toolkit.backends import NLPBackendInfo
 from nlpo_toolkit.nlp import load_roman_exceptions
 
 from .config import AppConfig
-from .corpus import prepare_corpora, resolve_project_path
+from .corpus import prepare_corpora
 from .dependencies import BackendFactory, RunnerDependencies
-from .run_plan import build_run_plan, ensure_out_dir
+from .run_plan import RunPlan, build_run_plan, ensure_out_dir
 from .runner_types import RunContext
 
 
@@ -45,13 +45,11 @@ def initialize_sentence_splitter(
 
 def load_roman_exceptions_for_run(
     *,
-    config: AppConfig,
-    project_root: Path,
+    plan: RunPlan,
 ) -> frozenset[str]:
-    roman_exceptions_file = config.filters.roman_exceptions_file
-    if not roman_exceptions_file:
+    path = plan.config_files.path("filters.roman_exceptions_file")
+    if path is None:
         return frozenset()
-    path = resolve_project_path(project_root, roman_exceptions_file)
     return load_roman_exceptions(path)
 
 
@@ -78,9 +76,10 @@ def prepare_run_context(
     prepared_corpora = prepare_corpora(
         work_items=plan.work_items,
         config=plan.config,
-        project_root=plan.project_root,
+        config_files=plan.config_files,
     )
     ensure_out_dir(plan.out_dir)
+    roman_exceptions = load_roman_exceptions_for_run(plan=plan)
     nlp, backend_info, package = initialize_nlp_runtime(
         config=plan.config,
         dependencies=dependencies,
@@ -88,10 +87,6 @@ def prepare_run_context(
     splitter_nlp = initialize_sentence_splitter(
         config=plan.config,
         dependencies=dependencies,
-    )
-    roman_exceptions = load_roman_exceptions_for_run(
-        config=plan.config,
-        project_root=plan.project_root,
     )
     return RunContext(
         plan=plan,

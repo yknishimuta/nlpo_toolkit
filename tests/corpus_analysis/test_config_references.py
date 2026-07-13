@@ -1,57 +1,173 @@
 from pathlib import Path
 
+import pytest
+
+from nlpo_toolkit.cleaner_contracts import (
+    CleanerConfig,
+    CleanerConfigInspection,
+    CleanerReferencedFile,
+)
 from nlpo_toolkit.corpus_analysis.config import ensure_app_config
 from nlpo_toolkit.corpus_analysis.config_references import (
-    build_config_file_inventory,
+    ConfigFileReference,
+    ConfigReferenceError,
+    ResolvedConfigFiles,
+    resolve_config_files,
 )
-from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 
 
-def test_inventory_uses_typed_cleaner_inspection(tmp_path: Path) -> None:
-    config_dir = tmp_path / "config"
-    config_dir.mkdir()
-    input_dir = tmp_path / "input"
-    input_dir.mkdir()
-    (input_dir / "a.txt").write_text("a", encoding="utf-8")
-    root_config = config_dir / "groups.yml"
-    root_config.write_text("groups: {}\n", encoding="utf-8")
-    rules = config_dir / "rules.yml"
-    lexicon = config_dir / "lexicon.tsv"
-    rules.write_text("rules: []\n", encoding="utf-8")
-    lexicon.write_text("a\tb\n", encoding="utf-8")
-    cleaner = config_dir / "cleaner.yml"
-    cleaner.write_text(
-        "kind: corpus_corporum\n"
-        "input: ../input\n"
-        "output: ../cleaned\n"
-        "rules_path: rules.yml\n"
-        "lexicon_map_path: lexicon.tsv\n",
-        encoding="utf-8",
+def _touch(path: Path, text: str = "x") -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def _inspection(
+    *, cleaner: Path, referenced_files: tuple[CleanerReferencedFile, ...]
+) -> CleanerConfigInspection:
+    return CleanerConfigInspection(
+        config=CleanerConfig(
+            source_path=cleaner,
+            kind="scholastic_text",
+            input_path=cleaner.parent,
+            output_path=cleaner.parent / "cleaned",
+        ),
+        input_files=(),
+        referenced_files=referenced_files,
     )
-    config = ensure_app_config({"groups": {"text": {"files": []}}})
 
-    inventory = build_config_file_inventory(
+
+def test_resolves_all_typed_references_and_snapshot_policy(tmp_path: Path) -> None:
+    root_config = _touch(tmp_path / "config" / "groups.yml")
+    cleaner = _touch(tmp_path / "config" / "cleaner.yml")
+    rules = _touch(tmp_path / "config" / "rules.yml")
+    lemma = _touch(tmp_path / "config" / "lemma.tsv")
+    wordlist = _touch(tmp_path / "data" / "words.txt")
+    patterns = _touch(tmp_path / "config" / "refs.txt")
+    roman = _touch(tmp_path / "config" / "roman.txt")
+    config = ensure_app_config(
+        {
+            "preprocess": {"kind": "cleaner", "config": "config/cleaner.yml"},
+            "groups": {"text": {"files": []}},
+            "dictcheck": {
+                "enabled": False,
+                "lemma_normalize": "config/lemma.tsv",
+                "wordlist": "data/words.txt",
+            },
+            "ref_tags": {"enabled": False, "patterns": "config/refs.txt"},
+            "filters": {"roman_exceptions_file": "config/roman.txt"},
+        }
+    )
+
+    resolved = resolve_config_files(
         config=config,
         config_path=root_config,
         project_root=tmp_path,
-        cleaner_inspection=inspect_cleaner_config(cleaner),
+        cleaner_inspection=_inspection(
+            cleaner=cleaner,
+            referenced_files=(CleanerReferencedFile("preprocess.rules_path", rules),),
+        ),
     )
 
-    assert [(item.kind, item.path) for item in inventory] == [
-        ("root_config", root_config.resolve()),
-        ("preprocess.config", cleaner.resolve()),
-        ("preprocess.rules_path", rules.resolve()),
-        ("preprocess.lexicon_map_path", lexicon.resolve()),
+    assert [item.kind for item in resolved.references] == [
+        "root_config",
+        "preprocess.config",
+        "preprocess.rules_path",
+        "dictcheck.lemma_normalize",
+        "dictcheck.wordlist",
+        "ref_tags.patterns",
+        "filters.roman_exceptions_file",
     ]
+    assert resolved.require("root_config").path == root_config.resolve()
+    assert resolved.path("preprocess.rules_path") == rules.resolve()
+    assert resolved.path("dictcheck.lemma_normalize") == lemma.resolve()
+    assert resolved.path("dictcheck.wordlist") == wordlist.resolve()
+    assert resolved.path("ref_tags.patterns") == patterns.resolve()
+    assert resolved.path("filters.roman_exceptions_file") == roman.resolve()
+    assert resolved.require("dictcheck.wordlist").copy_to_snapshot is False
+    assert resolved.require("dictcheck.wordlist").snapshot_path is None
 
 
-def test_inventory_without_cleaner_has_no_preprocess_entries(tmp_path: Path) -> None:
-    root_config = tmp_path / "groups.yml"
-    root_config.write_text("groups: {}\n", encoding="utf-8")
-    inventory = build_config_file_inventory(
+def test_absolute_path_and_external_snapshot_path(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    root_config = _touch(project / "groups.yml")
+    external = _touch(tmp_path / "external" / "lemma.tsv")
+    config = ensure_app_config(
+        {
+            "groups": {"text": {"files": []}},
+            "dictcheck": {"lemma_normalize": str(external)},
+        }
+    )
+
+    resolved = resolve_config_files(
+        config=config,
+        config_path=root_config,
+        project_root=project,
+        cleaner_inspection=None,
+    )
+
+    reference = resolved.require("dictcheck.lemma_normalize")
+    assert reference.path == external.resolve()
+    assert reference.snapshot_path == Path("external/lemma.tsv")
+
+
+def test_unset_optional_references_are_omitted(tmp_path: Path) -> None:
+    root_config = _touch(tmp_path / "groups.yml")
+    resolved = resolve_config_files(
         config=ensure_app_config({"groups": {"text": {"files": []}}}),
         config_path=root_config,
         project_root=tmp_path,
         cleaner_inspection=None,
     )
-    assert [item.kind for item in inventory] == ["root_config"]
+    assert [item.kind for item in resolved.references] == ["root_config"]
+    assert resolved.get("dictcheck.wordlist") is None
+
+
+def test_duplicate_kind_is_rejected(tmp_path: Path) -> None:
+    path = _touch(tmp_path / "same.yml")
+    reference = ConfigFileReference("duplicate", path, True, True, Path("same.yml"))
+    with pytest.raises(ConfigReferenceError, match="duplicate"):
+        ResolvedConfigFiles((reference, reference))
+
+
+@pytest.mark.parametrize("make_path", [lambda path: path, lambda path: path.mkdir() or path])
+def test_missing_or_directory_reference_is_rejected(tmp_path: Path, make_path) -> None:
+    root_config = _touch(tmp_path / "groups.yml")
+    configured = make_path(tmp_path / "configured")
+    config = ensure_app_config(
+        {
+            "groups": {"text": {"files": []}},
+            "dictcheck": {"lemma_normalize": str(configured)},
+        }
+    )
+    expected = "does not exist" if not configured.exists() else "is not a file"
+
+    with pytest.raises(ConfigReferenceError) as caught:
+        resolve_config_files(
+            config=config,
+            config_path=root_config,
+            project_root=tmp_path,
+            cleaner_inspection=None,
+        )
+
+    message = str(caught.value)
+    assert expected in message
+    assert "dictcheck.lemma_normalize" in message
+    assert str(configured.resolve()) in message
+
+
+def test_optional_cleaner_entry_is_explicit_and_must_exist(tmp_path: Path) -> None:
+    root_config = _touch(tmp_path / "groups.yml")
+    cleaner = _touch(tmp_path / "cleaner.yml")
+    missing = tmp_path / "optional.tsv"
+    inspection = _inspection(
+        cleaner=cleaner,
+        referenced_files=(CleanerReferencedFile("preprocess.optional", missing, False),),
+    )
+    with pytest.raises(ConfigReferenceError, match="preprocess.optional"):
+        resolve_config_files(
+            config=ensure_app_config({"groups": {"text": {"files": []}}}),
+            config_path=root_config,
+            project_root=tmp_path,
+            cleaner_inspection=inspection,
+        )

@@ -9,7 +9,7 @@ from nlpo_toolkit.corpus_analysis.runner import run
 from tests.corpus_analysis.fake_nlp import fake_backend_factory, runner_dependencies
 
 
-def test_dictcheck_enabled_creates_known_unknown(tmp_path):
+def test_dictcheck_enabled_creates_known_unknown(tmp_path, monkeypatch):
     # --- Arrange: fake "repo" layout that main() expects ---
     script_dir = tmp_path / "runner_dir"
     (script_dir / "config").mkdir(parents=True, exist_ok=True)
@@ -63,12 +63,23 @@ def test_dictcheck_enabled_creates_known_unknown(tmp_path):
             [("rosa", "rosa", "NOUN"), ("rosa", "rosa", "NOUN"), ("puella", "puella", "NOUN")]
         ),
     )
+    import nlpo_toolkit.nlp as nlp_mod
+
+    original_loader = nlp_mod.load_vocab
+    loaded_paths: list[Path] = []
+
+    def recording_loader(path: Path):
+        loaded_paths.append(path)
+        return original_loader(path)
+
+    monkeypatch.setattr(nlp_mod, "load_vocab", recording_loader)
     result = run(
         project_root=script_dir,
         config_path=config_path,
         dependencies=dependencies,
     )
     assert result.exit_code == 0
+    assert loaded_paths == [wordlist_path.resolve()]
 
     # --- Assert ---
     base_csv = out_dir / "frequency_text.csv"

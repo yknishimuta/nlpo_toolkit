@@ -17,6 +17,9 @@ def test_dictcheck_disabled_does_not_create_known_unknown(tmp_path):
     data_dir = script_dir / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
     (data_dir / "t1.txt").write_text("Puella rosam amat.\n", encoding="utf-8")
+    wordlist = data_dir / "wordlists" / "latin_words.txt"
+    wordlist.parent.mkdir()
+    wordlist.write_text("rosa\n", encoding="utf-8")
 
     out_dir = script_dir / "output"
 
@@ -33,8 +36,8 @@ def test_dictcheck_disabled_does_not_create_known_unknown(tmp_path):
         },
         "dictcheck": {
             "enabled": False,
-            # even if present, must not be used when enabled=False
-            "wordlist": str(script_dir / "data" / "wordlists" / "latin_words.txt"),
+            # Explicit paths are validated even when the feature is disabled.
+            "wordlist": str(wordlist),
         },
     }
 

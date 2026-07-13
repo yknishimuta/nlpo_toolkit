@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .archive import ArchiveOptions, RunArchiveError, RunArchiveResult
 from .cleaner_runtime import CleanerError
+from .config_references import ConfigReferenceError
 from .corpus_errors import CorpusPreparationError
 from .dependencies import CountCommandDependencies
 from .runner_types import RunResult
@@ -56,6 +57,7 @@ def execute_count_command(
         )
     except (
         CleanerError,
+        ConfigReferenceError,
         CorpusPreparationError,
         FileNotFoundError,
         ValueError,

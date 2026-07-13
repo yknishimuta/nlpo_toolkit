@@ -9,6 +9,8 @@ from nlpo_toolkit.corpus_analysis.dependencies import CorpusPlanningDependencies
 from nlpo_toolkit.corpus_analysis.dry_run import DiagnosticLevel, execute_dry_run
 from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis.config import ConfigError
+from nlpo_toolkit.corpus_analysis.config_references import ConfigReferenceError
+from nlpo_toolkit.corpus_analysis.run_plan import build_run_plan
 
 
 def _execute_dry_run(
@@ -120,8 +122,12 @@ def test_dry_run_reports_config_paths_matches_and_warnings(tmp_path: Path, capsy
     assert "  - cleaned/b.txt" in out
     assert "  - cleaned/c.txt" in out
     assert "[WARN] duplicate YAML key: trace" in out
-    assert "[OK] dictcheck wordlist found" in out
-    assert "[OK] ref_tags patterns found" in out
+    assert "[OK] dictcheck.wordlist found: data/wordlist/latin_words.txt" in out
+    assert "[OK] ref_tags.patterns found: config/ref_tags.txt" in out
+    assert (
+        "[OK] filters.roman_exceptions_file found: "
+        "config/roman_numeral_exceptions.txt"
+    ) in out
     assert "[OK] output dir: output" in out
 
 
@@ -298,6 +304,51 @@ def test_dry_run_reports_missing_config_and_preserves_cause(
     with pytest.raises(ConfigError) as caught:
         load_config(config_path)
     assert isinstance(caught.value.__cause__, FileNotFoundError)
+
+
+def test_dry_run_and_normal_planning_report_same_missing_reference(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "groups.yml"
+    config_path.write_text(
+        "groups: {text: {files: []}}\n"
+        "filters: {roman_exceptions_file: config/missing-roman.txt}\n",
+        encoding="utf-8",
+    )
+    dependencies = CorpusPlanningDependencies(
+        load_config=load_config,
+        cleaner_loader=lambda: pytest.fail("cleaner must not run"),
+    )
+
+    dry_result = execute_dry_run(
+        request=CountRequest(
+            project_root=tmp_path,
+            config_path=config_path,
+            dry_run=True,
+        ),
+        dependencies=dependencies,
+    )
+    dry_error = next(
+        item.message
+        for item in dry_result.diagnostics
+        if item.level is DiagnosticLevel.ERROR
+    )
+
+    with pytest.raises(ConfigReferenceError) as normal:
+        build_run_plan(
+            project_root=tmp_path,
+            script_dir=None,
+            config_path=config_path,
+            group_by_file=False,
+            auto_single_cleaned=False,
+            error_on_empty_group=False,
+            dependencies=dependencies,
+            preprocess_mode="execute",
+        )
+
+    assert dry_error == str(normal.value)
+    assert "filters.roman_exceptions_file" in dry_error
+    assert str((tmp_path / "config/missing-roman.txt").resolve()) in dry_error
 
 
 @pytest.mark.parametrize(

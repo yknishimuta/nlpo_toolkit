@@ -13,13 +13,14 @@ from nlpo_toolkit.corpus_analysis.archive import (
     sanitize_run_name,
 )
 from nlpo_toolkit.corpus_analysis.config import ensure_app_config
+from nlpo_toolkit.corpus_analysis.config_references import ConfigFileReference
 from nlpo_toolkit.corpus_analysis.count_command import CountRequest, execute_count_command
 from nlpo_toolkit.corpus_analysis.dependencies import (
     CountCommandDependencies,
     default_runner_dependencies,
 )
 from nlpo_toolkit.corpus_analysis.run_plan import RunPlan
-from nlpo_toolkit.corpus_analysis.runner_types import ReferencedConfigFile, RunResult
+from nlpo_toolkit.corpus_analysis.runner_types import RunResult
 
 
 def make_run_result(
@@ -29,7 +30,7 @@ def make_run_result(
     trace_files: tuple[Path, ...] = (),
     input_files: tuple[Path, ...] = (),
     cleaned_files: tuple[Path, ...] = (),
-    config_files: tuple[ReferencedConfigFile, ...] = (),
+    config_files: tuple[ConfigFileReference, ...] = (),
 ) -> RunResult:
     config_path = tmp_path / "config.yml"
     config_path.write_text("groups: {g: {files: []}}\n", encoding="utf-8")
@@ -86,7 +87,10 @@ def test_archive_uses_exact_cleaned_trace_config_and_external_inventory(tmp_path
     wordlist.write_text("rosa", encoding="utf-8")
     result = make_run_result(
         tmp_path, trace_files=(trace,), cleaned_files=(selected,),
-        config_files=(ReferencedConfigFile("root_config", config, True, Path("config/root.yml")), ReferencedConfigFile("dictcheck.wordlist", wordlist, False)),
+        config_files=(
+            ConfigFileReference("root_config", config, True, True, Path("config/root.yml")),
+            ConfigFileReference("dictcheck.wordlist", wordlist, True, False),
+        ),
     )
 
     archive = create_run_archive(result=result, options=ArchiveOptions(run_name="inventory", include_cleaned=True))
