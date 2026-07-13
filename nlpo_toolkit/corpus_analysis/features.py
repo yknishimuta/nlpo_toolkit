@@ -7,7 +7,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
-from nlpo_toolkit.nlp import should_drop_roman_numeral
+from nlpo_toolkit.nlp import (
+    RomanExceptionsError,
+    effective_roman_exceptions,
+    load_roman_exceptions,
+    should_drop_roman_numeral,
+)
 
 from .analysis_records import (
     NLPAnalysisRecord,
@@ -72,27 +77,53 @@ def safe_feature_name(value: str) -> str:
     return name or "empty"
 
 
-def _filtered_word_records(
+@dataclass(frozen=True)
+class FeatureFilterPolicy:
+    min_token_length: int = 0
+    drop_roman_numerals: bool = False
+    roman_exceptions: frozenset[str] = frozenset()
+
+    def __post_init__(self) -> None:
+        if isinstance(self.min_token_length, bool) or not isinstance(
+            self.min_token_length, int
+        ):
+            raise TypeError("min_token_length must be an integer")
+        if self.min_token_length < 0:
+            raise ValueError("min_token_length must be non-negative")
+        if not isinstance(self.drop_roman_numerals, bool):
+            raise TypeError("drop_roman_numerals must be a bool")
+        normalized = frozenset(
+            str(item).strip().lower()
+            for item in self.roman_exceptions
+            if str(item).strip()
+        )
+        object.__setattr__(self, "roman_exceptions", normalized)
+
+
+def filter_feature_records(
     records: Iterable[NLPAnalysisRecord],
     *,
-    min_token_length: int = 0,
-    drop_roman_numerals: bool = False,
-) -> list[NLPAnalysisRecord]:
+    policy: FeatureFilterPolicy,
+) -> tuple[NLPAnalysisRecord, ...]:
     out: list[NLPAnalysisRecord] = []
+    effective_exceptions = effective_roman_exceptions(
+        use_lemma=False,
+        configured_exceptions=policy.roman_exceptions,
+    )
     for record in records:
         key = feature_token_value(record)
         if not is_word_token_text(key):
             continue
-        if len(key) < min_token_length:
+        if len(key) < policy.min_token_length:
             continue
         if should_drop_roman_numeral(
             key,
-            drop_roman_numerals=drop_roman_numerals,
-            effective_exceptions=frozenset(),
+            drop_roman_numerals=policy.drop_roman_numerals,
+            effective_exceptions=effective_exceptions,
         ):
             continue
         out.append(record)
-    return out
+    return tuple(out)
 
 
 def compute_basic_features(
@@ -101,18 +132,12 @@ def compute_basic_features(
     group: str,
     file_count: int,
     *,
-    min_token_length: int = 0,
-    drop_roman_numerals: bool = False,
+    raw_token_count: int,
+    sentence_count: int,
 ) -> dict[str, Any]:
-    word_records = _filtered_word_records(
-        records,
-        min_token_length=min_token_length,
-        drop_roman_numerals=drop_roman_numerals,
-    )
-    sentence_count = len({(r.chunk_index, r.sentence_index) for r in records})
-    word_token_count = len(word_records)
-    lemmas = [feature_lemma_value(r) for r in word_records]
-    tokens = [feature_token_value(r) for r in word_records]
+    word_token_count = len(records)
+    lemmas = [feature_lemma_value(r) for r in records]
+    tokens = [feature_token_value(r) for r in records]
     lemma_counts = Counter(lemmas)
     lemma_type_count = len(lemma_counts)
     token_type_count = len(set(tokens))
@@ -124,7 +149,7 @@ def compute_basic_features(
         "file_count": file_count,
         "char_count": len(text),
         "sentence_count": sentence_count,
-        "token_count": len(records),
+        "token_count": raw_token_count,
         "word_token_count": word_token_count,
         "lemma_type_count": lemma_type_count,
         "token_type_count": token_type_count,
@@ -138,9 +163,8 @@ def compute_basic_features(
 
 
 def compute_upos_features(records: Sequence[NLPAnalysisRecord]) -> dict[str, Any]:
-    word_records = _filtered_word_records(records)
-    denom = len(word_records)
-    counts = Counter(feature_upos_value(r) for r in word_records)
+    denom = len(records)
+    counts = Counter(feature_upos_value(r) for r in records)
     features: dict[str, Any] = {}
     for upos in UPOS_FEATURES:
         count = counts.get(upos, 0)
@@ -156,6 +180,10 @@ def compute_upos_features(records: Sequence[NLPAnalysisRecord]) -> dict[str, Any
     return features
 
 
+def feature_field_value(record: NLPAnalysisRecord, field: str) -> str:
+    return feature_lemma_value(record) if field == "lemma" else feature_token_value(record)
+
+
 def select_mfw(
     all_group_records: Sequence[Sequence[NLPAnalysisRecord]],
     n: int,
@@ -167,9 +195,9 @@ def select_mfw(
         raise FeatureError("--field must be 'lemma' or 'token'")
     counter: Counter[str] = Counter()
     for records in all_group_records:
-        for record in _filtered_word_records(records):
-            value = feature_lemma_value(record) if field == "lemma" else feature_token_value(record)
-            if value and is_word_token_text(value):
+        for record in records:
+            value = feature_field_value(record, field)
+            if value:
                 counter[value] += 1
     return [term for term, _count in sorted(counter.items(), key=lambda kv: (-kv[1], kv[0]))[:n]]
 
@@ -179,11 +207,10 @@ def compute_mfw_features(
     mfw_terms: Sequence[str],
     field: str,
 ) -> dict[str, Any]:
-    word_records = _filtered_word_records(records)
-    denom = len(word_records)
+    denom = len(records)
     counter: Counter[str] = Counter()
-    for record in word_records:
-        value = feature_lemma_value(record) if field == "lemma" else feature_token_value(record)
+    for record in records:
+        value = feature_field_value(record, field)
         if value:
             counter[value] += 1
     return {
@@ -198,8 +225,7 @@ class FeatureOptions:
     mfw: int = 0
     include_upos: bool = True
     include_basic: bool = True
-    min_token_length: int = 0
-    drop_roman_numerals: bool = False
+    filter_policy: FeatureFilterPolicy = FeatureFilterPolicy()
     extraction_policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY
 
 
@@ -217,7 +243,9 @@ class PreparedFeatureCorpus:
     group: str
     files: tuple[Path, ...]
     text: str
-    records: tuple[NLPAnalysisRecord, ...]
+    raw_record_count: int
+    sentence_count: int
+    feature_records: tuple[NLPAnalysisRecord, ...]
 
 
 @dataclass(frozen=True)
@@ -237,29 +265,39 @@ def build_feature_rows(
 
     prepared: list[PreparedFeatureCorpus] = []
     for group, files, text in groups_texts:
+        raw_records = tuple(
+            iter_nlp_analysis_records_from_text(
+                text=text,
+                nlp=nlp,
+                policy=options.extraction_policy,
+            )
+        )
         prepared.append(
             PreparedFeatureCorpus(
                 group=group,
                 files=tuple(files),
                 text=text,
-                records=tuple(
-                    iter_nlp_analysis_records_from_text(
-                        text=text,
-                        nlp=nlp,
-                        policy=options.extraction_policy,
-                    )
+                raw_record_count=len(raw_records),
+                sentence_count=len(
+                    {(record.chunk_index, record.sentence_index) for record in raw_records}
+                ),
+                feature_records=filter_feature_records(
+                    raw_records,
+                    policy=options.filter_policy,
                 ),
             )
         )
 
-    mfw_terms = select_mfw([corpus.records for corpus in prepared], options.mfw, options.field)
+    mfw_terms = select_mfw(
+        [corpus.feature_records for corpus in prepared], options.mfw, options.field
+    )
     rows: list[dict[str, Any]] = []
     for corpus in prepared:
         group, files, text, records = (
             corpus.group,
             corpus.files,
             corpus.text,
-            corpus.records,
+            corpus.feature_records,
         )
         row: dict[str, Any] = {"group": group}
         if options.include_basic:
@@ -269,8 +307,8 @@ def build_feature_rows(
                     text,
                     group,
                     len(files),
-                    min_token_length=options.min_token_length,
-                    drop_roman_numerals=options.drop_roman_numerals,
+                    raw_token_count=corpus.raw_record_count,
+                    sentence_count=corpus.sentence_count,
                 )
             )
         if options.include_upos:
@@ -296,13 +334,27 @@ def execute_feature_command(
         raise FeatureError(str(exc)) from exc
     config = plan.config
 
+    roman_exceptions_path = plan.config_files.path("filters.roman_exceptions_file")
+    try:
+        configured_roman_exceptions = (
+            load_roman_exceptions(roman_exceptions_path)
+            if roman_exceptions_path is not None
+            else frozenset()
+        )
+    except RomanExceptionsError as exc:
+        raise FeatureError(str(exc)) from exc
+
     options = FeatureOptions(
         field=request.field,
         mfw=request.mfw,
         include_upos=request.include_upos,
         include_basic=request.include_basic,
-        min_token_length=config.filters.min_token_length,
-        drop_roman_numerals=config.filters.drop_roman_numerals,
+        # UPOS targets belong to Count selection, not stylistic feature filtering.
+        filter_policy=FeatureFilterPolicy(
+            min_token_length=config.filters.min_token_length,
+            drop_roman_numerals=config.filters.drop_roman_numerals,
+            roman_exceptions=configured_roman_exceptions,
+        ),
         extraction_policy=dependencies.analysis.extraction_policy,
     )
 

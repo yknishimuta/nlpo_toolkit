@@ -10,6 +10,7 @@ from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.features import (
     FeatureError,
     FeatureCommandResult,
+    FeatureFilterPolicy,
     FeatureOptions,
     FeatureRequest,
     build_feature_rows,
@@ -18,6 +19,7 @@ from nlpo_toolkit.corpus_analysis.features import (
     compute_upos_features,
     select_mfw,
     execute_feature_command,
+    filter_feature_records,
     safe_feature_name,
 )
 from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
@@ -143,7 +145,15 @@ def test_compute_basic_features_values() -> None:
         _record("Rosa", "rosa", "NOUN", 1),
     ]
 
-    row = compute_basic_features(records, "Rosa amat. Rosa", "g", 1)
+    feature_records = filter_feature_records(records, policy=FeatureFilterPolicy())
+    row = compute_basic_features(
+        feature_records,
+        "Rosa amat. Rosa",
+        "g",
+        1,
+        raw_token_count=len(records),
+        sentence_count=2,
+    )
 
     assert row["sentence_count"] == 2
     assert row["token_count"] == 4
@@ -160,7 +170,9 @@ def test_compute_upos_features_values() -> None:
         _record(".", ".", "PUNCT", 0),
     ]
 
-    row = compute_upos_features(records)
+    row = compute_upos_features(
+        filter_feature_records(records, policy=FeatureFilterPolicy())
+    )
 
     assert row["upos_NOUN_count"] == 1
     assert row["upos_NOUN_ratio"] == pytest.approx(1 / 3)
@@ -173,7 +185,14 @@ def test_compute_upos_features_values() -> None:
 def test_missing_lemma_falls_back_to_surface_for_basic_and_mfw() -> None:
     records = [_record("Rosa", None, "NOUN", 0)]
 
-    row = compute_basic_features(records, "Rosa", "g", 1)
+    row = compute_basic_features(
+        records,
+        "Rosa",
+        "g",
+        1,
+        raw_token_count=1,
+        sentence_count=1,
+    )
 
     assert row["lemma_type_count"] == 1
     assert select_mfw([records], 1, "lemma") == ["rosa"]
@@ -186,7 +205,14 @@ def test_sentence_count_uses_chunk_and_sentence_index() -> None:
         _record("b", "b", "NOUN", 0, chunk_index=1),
     ]
 
-    row = compute_basic_features(records, "a b", "g", 1)
+    row = compute_basic_features(
+        records,
+        "a b",
+        "g",
+        1,
+        raw_token_count=2,
+        sentence_count=2,
+    )
 
     assert row["sentence_count"] == 2
 
@@ -197,53 +223,67 @@ def test_missing_upos_and_punctuation_preserve_feature_denominators() -> None:
         _record(".", ".", "PUNCT", 0),
     ]
 
-    basic = compute_basic_features(records, "Rosa.", "g", 1)
-    upos = compute_upos_features(records)
+    feature_records = filter_feature_records(records, policy=FeatureFilterPolicy())
+    basic = compute_basic_features(
+        feature_records,
+        "Rosa.",
+        "g",
+        1,
+        raw_token_count=2,
+        sentence_count=1,
+    )
+    upos = compute_upos_features(feature_records)
 
     assert basic["token_count"] == 2
     assert basic["word_token_count"] == 1
     assert upos["upos_NOUN_count"] == 0
     assert upos["content_word_ratio"] == 0.0
-    assert select_mfw([records], 5, "token") == ["rosa"]
+    assert select_mfw([feature_records], 5, "token") == ["rosa"]
 
 
-def test_basic_filters_do_not_change_upos_or_mfw_semantics() -> None:
+def test_feature_filter_is_shared_by_basic_upos_and_mfw() -> None:
     records = [
         _record("xiv", "xiv", "NUM", 0),
         _record("a", "a", "NOUN", 0),
         _record("rosa", "rosa", "NOUN", 0),
+        _record(".", ".", "PUNCT", 0),
     ]
-
-    filtered_basic = compute_basic_features(
+    feature_records = filter_feature_records(
         records,
+        policy=FeatureFilterPolicy(
+            min_token_length=2,
+            drop_roman_numerals=True,
+        ),
+    )
+    basic = compute_basic_features(
+        feature_records,
         "xiv a rosa",
         "g",
         1,
-        min_token_length=2,
-        drop_roman_numerals=True,
+        raw_token_count=4,
+        sentence_count=1,
     )
-    unfiltered_basic = compute_basic_features(records, "xiv a rosa", "g", 1)
+    upos = compute_upos_features(feature_records)
+    terms = select_mfw([feature_records], 3, "token")
+    mfw = compute_mfw_features(feature_records, terms, "token")
 
-    assert filtered_basic["word_token_count"] == 1
-    assert unfiltered_basic["word_token_count"] == 3
-    assert compute_upos_features(records)["upos_NUM_count"] == 1
-    assert select_mfw([records], 3, "token") == ["a", "rosa", "xiv"]
+    assert [record.token for record in feature_records] == ["rosa"]
+    assert basic["word_token_count"] == 1
+    assert basic["lemma_type_count"] == 1
+    assert upos["upos_NOUN_count"] == 1
+    assert upos["upos_NUM_count"] == 0
+    assert upos["upos_NOUN_ratio"] == 1.0
+    assert terms == ["rosa"]
+    assert mfw["mfw_rosa"] == 1.0
 
 
-def test_features_roman_policy_has_no_count_surface_exceptions() -> None:
-    records = [_record("vi", "vi", "NUM", 0)]
+def test_features_roman_policy_uses_shared_surface_exceptions() -> None:
+    records = (_record("vi", "vi", "NUM", 0),)
 
-    dropped = compute_basic_features(
+    assert filter_feature_records(
         records,
-        "vi",
-        "g",
-        1,
-        drop_roman_numerals=True,
-    )
-    kept = compute_basic_features(records, "vi", "g", 1)
-
-    assert dropped["word_token_count"] == 0
-    assert kept["word_token_count"] == 1
+        policy=FeatureFilterPolicy(drop_roman_numerals=True),
+    ) == records
 
 
 def test_build_feature_rows_chunks_through_shared_extractor() -> None:
@@ -429,6 +469,102 @@ def test_run_features_two_groups_two_rows(tmp_path: Path) -> None:
 
     rows = list(csv.DictReader(out.open(encoding="utf-8")))
     assert [row["group"] for row in rows] == ["a", "b"]
+
+
+def test_feature_command_applies_one_shared_filter_and_loads_roman_exceptions_once(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import nlpo_toolkit.corpus_analysis.features as features_mod
+
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input" / "a.txt").write_text("xiv a rosa", encoding="utf-8")
+    (tmp_path / "input" / "b.txt").write_text("xiv a rosa", encoding="utf-8")
+    (tmp_path / "config").mkdir()
+    exceptions_path = tmp_path / "config" / "roman.txt"
+    exceptions_path.write_text("XIV\n", encoding="utf-8")
+    config_path = tmp_path / "groups.yml"
+    config_path.write_text(
+        "groups:\n"
+        "  a: {files: [input/a.txt]}\n"
+        "  b: {files: [input/b.txt]}\n"
+        "filters:\n"
+        "  min_token_length: 2\n"
+        "  drop_roman_numerals: true\n"
+        "  roman_exceptions_file: config/roman.txt\n"
+        "  upos_targets: [VERB]\n",
+        encoding="utf-8",
+    )
+
+    class RecordingNLP:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def __call__(self, text: str) -> NLPDocument:
+            self.calls.append(text)
+            return NLPDocument(
+                sentences=[
+                    NLPSentence(
+                        text=text,
+                        tokens=[
+                            NLPToken("xiv", "fourteen", "NUM"),
+                            NLPToken("a", "a", "NOUN"),
+                            NLPToken("rosa", "rosa", "NOUN"),
+                        ],
+                    )
+                ],
+                text=text,
+            )
+
+    nlp = RecordingNLP()
+    load_calls: list[Path] = []
+    filter_calls: list[tuple[NLPAnalysisRecord, ...]] = []
+    real_loader = features_mod.load_roman_exceptions
+    real_filter = features_mod.filter_feature_records
+
+    def recording_loader(path: Path) -> frozenset[str]:
+        load_calls.append(path)
+        return real_loader(path)
+
+    def recording_filter(records, *, policy):
+        records = tuple(records)
+        filter_calls.append(records)
+        return real_filter(records, policy=policy)
+
+    monkeypatch.setattr(features_mod, "load_roman_exceptions", recording_loader)
+    monkeypatch.setattr(features_mod, "filter_feature_records", recording_filter)
+
+    dependencies = _dependencies()
+    dependencies = FeatureCommandDependencies(
+        planning=dependencies.planning,
+        analysis=AnalysisDependencies(
+            backend_factory=lambda config: BuiltNLPBackend(
+                backend=nlp,
+                info=NLPBackendInfo(name="fake", language=config.language),
+            ),
+            extraction_policy=dependencies.analysis.extraction_policy,
+        ),
+    )
+    result = execute_feature_command(
+        FeatureRequest(
+            corpus=CorpusPreparationRequest(tmp_path, config_path),
+            mfw=2,
+            field="lemma",
+        ),
+        dependencies=dependencies,
+    )
+
+    assert load_calls == [exceptions_path.resolve()]
+    assert len(filter_calls) == 2
+    assert len(nlp.calls) == 2
+    assert [row["group"] for row in result.rows] == ["a", "b"]
+    for row in result.rows:
+        assert row["token_count"] == 3
+        assert row["word_token_count"] == 2
+        assert row["upos_NUM_count"] == 1
+        assert row["upos_NOUN_count"] == 1
+        assert row["mfw_fourteen"] == 0.5
+        assert row["mfw_rosa"] == 0.5
 
 
 def test_run_features_group_by_file(tmp_path: Path) -> None:

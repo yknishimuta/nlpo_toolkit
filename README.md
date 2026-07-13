@@ -527,10 +527,21 @@ concatenated, configured text normalization is applied, and reference tags are
 removed before NLP. If `ref_tags.enabled=true`, the pattern file must exist; a
 missing pattern file is a configuration error.
 
-Features and counting use the same chunked, pre-filter NLP analysis-record
-extraction layer. Feature statistics are computed directly from those raw
-records: they do not apply count-specific UPOS selection, require token
-artifacts, or imply use of the analysis cache.
+Features and counting use the same chunked NLP analysis-record extraction
+layer. After extraction, Features applies one eligibility filter per corpus;
+basic lexical statistics, UPOS statistics, global MFW selection, and per-corpus
+MFW frequencies all consume that same filtered record tuple. Eligibility uses
+the surface token and includes word-token detection, `min_token_length`, and
+the Roman-numeral policy including configured and built-in surface exceptions.
+The MFW `lemma`/`token` field changes only the value selected from eligible
+records, never the eligible record population.
+
+`filters.upos_targets` is intentionally Count-only and is not applied to
+Features: UPOS distribution and content/function ratios require the full
+eligible lexical population. In feature output, `token_count` is the raw NLP
+record count, while `word_token_count` is the count that passed the feature
+eligibility filter. Features do not require token artifacts or imply use of the
+analysis cache.
 
 ## N-Gram CLI
 
