@@ -1,4 +1,3 @@
-from dataclasses import fields
 from pathlib import Path
 
 from nlpo_toolkit.corpus_analysis.config import (
@@ -9,9 +8,9 @@ from nlpo_toolkit.corpus_analysis.config import (
 
 
 def test_unused_config_fields_are_removed() -> None:
-    app_fields = {field.name for field in fields(AppConfig)}
-    filter_fields = {field.name for field in fields(FilterConfig)}
-    normalization_fields = {field.name for field in fields(NormalizationConfig)}
+    app_fields = set(AppConfig.model_fields)
+    filter_fields = set(FilterConfig.model_fields)
+    normalization_fields = set(NormalizationConfig.model_fields)
 
     assert "vocab_path" not in app_fields
     assert "prune" not in app_fields

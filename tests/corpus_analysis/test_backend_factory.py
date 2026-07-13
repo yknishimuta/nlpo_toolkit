@@ -5,11 +5,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
 from nlpo_toolkit.backends import (
     BuiltNLPBackend,
-    NLPBackendConfigError,
     NLPBackendInfo,
     TransformersBackend as PublicTransformersBackend,
     create_nlp_backend,
@@ -158,8 +158,8 @@ def test_factory_selects_transformers_without_stanza(monkeypatch: pytest.MonkeyP
 
 
 def test_factory_rejects_transformers_without_model_name() -> None:
-    with pytest.raises(NLPBackendConfigError, match="nlp.model_name is required"):
-        create_nlp_backend(NLPConfig(backend="transformers", language="la"))
+    with pytest.raises(ValidationError, match="model_name is required"):
+        NLPConfig(backend="transformers", language="la")
 
 
 def test_config_rejects_transformers_without_model_name(tmp_path: Path) -> None:
@@ -177,7 +177,7 @@ def test_config_rejects_transformers_without_model_name(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="nlp.model_name is required"):
+    with pytest.raises(ValueError, match="nlp.*model_name is required"):
         load_config(cfg)
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -27,8 +27,8 @@ class RunReport:
 
 
 def _format_normalization_kv(norm: object) -> str:
-    if hasattr(norm, "__dataclass_fields__"):
-        norm_dict = asdict(norm)
+    if hasattr(norm, "model_dump"):
+        norm_dict = norm.model_dump(mode="python")
     elif isinstance(norm, dict):
         norm_dict = norm
     else:
@@ -188,7 +188,7 @@ def build_final_run_metadata(
         meta["grouping"] = {"mode": "per_file" if plan.per_file else "groups"}
     meta["environment"] = collect_runtime_environment(plan.project_root)
 
-    norm_dict = asdict(plan.config.normalization)
+    norm_dict = plan.config.normalization.model_dump(mode="json")
     norm_canon = json.dumps(norm_dict, ensure_ascii=False, sort_keys=True)
     meta["normalization"] = norm_dict
     meta["normalization_hash_sha256"] = hashlib.sha256(norm_canon.encode("utf-8")).hexdigest()

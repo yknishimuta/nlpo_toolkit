@@ -328,7 +328,6 @@ def test_build_analysis_plan_defers_count_specific_validation(
                 "part_a": {"files": ["input/part-a.txt"]},
                 "part_b": {"files": ["input/part-b.txt"]},
             },
-            "grouping": {"mode": "per_file"},
             "validations": {
                 "partitions": [
                     {
@@ -345,7 +344,7 @@ def test_build_analysis_plan_defers_count_specific_validation(
         project_root=tmp_path,
         script_dir=None,
         config_path=config_path,
-        group_by_file=False,
+        group_by_file=True,
         auto_single_cleaned=False,
         error_on_empty_group=False,
         dependencies=dependencies,

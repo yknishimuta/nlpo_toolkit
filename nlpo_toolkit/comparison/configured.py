@@ -4,7 +4,15 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 from functools import cmp_to_key
-from typing import Any, Mapping, Sequence
+from typing import Annotated, Any, Literal, Mapping, Sequence
+
+from pydantic import Field, StrictBool, StrictInt, model_validator
+
+from nlpo_toolkit.config_model import (
+    ConfigModel,
+    PositiveFiniteFloat,
+    StrippedNonBlankStr,
+)
 
 from nlpo_toolkit.comparison import (
     ComparisonEngineError,
@@ -22,17 +30,36 @@ EPSILON = 1e-12
 _SAFE_NAME_RE = re.compile(r"[^0-9A-Za-z]+")
 
 
-@dataclass(frozen=True)
-class ComparisonSpec:
-    name: str
-    group_a: str
-    group_b: str
-    scale: int = 10_000
-    zero_correction: float = 0.5
-    min_total_count: int = 1
-    report: str = "all"
-    sort_by: str = "log_likelihood"
-    sort_descending: bool = True
+ComparisonReport = Literal["all", "filtered"]
+ComparisonSortBy = Literal[
+    "log_likelihood",
+    "abs_log_ratio",
+    "total_count",
+    "item",
+]
+PositiveStrictInt = Annotated[StrictInt, Field(gt=0)]
+
+
+class ComparisonSortConfig(ConfigModel):
+    by: ComparisonSortBy = "log_likelihood"
+    descending: StrictBool = True
+
+
+class ComparisonSpec(ConfigModel):
+    name: StrippedNonBlankStr
+    group_a: StrippedNonBlankStr
+    group_b: StrippedNonBlankStr
+    scale: PositiveStrictInt = 10_000
+    zero_correction: PositiveFiniteFloat = 0.5
+    min_total_count: PositiveStrictInt = 1
+    report: ComparisonReport = "all"
+    sort: ComparisonSortConfig = Field(default_factory=ComparisonSortConfig)
+
+    @model_validator(mode="after")
+    def validate_distinct_groups(self) -> ComparisonSpec:
+        if self.group_a == self.group_b:
+            raise ValueError("group_a and group_b must be different")
+        return self
 
 
 @dataclass(frozen=True)
@@ -130,9 +157,9 @@ def _compare_values(a: Any, b: Any, *, descending: bool) -> int:
 def _sort_rows(rows: list[ComparisonRow], spec: ComparisonSpec) -> list[ComparisonRow]:
     def compare(left: ComparisonRow, right: ComparisonRow) -> int:
         primary = _compare_values(
-            _primary_value(left, spec.sort_by),
-            _primary_value(right, spec.sort_by),
-            descending=spec.sort_descending,
+            _primary_value(left, spec.sort.by),
+            _primary_value(right, spec.sort.by),
+            descending=spec.sort.descending,
         )
         if primary:
             return primary
@@ -143,7 +170,7 @@ def _sort_rows(rows: list[ComparisonRow], spec: ComparisonSpec) -> list[Comparis
             ("total_count", True),
             ("item", False),
         ):
-            if key == spec.sort_by:
+            if key == spec.sort.by:
                 continue
             result = _compare_values(
                 _primary_value(left, key),

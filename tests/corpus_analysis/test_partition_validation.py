@@ -14,7 +14,13 @@ from nlpo_toolkit.corpus_analysis.partition_validation import (
 
 
 def _spec(*, report: str = "mismatches", parts: tuple[str, ...] = ("part_a", "part_b")):
-    return PartitionSpec("split", "whole", parts, "warn", report)
+    return PartitionSpec(
+        name="split",
+        whole="whole",
+        parts=parts,
+        on_mismatch="warn",
+        report=report,
+    )
 
 
 def test_validate_partition_exact_match() -> None:
@@ -37,7 +43,7 @@ def test_validate_partition_exact_match() -> None:
 
 def test_validate_partition_whole_side_is_larger() -> None:
     result = validate_partition(
-        PartitionSpec("split", "whole", ("part_a", "part_b"), "warn", "mismatches"),
+        PartitionSpec(name="split", whole="whole", parts=("part_a", "part_b")),
         {
             "whole": Counter({"a": 3}),
             "part_a": Counter({"a": 2}),
@@ -52,7 +58,7 @@ def test_validate_partition_whole_side_is_larger() -> None:
 
 def test_validate_partition_parts_side_is_larger() -> None:
     result = validate_partition(
-        PartitionSpec("split", "whole", ("part_a", "part_b"), "warn", "mismatches"),
+        PartitionSpec(name="split", whole="whole", parts=("part_a", "part_b")),
         {
             "whole": Counter({"a": 2}),
             "part_a": Counter({"a": 3}),
@@ -168,7 +174,7 @@ def test_load_config_rejects_non_mapping_partition_item(tmp_path: Path) -> None:
         "groups:\n  full: {files: [a.txt]}\nvalidations:\n  partitions: [bad]\n",
     )
 
-    with pytest.raises(ValueError, match="must be a mapping"):
+    with pytest.raises(ValueError, match="valid dictionary"):
         load_config(cfg)
 
 
@@ -205,7 +211,7 @@ def test_load_config_rejects_duplicate_partition_names(tmp_path: Path) -> None:
         "    - {name: split, whole: full, parts: [a, b]}\n",
     )
 
-    with pytest.raises(ValueError, match="Duplicate partition name"):
+    with pytest.raises(ValueError, match="duplicate partition name"):
         load_config(cfg)
 
 
@@ -233,7 +239,7 @@ def test_load_config_rejects_invalid_report(tmp_path: Path) -> None:
         load_config(cfg)
 
 
-def test_load_config_preserves_per_file_partitions_for_count_validation(tmp_path: Path) -> None:
+def test_load_config_rejects_per_file_partitions(tmp_path: Path) -> None:
     cfg = _write_cfg(
         tmp_path,
         "groups:\n  full: {files: [a.txt]}\n  a: {files: [a.txt]}\n  b: {files: [b.txt]}\n"
@@ -242,6 +248,5 @@ def test_load_config_preserves_per_file_partitions_for_count_validation(tmp_path
         "    - {name: split, whole: full, parts: [a, b]}\n",
     )
 
-    config = load_config(cfg)
-    assert config.grouping.mode == "per_file"
-    assert [spec.name for spec in config.partition_validations] == ["split"]
+    with pytest.raises(ValueError, match="validations.partitions cannot be used"):
+        load_config(cfg)

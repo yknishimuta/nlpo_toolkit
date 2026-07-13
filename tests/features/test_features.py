@@ -466,7 +466,6 @@ def test_features_does_not_apply_count_partition_validation(tmp_path: Path) -> N
         "  whole: {files: [input/a.txt]}\n"
         "  part_a: {files: [input/a.txt]}\n"
         "  part_b: {files: [input/a.txt]}\n"
-        "grouping: {mode: per_file}\n"
         "validations:\n"
         "  partitions:\n"
         "    - {name: split, whole: whole, parts: [part_a, part_b]}\n",
@@ -474,7 +473,11 @@ def test_features_does_not_apply_count_partition_validation(tmp_path: Path) -> N
     )
 
     result = execute_feature_command(
-        FeatureRequest(project_root=tmp_path, config_path=config_path),
+        FeatureRequest(
+            project_root=tmp_path,
+            config_path=config_path,
+            group_by_file=True,
+        ),
         dependencies=_dependencies(),
     )
 

@@ -51,8 +51,8 @@ def test_load_config_accepts_valid_comparison(tmp_path: Path) -> None:
     specs = load_config(cfg_path).comparisons
     assert len(specs) == 1
     assert specs[0].name == "comparison_1"
-    assert specs[0].sort_by == "abs_log_ratio"
-    assert specs[0].sort_descending is False
+    assert specs[0].sort.by == "abs_log_ratio"
+    assert specs[0].sort.descending is False
 
 
 @pytest.mark.parametrize(
@@ -61,7 +61,7 @@ def test_load_config_accepts_valid_comparison(tmp_path: Path) -> None:
         (
             "- {name: comparison_1, group_a: corpus_a, group_b: corpus_b}\n"
             "- {name: comparison_1, group_a: corpus_a, group_b: corpus_c}",
-            "Duplicate comparison name",
+            "duplicate comparison name",
         ),
         (
             "- {name: comparison_1, group_a: corpus_a, group_b: corpus_a}",
@@ -132,7 +132,7 @@ def test_load_config_rejects_non_list_comparisons(tmp_path: Path) -> None:
         load_config(cfg_path)
 
 
-def test_load_config_preserves_per_file_comparisons_for_count_validation(tmp_path: Path) -> None:
+def test_load_config_rejects_per_file_comparisons(tmp_path: Path) -> None:
     cfg_path = _write_cfg(
         tmp_path,
         "\n".join(
@@ -151,6 +151,5 @@ def test_load_config_preserves_per_file_comparisons_for_count_validation(tmp_pat
         ),
     )
 
-    config = load_config(cfg_path)
-    assert config.grouping.mode == "per_file"
-    assert [spec.name for spec in config.comparisons] == ["comparison_1"]
+    with pytest.raises(ValueError, match="comparisons cannot be used"):
+        load_config(cfg_path)

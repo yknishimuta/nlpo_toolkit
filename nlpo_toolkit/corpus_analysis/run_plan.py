@@ -59,7 +59,7 @@ class AnalysisPlan:
 
     @property
     def partition_specs(self) -> tuple[PartitionSpec, ...]:
-        return self.config.partition_validations
+        return self.config.validations.partitions
 
     @property
     def comparison_specs(self) -> tuple[ComparisonSpec, ...]:

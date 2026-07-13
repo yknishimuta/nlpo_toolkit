@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import fields
 from pathlib import Path
 
 from nlpo_toolkit.corpus_analysis.config import AppConfig
@@ -24,7 +23,7 @@ def test_production_code_has_no_removed_cache_references() -> None:
 
 
 def test_app_config_has_only_analysis_cache() -> None:
-    field_names = {field.name for field in fields(AppConfig)}
+    field_names = set(AppConfig.model_fields)
 
     assert "analysis_cache" in field_names
     assert ("lemma" + "_cache") not in field_names

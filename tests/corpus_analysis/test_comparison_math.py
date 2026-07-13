@@ -153,7 +153,9 @@ def test_compare_counters_uses_union_and_keeps_one_sided_items() -> None:
     result = compare_counters(
         counter_a=counter_a,
         counter_b=counter_b,
-        spec=ComparisonSpec("comparison_1", "group_a", "group_b"),
+        spec=ComparisonSpec(
+            name="comparison_1", group_a="group_a", group_b="group_b"
+        ),
         analysis_unit="lemma",
     )
 
@@ -172,9 +174,9 @@ def test_compare_counters_total_count_filter_rates_and_direction() -> None:
         counter_a=counter_a,
         counter_b=counter_b,
         spec=ComparisonSpec(
-            "comparison_1",
-            "group_a",
-            "group_b",
+            name="comparison_1",
+            group_a="group_a",
+            group_b="group_b",
             min_total_count=2,
         ),
         analysis_unit="surface",
@@ -194,7 +196,9 @@ def test_compare_counters_equal_direction() -> None:
     result = compare_counters(
         counter_a=Counter({"item_common": 10}),
         counter_b=Counter({"item_common": 20}),
-        spec=ComparisonSpec("comparison_1", "group_a", "group_b"),
+        spec=ComparisonSpec(
+            name="comparison_1", group_a="group_a", group_b="group_b"
+        ),
         analysis_unit="lemma",
     )
 
@@ -205,7 +209,9 @@ def test_compare_counters_default_sort_is_specified_order() -> None:
     result = compare_counters(
         counter_a=Counter({"item_a": 4, "item_b": 2, "item_c": 1}),
         counter_b=Counter({"item_a": 1, "item_b": 2, "item_c": 4}),
-        spec=ComparisonSpec("comparison_1", "group_a", "group_b"),
+        spec=ComparisonSpec(
+            name="comparison_1", group_a="group_a", group_b="group_b"
+        ),
         analysis_unit="lemma",
     )
 
@@ -221,7 +227,9 @@ def test_compare_counters_lemma_and_surface_modes() -> None:
         result = compare_counters(
             counter_a=Counter({"item_a": 1}),
             counter_b=Counter({"item_b": 1}),
-            spec=ComparisonSpec("comparison_1", "group_a", "group_b"),
+            spec=ComparisonSpec(
+                name="comparison_1", group_a="group_a", group_b="group_b"
+            ),
             analysis_unit=unit,
         )
         assert result.analysis_unit == unit

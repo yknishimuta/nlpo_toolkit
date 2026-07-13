@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import fields
 from pathlib import Path
 
 import pytest
@@ -13,7 +12,6 @@ from nlpo_toolkit.corpus_analysis.config import (
     ensure_app_config,
     load_config,
 )
-from nlpo_toolkit.corpus_analysis.config.schema import KNOWN_TOP_LEVEL_KEYS
 
 
 def _assert_config_round_trip(config: AppConfig) -> dict[str, object]:
@@ -80,7 +78,7 @@ def test_load_config_rejects_missing_groups(tmp_path: Path):
     cfg_path = tmp_path / "invalid.yml"
     cfg_path.write_text("out_dir: output\n", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="groups is required"):
+    with pytest.raises(ValueError, match="groups: Field required"):
         load_config(cfg_path)
 
 
@@ -327,7 +325,7 @@ def test_config_to_dict_round_trips_partition_validation():
     assert isinstance(partitions, list)
     assert isinstance(partitions[0]["parts"], list)
     restored = ensure_app_config(serialized)
-    assert restored.partition_validations == original.partition_validations
+    assert restored.validations.partitions == original.validations.partitions
 
 
 def test_config_to_dict_round_trips_comparisons():
@@ -450,7 +448,7 @@ def test_removed_top_level_keys_are_rejected(removed_key: str):
         removed_key: True,
     }
 
-    with pytest.raises(ValueError, match="Unknown top-level"):
+    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
         ensure_app_config(raw)
 
 
@@ -479,19 +477,19 @@ def test_removed_nested_keys_are_rejected(section: str, removed_key: str, value:
         },
     }
 
-    with pytest.raises(ValueError, match=f"Unknown {section}"):
+    with pytest.raises(ValueError, match=f"{section}.{removed_key}.*Extra inputs"):
         ensure_app_config(raw)
 
 
 def test_app_config_has_no_unused_vocab_path():
-    names = {field.name for field in fields(AppConfig)}
+    names = set(AppConfig.model_fields)
 
     assert "vocab_path" not in names
     assert "prune" not in names
 
 
 def test_normalization_config_has_only_active_fields():
-    names = {field.name for field in fields(NormalizationConfig)}
+    names = set(NormalizationConfig.model_fields)
 
     assert names == {
         "enabled",
@@ -578,7 +576,7 @@ def test_canonical_config_yaml_round_trip():
     ("body", "match"),
     [
         ("groups:\n  corpus_a:\n    files: input/*.txt\n", "groups.corpus_a.files"),
-        ("groups:\n  corpus_a:\n    files: [input/a.txt, 1]\n", "groups.corpus_a.files\\[1\\]"),
+        ("groups:\n  corpus_a:\n    files: [input/a.txt, 1]\n", "groups.corpus_a.files.1"),
         ("groups:\n  corpus_a: {files: [input/a.txt]}\nanalysis_unit: token\n", "analysis_unit"),
         (
             "groups:\n  corpus_a: {files: [input/a.txt]}\nfilters:\n  min_token_length: -1\n",
@@ -644,7 +642,8 @@ def test_repository_config_uses_only_canonical_top_level_keys():
         Path("config/groups.config.yml").read_text(encoding="utf-8")
     )
     assert isinstance(raw, dict)
-    assert set(raw) <= KNOWN_TOP_LEVEL_KEYS
+    schema = AppConfig.model_json_schema(by_alias=True)
+    assert set(raw) <= set(schema["properties"])
 
 
 def test_repository_config_round_trips_through_python_and_yaml():

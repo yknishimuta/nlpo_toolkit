@@ -95,6 +95,11 @@ If `--config` is omitted, the CLI uses:
 Relative paths in the YAML config are resolved from `--project-root`, not from
 the location of Python source files.
 
+The groups configuration is validated by Pydantic v2. Unknown keys are errors
+at every level, and YAML scalar values are not implicitly coerced (for example,
+`enabled: "true"` is not accepted as a boolean). File paths remain relative to
+the project root, and referenced-file existence is checked during planning.
+
 ### Frequency Output Naming
 
 Frequency output naming changed from `noun_frequency_<label>.csv` to
@@ -820,6 +825,15 @@ docker compose build --build-arg DOWNLOAD_STANZA_MODELS=false
 ```
 
 ## Development Checks
+
+Generate the JSON Schema directly from the canonical Pydantic model:
+
+```bash
+python scripts/generate_config_schema.py
+```
+
+This writes `config/groups.config.schema.json`; the generated file is not an
+independent source of truth and should not be edited by hand.
 
 Fast unit tests:
 

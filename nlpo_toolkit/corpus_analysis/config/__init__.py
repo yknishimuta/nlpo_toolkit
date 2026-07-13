@@ -18,6 +18,7 @@ from .models import (
     RefTagsConfig,
     TokenArtifactConfig,
     TraceConfig,
+    ValidationsConfig,
 )
 from .parser import ConfigError, ensure_app_config, load_config, parse_config
 from .serializer import config_to_dict
@@ -41,6 +42,7 @@ __all__ = [
     "RefTagsConfig",
     "TokenArtifactConfig",
     "TraceConfig",
+    "ValidationsConfig",
     "config_to_dict",
     "ensure_app_config",
     "load_config",

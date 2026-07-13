@@ -378,7 +378,6 @@ def test_config_ngram_does_not_apply_count_partition_validation(tmp_path) -> Non
         "  whole: {files: [input/a.txt]}\n"
         "  part_a: {files: [input/a.txt]}\n"
         "  part_b: {files: [input/a.txt]}\n"
-        "grouping: {mode: per_file}\n"
         "validations:\n"
         "  partitions:\n"
         "    - {name: split, whole: whole, parts: [part_a, part_b]}\n",
@@ -394,6 +393,7 @@ def test_config_ngram_does_not_apply_count_partition_validation(tmp_path) -> Non
             by_group=False,
             min_count=1,
             top=None,
+            group_by_file=True,
         ),
         dependencies=ConfigNgramDependencies(
             planning=CorpusPlanningDependencies(

@@ -1,128 +1,219 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Literal, Mapping
+from typing import Annotated, Literal
+
+from pydantic import (
+    AfterValidator,
+    Field,
+    StrictBool,
+    StrictInt,
+    StrictStr,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
 from nlpo_toolkit.comparison.configured import ComparisonSpec
+from nlpo_toolkit.config_model import (
+    ConfigModel,
+    NonBlankStr,
+    PositiveFiniteFloat,
+)
 from ..partition_models import PartitionSpec
 
 
 AnalysisUnit = Literal["lemma", "surface"]
 GroupingMode = Literal["groups", "per_file", "auto_single_cleaned"]
 NLPBackendName = Literal["stanza", "transformers"]
+NonNegativeStrictInt = Annotated[StrictInt, Field(ge=0)]
 
 
-@dataclass(frozen=True)
-class GroupConfig:
-    files: tuple[str, ...]
+def uppercase_non_blank(value: str) -> str:
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError("must be a non-empty string")
+    return stripped.upper()
 
 
-@dataclass(frozen=True)
-class PreprocessConfig:
-    kind: str | None = None
-    config: str | None = None
+UpperNonBlankStr = Annotated[StrictStr, AfterValidator(uppercase_non_blank)]
 
 
-@dataclass(frozen=True)
-class GroupingConfig:
+class GroupConfig(ConfigModel):
+    files: tuple[NonBlankStr, ...]
+
+
+class PreprocessConfig(ConfigModel):
+    kind: Literal["cleaner"] | None = None
+    config: NonBlankStr | None = None
+
+    @model_validator(mode="after")
+    def validate_pair(self) -> PreprocessConfig:
+        if (self.kind is None) != (self.config is None):
+            raise ValueError("kind and config must be specified together")
+        return self
+
+
+class GroupingConfig(ConfigModel):
     mode: GroupingMode = "groups"
-    auto_group_name: str = "text"
+    auto_group_name: NonBlankStr = "text"
 
 
-@dataclass(frozen=True)
-class NLPConfig:
+class NLPConfig(ConfigModel):
     backend: NLPBackendName = "stanza"
-    language: str = "la"
-    stanza_package: str | dict[str, str] | None = "perseus"
-    model_name: str | None = None
-    cpu_only: bool = True
+    language: NonBlankStr = "la"
+    stanza_package: NonBlankStr | dict[StrictStr, StrictStr] | None = "perseus"
+    model_name: NonBlankStr | None = None
+    cpu_only: StrictBool = True
+
+    @field_validator("stanza_package", mode="before")
+    @classmethod
+    def default_null_package(cls, value: object) -> object:
+        return "perseus" if value is None else value
+
+    @model_validator(mode="after")
+    def validate_backend(self) -> NLPConfig:
+        if self.backend == "transformers" and self.model_name is None:
+            raise ValueError("model_name is required when backend=transformers")
+        return self
 
 
-@dataclass(frozen=True)
-class FilterConfig:
-    min_token_length: int = 0
-    drop_roman_numerals: bool = False
-    roman_exceptions_file: str | None = None
-    upos_targets: frozenset[str] = frozenset({"NOUN"})
+class FilterConfig(ConfigModel):
+    min_token_length: NonNegativeStrictInt = 0
+    drop_roman_numerals: StrictBool = False
+    roman_exceptions_file: NonBlankStr | None = None
+    upos_targets: frozenset[UpperNonBlankStr] = frozenset({"NOUN"})
+
+    @field_serializer("upos_targets")
+    def serialize_upos_targets(self, value: frozenset[str]) -> list[str]:
+        return sorted(value)
 
 
-@dataclass(frozen=True)
-class NormalizationConfig:
-    enabled: bool = True
-    casefold: bool = False
-    map_u_v: bool = False
-    map_i_j: bool = False
-    strip_diacritics: bool = False
-    normalize_ligatures: bool = False
-    unicode_nf: str | None = None
+class NormalizationConfig(ConfigModel):
+    enabled: StrictBool = True
+    casefold: StrictBool = False
+    map_u_v: StrictBool = False
+    map_i_j: StrictBool = False
+    strip_diacritics: StrictBool = False
+    normalize_ligatures: StrictBool = False
+    unicode_nf: NonBlankStr | None = None
 
 
-@dataclass(frozen=True)
-class DictCheckConfig:
-    enabled: bool = False
-    wordlist: str | None = None
-    lemma_normalize: str | None = None
+class DictCheckConfig(ConfigModel):
+    enabled: StrictBool = False
+    wordlist: NonBlankStr | None = None
+    lemma_normalize: NonBlankStr | None = None
 
 
-@dataclass(frozen=True)
-class RefTagsConfig:
-    enabled: bool = False
-    patterns: str | None = None
+class RefTagsConfig(ConfigModel):
+    enabled: StrictBool = False
+    patterns: NonBlankStr | None = None
+
+    @model_validator(mode="after")
+    def validate_patterns(self) -> RefTagsConfig:
+        if self.enabled and self.patterns is None:
+            raise ValueError("patterns is required when enabled=true")
+        return self
 
 
-@dataclass(frozen=True)
-class TraceConfig:
-    enabled: bool = False
-    path: str | None = None
-    max_rows: int | None = 0
-    only_keys: frozenset[str] = frozenset()
-    write_truncation_marker: bool = True
+class TraceConfig(ConfigModel):
+    enabled: StrictBool = False
+    path: NonBlankStr | None = None
+    max_rows: NonNegativeStrictInt | None = 0
+    only_keys: frozenset[UpperNonBlankStr] = frozenset()
+    write_truncation_marker: StrictBool = True
+
+    @field_serializer("only_keys")
+    def serialize_only_keys(self, value: frozenset[str]) -> list[str]:
+        return sorted(value)
 
 
-@dataclass(frozen=True)
-class TokenArtifactConfig:
-    enabled: bool = False
-    path: str = "output/tokens.tsv"
+class TokenArtifactConfig(ConfigModel):
+    enabled: StrictBool = False
+    path: NonBlankStr = "output/tokens.tsv"
 
 
-@dataclass(frozen=True)
-class ArtifactsConfig:
-    tokens: TokenArtifactConfig = field(default_factory=TokenArtifactConfig)
+class ArtifactsConfig(ConfigModel):
+    tokens: TokenArtifactConfig = Field(default_factory=TokenArtifactConfig)
 
 
-@dataclass(frozen=True)
-class ArchiveConfig:
-    enabled: bool = False
-    runs_dir: str = "runs"
-    include_input: bool = False
-    include_cleaned: bool = False
+class ArchiveConfig(ConfigModel):
+    enabled: StrictBool = False
+    runs_dir: NonBlankStr = "runs"
+    include_input: StrictBool = False
+    include_cleaned: StrictBool = False
 
 
-@dataclass(frozen=True)
-class AnalysisCacheConfig:
-    enabled: bool = False
-    directory: str = ".analysis_cache"
-    use_manifest: bool = True
-    manifest_key_mode: str = "relative"
-    lock_timeout_sec: float = 300.0
+class AnalysisCacheConfig(ConfigModel):
+    enabled: StrictBool = False
+    directory: NonBlankStr = Field(
+        default=".analysis_cache",
+        validation_alias="dir",
+        serialization_alias="dir",
+    )
+    use_manifest: StrictBool = True
+    manifest_key_mode: NonBlankStr = "relative"
+    lock_timeout_sec: PositiveFiniteFloat = 300.0
 
 
-@dataclass(frozen=True)
-class AppConfig:
-    groups: Mapping[str, GroupConfig]
-    preprocess: PreprocessConfig = PreprocessConfig()
-    grouping: GroupingConfig = GroupingConfig()
-    nlp: NLPConfig = NLPConfig()
-    filters: FilterConfig = FilterConfig()
-    normalization: NormalizationConfig = NormalizationConfig()
-    dictcheck: DictCheckConfig = DictCheckConfig()
-    ref_tags: RefTagsConfig = RefTagsConfig()
-    trace: TraceConfig = TraceConfig()
-    artifacts: ArtifactsConfig = field(default_factory=ArtifactsConfig)
-    archive: ArchiveConfig = ArchiveConfig()
-    analysis_cache: AnalysisCacheConfig = AnalysisCacheConfig()
+class ValidationsConfig(ConfigModel):
+    partitions: tuple[PartitionSpec, ...] = ()
+
+
+class AppConfig(ConfigModel):
+    groups: dict[NonBlankStr, GroupConfig]
+    preprocess: PreprocessConfig = Field(default_factory=PreprocessConfig)
+    grouping: GroupingConfig = Field(default_factory=GroupingConfig)
+    nlp: NLPConfig = Field(default_factory=NLPConfig)
+    filters: FilterConfig = Field(default_factory=FilterConfig)
+    normalization: NormalizationConfig = Field(default_factory=NormalizationConfig)
+    dictcheck: DictCheckConfig = Field(default_factory=DictCheckConfig)
+    ref_tags: RefTagsConfig = Field(default_factory=RefTagsConfig)
+    trace: TraceConfig = Field(default_factory=TraceConfig)
+    artifacts: ArtifactsConfig = Field(default_factory=ArtifactsConfig)
+    archive: ArchiveConfig = Field(default_factory=ArchiveConfig)
+    analysis_cache: AnalysisCacheConfig = Field(default_factory=AnalysisCacheConfig)
     analysis_unit: AnalysisUnit = "lemma"
-    out_dir: str = "output"
-    csv_header: tuple[str, str] | None = None
+    out_dir: NonBlankStr = "output"
+    csv_header: tuple[NonBlankStr, NonBlankStr] | None = None
     comparisons: tuple[ComparisonSpec, ...] = ()
-    partition_validations: tuple[PartitionSpec, ...] = ()
+    validations: ValidationsConfig = Field(default_factory=ValidationsConfig)
+
+    @model_validator(mode="after")
+    def validate_references(self) -> AppConfig:
+        group_names = set(self.groups)
+        comparison_names: set[str] = set()
+        for spec in self.comparisons:
+            if spec.name in comparison_names:
+                raise ValueError(f"duplicate comparison name: {spec.name}")
+            comparison_names.add(spec.name)
+            if spec.group_a not in group_names:
+                raise ValueError(f"comparison {spec.name}: unknown group_a '{spec.group_a}'")
+            if spec.group_b not in group_names:
+                raise ValueError(f"comparison {spec.name}: unknown group_b '{spec.group_b}'")
+
+        partition_names: set[str] = set()
+        for spec in self.validations.partitions:
+            if spec.name in partition_names:
+                raise ValueError(f"duplicate partition name: {spec.name}")
+            partition_names.add(spec.name)
+            missing = [name for name in (spec.whole, *spec.parts) if name not in group_names]
+            if missing:
+                raise ValueError(
+                    f"partition {spec.name}: unknown group(s): {', '.join(missing)}"
+                )
+
+        if self.grouping.mode == "per_file" and self.comparisons:
+            raise ValueError("comparisons cannot be used with grouping.mode=per_file")
+        if self.grouping.mode == "per_file" and self.validations.partitions:
+            raise ValueError(
+                "validations.partitions cannot be used with grouping.mode=per_file"
+            )
+        return self
+
+    def to_external_dict(self) -> dict[str, object]:
+        data = self.model_dump(mode="json", by_alias=True)
+        if self.preprocess.kind is None:
+            data.pop("preprocess", None)
+        if self.csv_header is None:
+            data.pop("csv_header", None)
+        return data

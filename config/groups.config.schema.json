@@ -1,0 +1,668 @@
+{
+  "$defs": {
+    "AnalysisCacheConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "dir": {
+          "default": ".analysis_cache",
+          "title": "Dir",
+          "type": "string"
+        },
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "lock_timeout_sec": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            }
+          ],
+          "default": 300.0,
+          "title": "Lock Timeout Sec"
+        },
+        "manifest_key_mode": {
+          "default": "relative",
+          "title": "Manifest Key Mode",
+          "type": "string"
+        },
+        "use_manifest": {
+          "default": true,
+          "title": "Use Manifest",
+          "type": "boolean"
+        }
+      },
+      "title": "AnalysisCacheConfig",
+      "type": "object"
+    },
+    "ArchiveConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "include_cleaned": {
+          "default": false,
+          "title": "Include Cleaned",
+          "type": "boolean"
+        },
+        "include_input": {
+          "default": false,
+          "title": "Include Input",
+          "type": "boolean"
+        },
+        "runs_dir": {
+          "default": "runs",
+          "title": "Runs Dir",
+          "type": "string"
+        }
+      },
+      "title": "ArchiveConfig",
+      "type": "object"
+    },
+    "ArtifactsConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "tokens": {
+          "$ref": "#/$defs/TokenArtifactConfig"
+        }
+      },
+      "title": "ArtifactsConfig",
+      "type": "object"
+    },
+    "ComparisonSortConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "by": {
+          "default": "log_likelihood",
+          "enum": [
+            "log_likelihood",
+            "abs_log_ratio",
+            "total_count",
+            "item"
+          ],
+          "title": "By",
+          "type": "string"
+        },
+        "descending": {
+          "default": true,
+          "title": "Descending",
+          "type": "boolean"
+        }
+      },
+      "title": "ComparisonSortConfig",
+      "type": "object"
+    },
+    "ComparisonSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "group_a": {
+          "title": "Group A",
+          "type": "string"
+        },
+        "group_b": {
+          "title": "Group B",
+          "type": "string"
+        },
+        "min_total_count": {
+          "default": 1,
+          "exclusiveMinimum": 0,
+          "title": "Min Total Count",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "report": {
+          "default": "all",
+          "enum": [
+            "all",
+            "filtered"
+          ],
+          "title": "Report",
+          "type": "string"
+        },
+        "scale": {
+          "default": 10000,
+          "exclusiveMinimum": 0,
+          "title": "Scale",
+          "type": "integer"
+        },
+        "sort": {
+          "$ref": "#/$defs/ComparisonSortConfig"
+        },
+        "zero_correction": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            }
+          ],
+          "default": 0.5,
+          "title": "Zero Correction"
+        }
+      },
+      "required": [
+        "name",
+        "group_a",
+        "group_b"
+      ],
+      "title": "ComparisonSpec",
+      "type": "object"
+    },
+    "DictCheckConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "lemma_normalize": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lemma Normalize"
+        },
+        "wordlist": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wordlist"
+        }
+      },
+      "title": "DictCheckConfig",
+      "type": "object"
+    },
+    "FilterConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "drop_roman_numerals": {
+          "default": false,
+          "title": "Drop Roman Numerals",
+          "type": "boolean"
+        },
+        "min_token_length": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Min Token Length",
+          "type": "integer"
+        },
+        "roman_exceptions_file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Roman Exceptions File"
+        },
+        "upos_targets": {
+          "default": [
+            "NOUN"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "Upos Targets",
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "title": "FilterConfig",
+      "type": "object"
+    },
+    "GroupConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "files": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Files",
+          "type": "array"
+        }
+      },
+      "required": [
+        "files"
+      ],
+      "title": "GroupConfig",
+      "type": "object"
+    },
+    "GroupingConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "auto_group_name": {
+          "default": "text",
+          "title": "Auto Group Name",
+          "type": "string"
+        },
+        "mode": {
+          "default": "groups",
+          "enum": [
+            "groups",
+            "per_file",
+            "auto_single_cleaned"
+          ],
+          "title": "Mode",
+          "type": "string"
+        }
+      },
+      "title": "GroupingConfig",
+      "type": "object"
+    },
+    "NLPConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "default": "stanza",
+          "enum": [
+            "stanza",
+            "transformers"
+          ],
+          "title": "Backend",
+          "type": "string"
+        },
+        "cpu_only": {
+          "default": true,
+          "title": "Cpu Only",
+          "type": "boolean"
+        },
+        "language": {
+          "default": "la",
+          "title": "Language",
+          "type": "string"
+        },
+        "model_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Name"
+        },
+        "stanza_package": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "perseus",
+          "title": "Stanza Package"
+        }
+      },
+      "title": "NLPConfig",
+      "type": "object"
+    },
+    "NormalizationConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "casefold": {
+          "default": false,
+          "title": "Casefold",
+          "type": "boolean"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "map_i_j": {
+          "default": false,
+          "title": "Map I J",
+          "type": "boolean"
+        },
+        "map_u_v": {
+          "default": false,
+          "title": "Map U V",
+          "type": "boolean"
+        },
+        "normalize_ligatures": {
+          "default": false,
+          "title": "Normalize Ligatures",
+          "type": "boolean"
+        },
+        "strip_diacritics": {
+          "default": false,
+          "title": "Strip Diacritics",
+          "type": "boolean"
+        },
+        "unicode_nf": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unicode Nf"
+        }
+      },
+      "title": "NormalizationConfig",
+      "type": "object"
+    },
+    "PartitionSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "on_mismatch": {
+          "default": "warn",
+          "enum": [
+            "warn",
+            "error"
+          ],
+          "title": "On Mismatch",
+          "type": "string"
+        },
+        "parts": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2,
+          "title": "Parts",
+          "type": "array"
+        },
+        "report": {
+          "default": "mismatches",
+          "enum": [
+            "mismatches",
+            "all"
+          ],
+          "title": "Report",
+          "type": "string"
+        },
+        "whole": {
+          "title": "Whole",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "whole",
+        "parts"
+      ],
+      "title": "PartitionSpec",
+      "type": "object"
+    },
+    "PreprocessConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Config"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "const": "cleaner",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kind"
+        }
+      },
+      "title": "PreprocessConfig",
+      "type": "object"
+    },
+    "RefTagsConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "patterns": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Patterns"
+        }
+      },
+      "title": "RefTagsConfig",
+      "type": "object"
+    },
+    "TokenArtifactConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "path": {
+          "default": "output/tokens.tsv",
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "title": "TokenArtifactConfig",
+      "type": "object"
+    },
+    "TraceConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "max_rows": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 0,
+          "title": "Max Rows"
+        },
+        "only_keys": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Only Keys",
+          "type": "array",
+          "uniqueItems": true
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "write_truncation_marker": {
+          "default": true,
+          "title": "Write Truncation Marker",
+          "type": "boolean"
+        }
+      },
+      "title": "TraceConfig",
+      "type": "object"
+    },
+    "ValidationsConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "partitions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PartitionSpec"
+          },
+          "title": "Partitions",
+          "type": "array"
+        }
+      },
+      "title": "ValidationsConfig",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "analysis_cache": {
+      "$ref": "#/$defs/AnalysisCacheConfig"
+    },
+    "analysis_unit": {
+      "default": "lemma",
+      "enum": [
+        "lemma",
+        "surface"
+      ],
+      "title": "Analysis Unit",
+      "type": "string"
+    },
+    "archive": {
+      "$ref": "#/$defs/ArchiveConfig"
+    },
+    "artifacts": {
+      "$ref": "#/$defs/ArtifactsConfig"
+    },
+    "comparisons": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ComparisonSpec"
+      },
+      "title": "Comparisons",
+      "type": "array"
+    },
+    "csv_header": {
+      "anyOf": [
+        {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Csv Header"
+    },
+    "dictcheck": {
+      "$ref": "#/$defs/DictCheckConfig"
+    },
+    "filters": {
+      "$ref": "#/$defs/FilterConfig"
+    },
+    "grouping": {
+      "$ref": "#/$defs/GroupingConfig"
+    },
+    "groups": {
+      "additionalProperties": {
+        "$ref": "#/$defs/GroupConfig"
+      },
+      "title": "Groups",
+      "type": "object"
+    },
+    "nlp": {
+      "$ref": "#/$defs/NLPConfig"
+    },
+    "normalization": {
+      "$ref": "#/$defs/NormalizationConfig"
+    },
+    "out_dir": {
+      "default": "output",
+      "title": "Out Dir",
+      "type": "string"
+    },
+    "preprocess": {
+      "$ref": "#/$defs/PreprocessConfig"
+    },
+    "ref_tags": {
+      "$ref": "#/$defs/RefTagsConfig"
+    },
+    "trace": {
+      "$ref": "#/$defs/TraceConfig"
+    },
+    "validations": {
+      "$ref": "#/$defs/ValidationsConfig"
+    }
+  },
+  "required": [
+    "groups"
+  ],
+  "title": "AppConfig",
+  "type": "object"
+}

@@ -18,9 +18,11 @@ def _imports(path: Path) -> set[str]:
 def test_config_is_a_package() -> None:
     root = Path("nlpo_toolkit/corpus_analysis/config")
     assert root.is_dir()
-    assert {"__init__.py", "models.py", "schema.py", "values.py", "parser.py", "serializer.py"} <= {
+    assert {"__init__.py", "models.py", "parser.py", "serializer.py"} <= {
         path.name for path in root.iterdir()
     }
+    assert not (root / "schema.py").exists()
+    assert not (root / "values.py").exists()
     assert not Path("nlpo_toolkit/corpus_analysis/config.py").exists()
 
 

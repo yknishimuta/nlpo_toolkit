@@ -46,7 +46,9 @@ def test_csv_table_and_counter_group_comparison_share_pairwise_values(tmp_path: 
     group_result = compare_counters(
         counter_a=Counter({"item_common": 10, "item_a": 8, "item_rare_a": 1}),
         counter_b=Counter({"item_common": 20, "item_b": 7, "item_rare_b": 1}),
-        spec=ComparisonSpec("comparison_1", "group_a", "group_b"),
+        spec=ComparisonSpec(
+            name="comparison_1", group_a="group_a", group_b="group_b"
+        ),
         analysis_unit="lemma",
     )
 
