@@ -22,7 +22,8 @@ RUNNER_SPLIT_MODULE_NAMES = (
     "nlpo_toolkit.corpus_analysis.run_reporting",
 )
 RUNNER_RELATED_MODULE_NAMES = (
-    "nlpo_toolkit.corpus_analysis.dependencies",
+    "nlpo_toolkit.corpus_analysis.ports",
+    "nlpo_toolkit.corpus_analysis.composition",
     *RUNNER_SPLIT_MODULE_NAMES,
 )
 RUNNER_IMPORTABLE_MODULE_NAMES = (

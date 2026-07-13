@@ -11,7 +11,7 @@ from nlpo_toolkit.corpus_analysis.analysis_policy import (
     AnalysisExtractionPolicy,
     DEFAULT_ANALYSIS_EXTRACTION_POLICY,
 )
-from nlpo_toolkit.corpus_analysis.dependencies import (
+from nlpo_toolkit.corpus_analysis.ports import (
     AnalysisDependencies,
     BackendFactory,
     CorpusPlanningDependencies,

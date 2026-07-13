@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 
 from ..cleaner_runtime import CleanerError
-from ..dependencies import default_config_ngram_dependencies
+from ..composition import default_config_ngram_dependencies
 from ..ngram import (
     ConfigNgramRequest,
     NgramError,

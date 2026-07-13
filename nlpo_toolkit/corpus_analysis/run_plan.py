@@ -18,7 +18,7 @@ from .corpus import (
     resolve_cleaner_plan,
     resolve_corpus_work_items,
 )
-from .dependencies import CorpusPlanningDependencies
+from .ports import CorpusPlanningDependencies
 from .partition_models import PartitionSpec
 from .requests import CorpusPreparationRequest
 

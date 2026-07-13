@@ -8,7 +8,7 @@ from nlpo_toolkit.nlp import load_roman_exceptions
 
 from .config import AppConfig
 from .corpus import prepare_corpora
-from .dependencies import BackendFactory, RunnerDependencies
+from .ports import BackendFactory, RunnerDependencies
 from .run_plan import AnalysisPlan, build_count_plan, ensure_out_dir
 from .requests import CorpusPreparationRequest
 from .runner_types import RunContext

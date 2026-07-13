@@ -36,6 +36,12 @@ nlpo --help
 
 Runtime and development dependencies are declared in `pyproject.toml`.
 
+Dependency boundaries for corpus analysis are explicit: `ports.py` defines the
+interfaces and frozen containers required by application services, while
+`composition.py` selects production implementations. Application services import
+only ports, CLI/bootstrap code creates production dependencies, and unit tests
+normally construct port containers directly.
+
 Stanza model download is required for real NLP runs unless you use Docker:
 
 ```bash

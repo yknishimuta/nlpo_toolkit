@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 
 from ..cleaner_runtime import CleanerError
-from ..dependencies import default_feature_command_dependencies
+from ..composition import default_feature_command_dependencies
 from ..features import FeatureError, FeatureRequest, execute_feature_command
 from .common import (
     CLIContext,

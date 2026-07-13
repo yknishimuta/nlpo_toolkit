@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol
+
+from nlpo_toolkit.cleaner_contracts import CleanerLoader, CleanerRunner
 
 
 class CleanerError(RuntimeError):
@@ -17,13 +17,6 @@ class CleanerUnavailableError(CleanerError):
 
 class CleanerExecutionError(CleanerError):
     """The cleaner raised an exception or returned a failure status."""
-
-
-class CleanerRunner(Protocol):
-    def main(self, argv: list[str] | None = None) -> int | None: ...
-
-
-CleanerLoader = Callable[[], CleanerRunner]
 
 
 def load_default_cleaner() -> CleanerRunner:

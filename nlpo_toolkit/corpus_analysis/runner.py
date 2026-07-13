@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from . import analysis_pipeline, post_analysis, run_reporting, runtime
-from .dependencies import RunnerDependencies
+from .ports import RunnerDependencies
 from .runner_types import RunResult
 from .requests import CorpusPreparationRequest
 

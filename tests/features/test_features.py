@@ -32,11 +32,12 @@ from nlpo_toolkit.corpus_analysis.analysis_policy import AnalysisExtractionPolic
 from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.config import NLPConfig
-from nlpo_toolkit.corpus_analysis.dependencies import (
+from nlpo_toolkit.corpus_analysis.ports import (
     AnalysisDependencies,
     CorpusPlanningDependencies,
     FeatureCommandDependencies,
 )
+from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 
 
 def _doc_for_text(text: str) -> NLPDocument:
@@ -79,6 +80,7 @@ def _dependencies(cleaner=None) -> FeatureCommandDependencies:
         planning=CorpusPlanningDependencies(
             load_config=load_config,
             cleaner_loader=cleaner_loader,
+            cleaner_inspector=inspect_cleaner_config,
         ),
         analysis=AnalysisDependencies(
             backend_factory=_backend_factory,

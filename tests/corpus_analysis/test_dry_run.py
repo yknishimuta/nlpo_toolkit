@@ -4,13 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from nlpo_toolkit.corpus_analysis.dependencies import CorpusPlanningDependencies
+from nlpo_toolkit.corpus_analysis.ports import CorpusPlanningDependencies
 from nlpo_toolkit.corpus_analysis.dry_run import DiagnosticLevel, execute_dry_run
 from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis.config import ConfigError
 from nlpo_toolkit.corpus_analysis.config_references import ConfigReferenceError
 from nlpo_toolkit.corpus_analysis.run_plan import build_count_plan
 from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
+from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 
 
 def _execute_dry_run(
@@ -38,6 +39,7 @@ def _execute_dry_run(
             cleaner_loader=lambda: pytest.fail(
                 "cleaner loader must not be called"
             ),
+            cleaner_inspector=inspect_cleaner_config,
         ),
     )
     prefixes = {
@@ -321,6 +323,7 @@ def test_dry_run_and_normal_planning_report_same_missing_reference(
     dependencies = CorpusPlanningDependencies(
         load_config=load_config,
         cleaner_loader=lambda: pytest.fail("cleaner must not run"),
+        cleaner_inspector=inspect_cleaner_config,
     )
 
     dry_result = execute_dry_run(
@@ -377,6 +380,7 @@ def test_dry_run_does_not_hide_programmer_errors(
                 cleaner_loader=lambda: pytest.fail(
                     "cleaner loader must not be called"
                 ),
+                cleaner_inspector=inspect_cleaner_config,
             ),
         )
 

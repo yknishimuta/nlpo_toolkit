@@ -10,11 +10,13 @@ from pathlib import Path
 import pytest
 
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
-from nlpo_toolkit.corpus_analysis.archive import ArchiveOptions, create_run_archive
-from nlpo_toolkit.corpus_analysis.dependencies import CorpusPlanningDependencies
+from nlpo_toolkit.corpus_analysis.archive import create_run_archive
+from nlpo_toolkit.corpus_analysis.archive_types import ArchiveOptions
+from nlpo_toolkit.corpus_analysis.ports import CorpusPlanningDependencies
 from nlpo_toolkit.corpus_analysis.dry_run import execute_dry_run
 from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
+from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 from tests.corpus_analysis.fake_nlp import FakeNLPBackend, fake_backend_factory, runner_dependencies
 
 
@@ -266,6 +268,7 @@ def test_dry_run_reports_comparison_and_empty_reference(tmp_path: Path, capsys: 
             cleaner_loader=lambda: pytest.fail(
                 "cleaner loader must not be called"
             ),
+            cleaner_inspector=inspect_cleaner_config,
         ),
     )
 

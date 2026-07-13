@@ -6,12 +6,12 @@ from pathlib import Path
 import pytest
 
 from nlpo_toolkit.corpus_analysis.archive import (
-    ArchiveOptions,
     RunArchiveError,
     create_run_archive,
     file_sha256,
     sanitize_run_name,
 )
+from nlpo_toolkit.corpus_analysis.archive_types import ArchiveOptions
 from nlpo_toolkit.corpus_analysis.config import ensure_app_config
 from nlpo_toolkit.corpus_analysis.config_references import (
     ConfigFileReference,
@@ -19,10 +19,8 @@ from nlpo_toolkit.corpus_analysis.config_references import (
 )
 from nlpo_toolkit.corpus_analysis.count_command import CountRequest, execute_count_command
 from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
-from nlpo_toolkit.corpus_analysis.dependencies import (
-    CountCommandDependencies,
-    default_runner_dependencies,
-)
+from nlpo_toolkit.corpus_analysis.composition import default_runner_dependencies
+from nlpo_toolkit.corpus_analysis.ports import CountCommandDependencies
 from nlpo_toolkit.corpus_analysis.run_plan import AnalysisPlan
 from nlpo_toolkit.corpus_analysis.runner_types import RunResult
 

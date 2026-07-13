@@ -10,7 +10,7 @@ import pytest
 from nlpo_toolkit.corpus_analysis.analysis_policy import (
     DEFAULT_ANALYSIS_EXTRACTION_POLICY,
 )
-from nlpo_toolkit.corpus_analysis.dependencies import (
+from nlpo_toolkit.corpus_analysis.ports import (
     AnalysisDependencies,
     CorpusPlanningDependencies,
     RunnerDependencies,
@@ -80,6 +80,7 @@ def test_dependency_objects_are_frozen() -> None:
     planning = CorpusPlanningDependencies(
         load_config=lambda _path: None,  # type: ignore[return-value]
         cleaner_loader=lambda: None,  # type: ignore[return-value]
+        cleaner_inspector=lambda _path: None,  # type: ignore[return-value]
     )
     dependencies = RunnerDependencies(
         planning=planning,

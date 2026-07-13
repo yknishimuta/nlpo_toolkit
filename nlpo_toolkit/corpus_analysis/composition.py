@@ -1,11 +1,9 @@
-"""Explicit dependency types and production composition roots."""
+"""Production composition root for corpus-analysis application services."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import Any
 
 from nlpo_toolkit.backends import BuiltNLPBackend, create_nlp_backend
 from nlpo_toolkit.cleaner_contracts import CleanerConfigInspection
@@ -15,73 +13,26 @@ from .analysis_policy import (
     AnalysisExtractionPolicy,
     DEFAULT_ANALYSIS_EXTRACTION_POLICY,
 )
-from .cleaner_runtime import CleanerLoader, load_default_cleaner
-from .config import AppConfig, NLPConfig, load_config
-
-if TYPE_CHECKING:
-    from .archive import ArchiveOptions, RunArchiveResult
-    from .runner_types import RunResult
-    from .requests import CorpusPreparationRequest
-
-
-ConfigLoader = Callable[[Path], AppConfig]
-CleanerConfigInspector = Callable[[Path], CleanerConfigInspection]
-BackendFactory = Callable[[NLPConfig], BuiltNLPBackend]
-SentenceSplitterFactory = Callable[[NLPConfig], Any]
-ArchiveCreator = Callable[["RunResult", "ArchiveOptions"], "RunArchiveResult"]
-
-
-class CountRunner(Protocol):
-    def __call__(
-        self,
-        request: CorpusPreparationRequest,
-        *,
-        dependencies: RunnerDependencies,
-    ) -> RunResult: ...
+from .archive import create_run_archive
+from .cleaner_runtime import load_default_cleaner
+from .config import NLPConfig, load_config
+from .ports import (
+    AnalysisDependencies,
+    BackendFactory,
+    ConfigNgramDependencies,
+    CorpusPlanningDependencies,
+    CountCommandDependencies,
+    FeatureCommandDependencies,
+    RunnerDependencies,
+)
+from .runner import run
 
 
 def _inspect_cleaner_config(path: Path) -> CleanerConfigInspection:
+    # Keep the optional bundled cleaner package lazy until preprocessing is inspected.
     from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 
     return inspect_cleaner_config(path)
-
-
-@dataclass(frozen=True)
-class CorpusPlanningDependencies:
-    load_config: ConfigLoader
-    cleaner_loader: CleanerLoader
-    cleaner_inspector: CleanerConfigInspector = _inspect_cleaner_config
-
-
-@dataclass(frozen=True)
-class AnalysisDependencies:
-    backend_factory: BackendFactory
-    extraction_policy: AnalysisExtractionPolicy
-    sentence_splitter_factory: SentenceSplitterFactory | None = None
-
-
-@dataclass(frozen=True)
-class RunnerDependencies:
-    planning: CorpusPlanningDependencies
-    analysis: AnalysisDependencies
-
-
-@dataclass(frozen=True)
-class CountCommandDependencies:
-    runner: RunnerDependencies
-    run_analysis: CountRunner
-    archive_creator: ArchiveCreator
-
-
-@dataclass(frozen=True)
-class FeatureCommandDependencies:
-    planning: CorpusPlanningDependencies
-    analysis: AnalysisDependencies
-
-
-@dataclass(frozen=True)
-class ConfigNgramDependencies:
-    planning: CorpusPlanningDependencies
 
 
 def _create_sentence_splitter(config: NLPConfig) -> Any:
@@ -90,6 +41,18 @@ def _create_sentence_splitter(config: NLPConfig) -> Any:
         config.stanza_package or "perseus",
         config.cpu_only,
     )
+
+
+def _backend_factory_for(
+    extraction_policy: AnalysisExtractionPolicy,
+) -> BackendFactory:
+    def create_backend(config: NLPConfig) -> BuiltNLPBackend:
+        return create_nlp_backend(
+            config,
+            extraction_policy=extraction_policy,
+        )
+
+    return create_backend
 
 
 def default_corpus_planning_dependencies() -> CorpusPlanningDependencies:
@@ -105,10 +68,7 @@ def default_analysis_dependencies(
     extraction_policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY,
 ) -> AnalysisDependencies:
     return AnalysisDependencies(
-        backend_factory=lambda config: create_nlp_backend(
-            config,
-            extraction_policy=extraction_policy,
-        ),
+        backend_factory=_backend_factory_for(extraction_policy),
         extraction_policy=extraction_policy,
         sentence_splitter_factory=_create_sentence_splitter,
     )
@@ -122,9 +82,6 @@ def default_runner_dependencies() -> RunnerDependencies:
 
 
 def default_count_command_dependencies() -> CountCommandDependencies:
-    from .archive import create_run_archive
-    from .runner import run
-
     return CountCommandDependencies(
         runner=default_runner_dependencies(),
         run_analysis=run,

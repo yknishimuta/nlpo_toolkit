@@ -10,7 +10,7 @@ from typing import Iterable, Iterator
 
 from .corpus import PreparedCorpus, prepare_corpora
 from .config_references import ConfigReferenceError
-from .dependencies import ConfigNgramDependencies
+from .ports import ConfigNgramDependencies
 from .run_plan import build_analysis_plan
 from .requests import CorpusPreparationRequest
 from .analysis_records import TokenRecord

@@ -7,11 +7,16 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Iterable, Mapping, Sequence
 
-from nlpo_toolkit.cleaner_contracts import CleanerConfigError, CleanerConfigInspection
+from nlpo_toolkit.cleaner_contracts import (
+    CleanerConfigError,
+    CleanerConfigInspection,
+    CleanerLoader,
+    CleanerRunner,
+)
 
 from .config import AppConfig, GroupConfig, GroupingMode
 from .config_references import ResolvedConfigFiles
-from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner, run_cleaner
+from .cleaner_runtime import load_default_cleaner, run_cleaner
 from .corpus_errors import CleanerInspectionError, CorpusPreparationError
 from .io_utils import expand_globs, read_concat
 from .normalizer import normalize_text

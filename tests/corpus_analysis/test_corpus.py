@@ -30,7 +30,7 @@ from nlpo_toolkit.corpus_analysis.corpus_errors import (
     CorpusReadError,
 )
 from nlpo_toolkit.corpus_analysis.config import load_config
-from nlpo_toolkit.corpus_analysis.dependencies import (
+from nlpo_toolkit.corpus_analysis.ports import (
     AnalysisDependencies,
     ConfigNgramDependencies,
     CorpusPlanningDependencies,
@@ -43,6 +43,7 @@ from tests.corpus_analysis.fake_nlp import (
     fake_backend_factory,
     runner_dependencies,
 )
+from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 
 
 def _config(data: dict):
@@ -312,6 +313,7 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
     planning = CorpusPlanningDependencies(
         load_config=load_config,
         cleaner_loader=lambda: pytest.fail("cleaner loader must not be called"),
+        cleaner_inspector=inspect_cleaner_config,
     )
     features_mod.execute_feature_command(
             FeatureRequest(

@@ -3,11 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .archive import ArchiveOptions, RunArchiveError, RunArchiveResult
+from .archive import RunArchiveError
+from .archive_types import ArchiveOptions, RunArchiveResult
 from .cleaner_runtime import CleanerError
 from .config_references import ConfigReferenceError
 from .corpus_errors import CorpusPreparationError
-from .dependencies import CountCommandDependencies
+from .ports import CountCommandDependencies
 from .runner_types import RunResult
 from .requests import CorpusPreparationRequest
 

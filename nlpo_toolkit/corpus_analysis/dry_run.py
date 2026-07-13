@@ -7,7 +7,7 @@ from typing import Any, Mapping
 
 import yaml
 
-from .dependencies import CorpusPlanningDependencies
+from .ports import CorpusPlanningDependencies
 from .config import ConfigError
 from .config_references import ConfigReferenceError
 from .corpus_errors import CorpusPreparationError

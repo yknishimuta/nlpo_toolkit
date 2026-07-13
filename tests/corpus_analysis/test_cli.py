@@ -8,7 +8,7 @@ import pytest
 from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.cli import count as count_cli
 from nlpo_toolkit.corpus_analysis.count_command import CountRequest
-from nlpo_toolkit.corpus_analysis.dependencies import CountCommandDependencies
+from nlpo_toolkit.corpus_analysis.ports import CountCommandDependencies
 
 
 def _capture_count_request(monkeypatch, *, exit_code: int = 0):

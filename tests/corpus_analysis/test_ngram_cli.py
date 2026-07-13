@@ -9,7 +9,7 @@ from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.config import ensure_app_config, load_config
 from nlpo_toolkit.corpus_analysis.config_references import ResolvedConfigFiles
 from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
-from nlpo_toolkit.corpus_analysis.dependencies import (
+from nlpo_toolkit.corpus_analysis.ports import (
     ConfigNgramDependencies,
     CorpusPlanningDependencies,
 )
@@ -21,6 +21,7 @@ from nlpo_toolkit.corpus_analysis.ngram import (
     execute_config_ngram_command,
 )
 from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
+from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 from nlpo_toolkit.corpus_analysis.token_artifact import (
     TokenArtifactMetadata,
     TokenArtifactWriter,
@@ -324,6 +325,7 @@ def test_config_ngram_uses_canonical_analysis_plan_with_overrides(tmp_path, monk
                 cleaner_loader=lambda: pytest.fail(
                     "cleaner loader must not be called"
                 ),
+                cleaner_inspector=inspect_cleaner_config,
             ),
         ),
     )
@@ -367,6 +369,7 @@ def test_config_ngram_does_not_apply_count_partition_validation(tmp_path) -> Non
             planning=CorpusPlanningDependencies(
                 load_config=load_config,
                 cleaner_loader=lambda: pytest.fail("cleaner must not run"),
+                cleaner_inspector=inspect_cleaner_config,
             )
         ),
     )

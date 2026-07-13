@@ -7,7 +7,7 @@ import pytest
 
 from nlpo_toolkit.corpus_analysis.analysis_policy import AnalysisExtractionPolicy
 from nlpo_toolkit.corpus_analysis.config import ensure_app_config
-from nlpo_toolkit.corpus_analysis.dependencies import (
+from nlpo_toolkit.corpus_analysis.ports import (
     AnalysisDependencies,
     CorpusPlanningDependencies,
     RunnerDependencies,
@@ -40,6 +40,7 @@ def _loader(data: dict, *, cleaner=None):
     return CorpusPlanningDependencies(
         load_config=lambda _path: config,
         cleaner_loader=unexpected_cleaner_loader,
+        cleaner_inspector=inspect_cleaner_config,
     )
 
 

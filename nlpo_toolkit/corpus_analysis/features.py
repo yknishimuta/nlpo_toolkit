@@ -19,7 +19,7 @@ from .analysis_records import (
     iter_nlp_analysis_records_from_text,
 )
 from .analysis_policy import AnalysisExtractionPolicy, DEFAULT_ANALYSIS_EXTRACTION_POLICY
-from .dependencies import FeatureCommandDependencies
+from .ports import FeatureCommandDependencies
 from .corpus import prepare_corpora
 from .config_references import ConfigReferenceError
 from .run_plan import build_analysis_plan

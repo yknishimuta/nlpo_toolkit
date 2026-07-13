@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 
 from ..count_command import CountCommandError, CountRequest, execute_count_command
-from ..dependencies import default_count_command_dependencies
+from ..composition import default_count_command_dependencies
 from ..dry_run import DiagnosticLevel, execute_dry_run
 from .common import (
     CLIContext,
