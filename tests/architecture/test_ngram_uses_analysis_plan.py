@@ -17,7 +17,7 @@ def test_ngram_uses_canonical_corpus_planning_boundary() -> None:
     }
 
     assert {"load_config", "run_preprocess_if_needed", "resolve_corpus_work_items"}.isdisjoint(imported)
-    assert {"build_corpus_plan", "prepare_corpora"} <= imported
+    assert {"build_analysis_plan", "prepare_corpora"} <= imported
 
 
 def test_ngram_has_no_cleaner_fallback_or_direct_cleaner_execution() -> None:

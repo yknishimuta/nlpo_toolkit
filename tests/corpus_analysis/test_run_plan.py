@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError, fields
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,12 @@ from nlpo_toolkit.corpus_analysis.dependencies import (
 )
 from nlpo_toolkit.corpus_analysis.runtime import prepare_run_context
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
-from nlpo_toolkit.corpus_analysis.run_plan import build_run_plan
+from nlpo_toolkit.corpus_analysis.run_plan import (
+    AnalysisPlan,
+    build_analysis_plan,
+    build_count_plan,
+    validate_count_plan,
+)
 from nlpo_toolkit.corpus_analysis.config_references import ConfigReferenceError
 from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 
@@ -44,7 +50,134 @@ def _base_groups() -> dict:
     }
 
 
-def test_build_run_plan_inspects_cleaner_once(tmp_path: Path) -> None:
+def _direct_plan(
+    tmp_path: Path,
+    *,
+    grouping_mode: str = "groups",
+    config_data: dict | None = None,
+    group_files: dict | None = None,
+) -> AnalysisPlan:
+    config_path = tmp_path / "groups.yml"
+    config_path.write_text("dummy", encoding="utf-8")
+    return AnalysisPlan(
+        project_root=tmp_path.resolve(),
+        config_path=config_path.resolve(),
+        config=ensure_app_config(
+            config_data or {"groups": {"text": {"files": []}}}
+        ),
+        cleaned_dir=None,
+        grouping_mode=grouping_mode,
+        work_items=(),
+        group_files=group_files or {"text": ()},
+    )
+
+
+@pytest.mark.parametrize(
+    ("mode", "per_file", "auto_mode"),
+    (
+        ("groups", False, False),
+        ("per_file", True, False),
+        ("auto_single_cleaned", False, True),
+    ),
+)
+def test_analysis_plan_has_one_effective_grouping_mode(
+    tmp_path: Path,
+    mode: str,
+    per_file: bool,
+    auto_mode: bool,
+) -> None:
+    plan = _direct_plan(tmp_path, grouping_mode=mode)
+    assert plan.per_file is per_file
+    assert plan.auto_mode is auto_mode
+
+
+def test_analysis_plan_derives_policy_values_from_config(tmp_path: Path) -> None:
+    plan = _direct_plan(
+        tmp_path,
+        config_data={
+            "groups": {
+                "whole": {"files": []},
+                "part_a": {"files": []},
+                "part_b": {"files": []},
+            },
+            "out_dir": "derived-output",
+            "grouping": {"auto_group_name": "derived-group"},
+            "analysis_unit": "surface",
+            "validations": {
+                "partitions": [
+                    {
+                        "name": "split",
+                        "whole": "whole",
+                        "parts": ["part_a", "part_b"],
+                    }
+                ]
+            },
+            "comparisons": [
+                {"name": "compare", "group_a": "whole", "group_b": "part_a"}
+            ],
+        },
+    )
+
+    assert plan.out_dir == (tmp_path / "derived-output").resolve()
+    assert plan.auto_group_name == "derived-group"
+    assert [spec.name for spec in plan.partition_specs] == ["split"]
+    assert [spec.name for spec in plan.comparison_specs] == ["compare"]
+    assert plan.analysis_unit == "surface"
+    assert plan.use_lemma is False
+    assert plan.csv_header == ("word", "frequency")
+
+    lemma_plan = _direct_plan(
+        tmp_path,
+        config_data={"groups": {"text": {"files": []}}},
+    )
+    assert lemma_plan.analysis_unit == "lemma"
+    assert lemma_plan.use_lemma is True
+    assert lemma_plan.csv_header == ("lemma", "count")
+
+
+def test_analysis_plan_stores_only_canonical_values_and_is_frozen(
+    tmp_path: Path,
+) -> None:
+    derived = {
+        "per_file",
+        "auto_mode",
+        "out_dir",
+        "auto_group_name",
+        "partition_specs",
+        "comparison_specs",
+        "analysis_unit",
+        "use_lemma",
+        "csv_header",
+    }
+    assert derived.isdisjoint({field.name for field in fields(AnalysisPlan)})
+    plan = _direct_plan(tmp_path)
+    with pytest.raises(FrozenInstanceError):
+        plan.cleaned_dir = tmp_path  # type: ignore[misc]
+    with pytest.raises(TypeError):
+        AnalysisPlan(
+            project_root=tmp_path,
+            config_path=tmp_path / "groups.yml",
+            config=plan.config,
+            cleaned_dir=None,
+            grouping_mode="groups",
+            work_items=(),
+            group_files={},
+            out_dir=tmp_path / "output",  # type: ignore[call-arg]
+        )
+
+
+def test_analysis_plan_copies_group_files_into_read_only_mapping(
+    tmp_path: Path,
+) -> None:
+    source = {"text": (tmp_path / "a.txt",)}
+    plan = _direct_plan(tmp_path, group_files=source)
+    source["text"] = (tmp_path / "changed.txt",)
+    assert plan.group_files["text"] == (tmp_path / "a.txt",)
+    with pytest.raises(TypeError):
+        plan.group_files["new"] = ()  # type: ignore[index]
+
+
+def test_build_count_plan_inspects_cleaner_once(tmp_path: Path) -> None:
     config_dir = tmp_path / "config"
     config_dir.mkdir()
     input_dir = tmp_path / "input"
@@ -77,7 +210,7 @@ def test_build_run_plan_inspects_cleaner_once(tmp_path: Path) -> None:
         cleaner_inspector=inspector,
     )
 
-    plan = build_run_plan(
+    plan = build_count_plan(
         project_root=tmp_path,
         script_dir=None,
         config_path=config_path,
@@ -95,13 +228,13 @@ def test_build_run_plan_inspects_cleaner_once(tmp_path: Path) -> None:
     assert plan.config_files.path("preprocess.config") == cleaner_path.resolve()
 
 
-def test_build_run_plan_has_no_output_directory_side_effect(tmp_path: Path) -> None:
+def test_build_count_plan_has_no_output_directory_side_effect(tmp_path: Path) -> None:
     (tmp_path / "input").mkdir()
     (tmp_path / "input" / "a.txt").write_text("a", encoding="utf-8")
     config_path = tmp_path / "config.yml"
     _write_config(config_path)
 
-    plan = build_run_plan(
+    plan = build_count_plan(
         project_root=tmp_path,
         script_dir=None,
         config_path=config_path,
@@ -122,6 +255,136 @@ def test_build_run_plan_has_no_output_directory_side_effect(tmp_path: Path) -> N
     assert plan.work_items[0].label == "text"
 
 
+def test_build_analysis_plan_returns_canonical_effective_mode(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input" / "a.txt").write_text("a", encoding="utf-8")
+    config_path = tmp_path / "config.yml"
+    _write_config(config_path)
+
+    plan = build_analysis_plan(
+        project_root=tmp_path,
+        script_dir=None,
+        config_path=config_path,
+        group_by_file=True,
+        auto_single_cleaned=False,
+        error_on_empty_group=False,
+        dependencies=_loader(_base_groups()),
+        preprocess_mode="inspect",
+    )
+
+    assert isinstance(plan, AnalysisPlan)
+    assert plan.grouping_mode == "per_file"
+    assert plan.per_file is True
+
+
+def test_cli_auto_mode_overrides_per_file_mode(tmp_path: Path) -> None:
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    cleaned = tmp_path / "cleaned"
+    cleaned.mkdir()
+    selected = cleaned / "only.txt"
+    selected.write_text("cleaned", encoding="utf-8")
+    (config_dir / "cleaner.yml").write_text(
+        "kind: scholastic_text\ninput: ../cleaned\noutput: ../cleaned\n",
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "groups.yml"
+    _write_config(config_path)
+
+    plan = build_analysis_plan(
+        project_root=tmp_path,
+        script_dir=None,
+        config_path=config_path,
+        group_by_file=True,
+        auto_single_cleaned=True,
+        error_on_empty_group=False,
+        dependencies=_loader(
+            {
+                "preprocess": {"kind": "cleaner", "config": "config/cleaner.yml"},
+                "groups": {"text": {"files": ["{cleaned_dir}/*.txt"]}},
+                "grouping": {"mode": "per_file"},
+            }
+        ),
+        preprocess_mode="inspect",
+    )
+
+    assert plan.grouping_mode == "auto_single_cleaned"
+    assert plan.auto_mode is True
+    assert plan.per_file is False
+    assert plan.group_files == {"text": (selected.resolve(),)}
+
+
+def test_build_analysis_plan_defers_count_specific_validation(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "groups.yml"
+    _write_config(config_path)
+    dependencies = _loader(
+        {
+            "groups": {
+                "whole": {"files": ["input/whole.txt"]},
+                "part_a": {"files": ["input/part-a.txt"]},
+                "part_b": {"files": ["input/part-b.txt"]},
+            },
+            "grouping": {"mode": "per_file"},
+            "validations": {
+                "partitions": [
+                    {
+                        "name": "split",
+                        "whole": "whole",
+                        "parts": ["part_a", "part_b"],
+                    }
+                ]
+            },
+        }
+    )
+
+    plan = build_analysis_plan(
+        project_root=tmp_path,
+        script_dir=None,
+        config_path=config_path,
+        group_by_file=False,
+        auto_single_cleaned=False,
+        error_on_empty_group=False,
+        dependencies=dependencies,
+        preprocess_mode="inspect",
+    )
+
+    assert plan.grouping_mode == "per_file"
+    with pytest.raises(ValueError, match="validations.partitions"):
+        validate_count_plan(plan)
+
+
+def test_build_count_plan_returns_same_analysis_plan_object(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import nlpo_toolkit.corpus_analysis.run_plan as plan_module
+
+    expected = _direct_plan(tmp_path)
+    monkeypatch.setattr(
+        plan_module,
+        "build_analysis_plan",
+        lambda **_kwargs: expected,
+    )
+
+    actual = plan_module.build_count_plan(
+        project_root=tmp_path,
+        script_dir=None,
+        config_path=tmp_path / "groups.yml",
+        group_by_file=False,
+        auto_single_cleaned=False,
+        error_on_empty_group=False,
+        dependencies=_loader(_base_groups()),
+        preprocess_mode="inspect",
+    )
+
+    assert actual is expected
+    assert actual.config_files is expected.config_files
+
+
 def test_inspect_mode_does_not_run_cleaner(tmp_path: Path) -> None:
     (tmp_path / "config").mkdir()
     (tmp_path / "cleaned").mkdir()
@@ -139,7 +402,7 @@ def test_inspect_mode_does_not_run_cleaner(tmp_path: Path) -> None:
         def main(argv):
             raise AssertionError("cleaner must not run in inspect mode")
 
-    plan = build_run_plan(
+    plan = build_count_plan(
         project_root=tmp_path,
         script_dir=None,
         config_path=config_path,
@@ -177,7 +440,7 @@ def test_execute_mode_runs_cleaner_before_resolving_groups(tmp_path: Path) -> No
             cleaned.mkdir()
             (cleaned / "made.txt").write_text("cleaned", encoding="utf-8")
 
-    plan = build_run_plan(
+    plan = build_count_plan(
         project_root=tmp_path,
         script_dir=None,
         config_path=config_path,
@@ -232,7 +495,7 @@ def test_inspect_and_execute_match_when_cleaned_files_already_exist(tmp_path: Pa
         def main(argv):
             return None
 
-    inspect_plan = build_run_plan(
+    inspect_plan = build_count_plan(
         project_root=tmp_path,
         script_dir=None,
         config_path=config_path,
@@ -242,7 +505,7 @@ def test_inspect_and_execute_match_when_cleaned_files_already_exist(tmp_path: Pa
         dependencies=_loader(data),
         preprocess_mode="inspect",
     )
-    execute_plan = build_run_plan(
+    execute_plan = build_count_plan(
         project_root=tmp_path,
         script_dir=None,
         config_path=config_path,
@@ -272,7 +535,7 @@ def test_yaml_per_file_mode_rejects_partition_and_comparison(tmp_path: Path) -> 
     }
 
     with pytest.raises(ValueError, match="validations.partitions"):
-        build_run_plan(
+        build_count_plan(
             project_root=tmp_path,
             script_dir=None,
             config_path=config_path,
@@ -294,7 +557,7 @@ def test_yaml_per_file_mode_rejects_partition_and_comparison(tmp_path: Path) -> 
         )
 
     with pytest.raises(ValueError, match="comparisons"):
-        build_run_plan(
+        build_count_plan(
             project_root=tmp_path,
             script_dir=None,
             config_path=config_path,
@@ -316,7 +579,7 @@ def test_cli_group_by_file_rejects_partition(tmp_path: Path) -> None:
     config_path = tmp_path / "config.yml"
     _write_config(config_path)
     with pytest.raises(ValueError, match="validations.partitions"):
-        build_run_plan(
+        build_count_plan(
             project_root=tmp_path,
             script_dir=None,
             config_path=config_path,
@@ -356,7 +619,7 @@ def test_auto_single_cleaned_selects_one_and_ignores_dotfiles(tmp_path: Path) ->
     config_path = tmp_path / "config.yml"
     _write_config(config_path)
 
-    plan = build_run_plan(
+    plan = build_count_plan(
         project_root=tmp_path,
         script_dir=None,
         config_path=config_path,
@@ -395,7 +658,7 @@ def test_auto_single_cleaned_rejects_zero_and_multiple_files(tmp_path: Path) -> 
     }
 
     with pytest.raises(ValueError, match="no .txt files"):
-        build_run_plan(
+        build_count_plan(
             project_root=tmp_path,
             script_dir=None,
             config_path=config_path,
@@ -409,7 +672,7 @@ def test_auto_single_cleaned_rejects_zero_and_multiple_files(tmp_path: Path) -> 
     (cleaned / "a.txt").write_text("a", encoding="utf-8")
     (cleaned / "b.txt").write_text("b", encoding="utf-8")
     with pytest.raises(ValueError, match="expected exactly one"):
-        build_run_plan(
+        build_count_plan(
             project_root=tmp_path,
             script_dir=None,
             config_path=config_path,
@@ -428,7 +691,7 @@ def test_empty_group_policy_and_spec_references(tmp_path: Path) -> None:
     config_path = tmp_path / "config.yml"
     _write_config(config_path)
 
-    plan = build_run_plan(
+    plan = build_count_plan(
         project_root=tmp_path,
         script_dir=None,
         config_path=config_path,
@@ -441,7 +704,7 @@ def test_empty_group_policy_and_spec_references(tmp_path: Path) -> None:
     assert plan.group_files == {"empty": ()}
 
     with pytest.raises(ValueError, match="No files matched"):
-        build_run_plan(
+        build_count_plan(
             project_root=tmp_path,
             script_dir=None,
             config_path=config_path,
@@ -453,7 +716,7 @@ def test_empty_group_policy_and_spec_references(tmp_path: Path) -> None:
         )
 
     with pytest.raises(ValueError, match="Partition split references empty group: part_b"):
-        build_run_plan(
+        build_count_plan(
             project_root=tmp_path,
             script_dir=None,
             config_path=config_path,
@@ -485,7 +748,7 @@ def test_comparison_empty_reference_fails_plan(tmp_path: Path) -> None:
     _write_config(config_path)
 
     with pytest.raises(ValueError, match="comparison ab references empty group: b"):
-        build_run_plan(
+        build_count_plan(
             project_root=tmp_path,
             script_dir=None,
             config_path=config_path,
@@ -578,7 +841,7 @@ def test_missing_non_cleaner_reference_fails_before_cleaner_execution(
     )
 
     with pytest.raises(ConfigReferenceError, match="dictcheck.lemma_normalize"):
-        build_run_plan(
+        build_count_plan(
             project_root=tmp_path,
             script_dir=None,
             config_path=config_path,

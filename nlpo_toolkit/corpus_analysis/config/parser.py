@@ -380,9 +380,6 @@ def _parse_comparison_specs(raw: Mapping[str, object]) -> tuple[ComparisonSpec, 
         return ()
     if not isinstance(items, list):
         raise ValueError("'comparisons' must be a list.")
-    grouping = raw.get("grouping") or {}
-    if isinstance(grouping, Mapping) and grouping.get("mode", "groups") == "per_file":
-        raise ValueError("comparisons cannot be used with grouping.mode=per_file")
     group_names = set(_as_mapping(raw.get("groups"), context="groups"))
     specs: list[ComparisonSpec] = []
     seen: set[str] = set()
@@ -450,8 +447,6 @@ def parse_config(raw: Mapping[str, object]) -> AppConfig:
     groups = _parse_groups(raw["groups"])
     grouping = _parse_grouping_config(raw.get("grouping"))
     partition_validations = _parse_partition_specs(raw)
-    if partition_validations and grouping.mode == "per_file":
-        raise ValueError("validations.partitions cannot be used with grouping.mode: per_file")
     comparisons = _parse_comparison_specs(raw)
 
     return AppConfig(

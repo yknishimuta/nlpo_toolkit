@@ -132,7 +132,7 @@ def test_load_config_rejects_non_list_comparisons(tmp_path: Path) -> None:
         load_config(cfg_path)
 
 
-def test_load_config_rejects_per_file_with_comparisons(tmp_path: Path) -> None:
+def test_load_config_preserves_per_file_comparisons_for_count_validation(tmp_path: Path) -> None:
     cfg_path = _write_cfg(
         tmp_path,
         "\n".join(
@@ -151,5 +151,6 @@ def test_load_config_rejects_per_file_with_comparisons(tmp_path: Path) -> None:
         ),
     )
 
-    with pytest.raises(ValueError, match="comparisons cannot be used"):
-        load_config(cfg_path)
+    config = load_config(cfg_path)
+    assert config.grouping.mode == "per_file"
+    assert [spec.name for spec in config.comparisons] == ["comparison_1"]

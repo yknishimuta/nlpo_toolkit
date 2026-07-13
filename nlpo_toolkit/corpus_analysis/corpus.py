@@ -9,7 +9,7 @@ from typing import Iterable, Mapping, Sequence
 
 from nlpo_toolkit.cleaner_contracts import CleanerConfigError, CleanerConfigInspection
 
-from .config import AppConfig, GroupConfig
+from .config import AppConfig, GroupConfig, GroupingMode
 from .config_references import ResolvedConfigFiles
 from .cleaner_runtime import CleanerLoader, CleanerRunner, load_default_cleaner, run_cleaner
 from .corpus_errors import CleanerInspectionError, CorpusPreparationError
@@ -43,7 +43,7 @@ class ResolvedCorpora:
     cleaned_dir: Path | None
     group_files: Mapping[str, tuple[Path, ...]]
     work_items: tuple[CorpusWorkItem, ...]
-    mode: str
+    mode: GroupingMode
 
 
 @dataclass(frozen=True)

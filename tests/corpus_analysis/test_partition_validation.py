@@ -233,7 +233,7 @@ def test_load_config_rejects_invalid_report(tmp_path: Path) -> None:
         load_config(cfg)
 
 
-def test_load_config_rejects_grouping_per_file_with_partitions(tmp_path: Path) -> None:
+def test_load_config_preserves_per_file_partitions_for_count_validation(tmp_path: Path) -> None:
     cfg = _write_cfg(
         tmp_path,
         "groups:\n  full: {files: [a.txt]}\n  a: {files: [a.txt]}\n  b: {files: [b.txt]}\n"
@@ -242,5 +242,6 @@ def test_load_config_rejects_grouping_per_file_with_partitions(tmp_path: Path) -
         "    - {name: split, whole: full, parts: [a, b]}\n",
     )
 
-    with pytest.raises(ValueError, match="per_file"):
-        load_config(cfg)
+    config = load_config(cfg)
+    assert config.grouping.mode == "per_file"
+    assert [spec.name for spec in config.partition_validations] == ["split"]

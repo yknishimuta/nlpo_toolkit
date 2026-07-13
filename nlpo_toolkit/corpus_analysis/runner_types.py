@@ -10,12 +10,12 @@ from nlpo_toolkit.backends import NLPBackendInfo
 from .corpus import PreparedCorpus
 from .analysis_policy import AnalysisExtractionPolicy, DEFAULT_ANALYSIS_EXTRACTION_POLICY
 from .config_references import ConfigFileReference
-from .run_plan import RunPlan
+from .run_plan import AnalysisPlan
 
 
 @dataclass(frozen=True)
 class RunContext:
-    plan: RunPlan
+    plan: AnalysisPlan
     prepared_corpora: tuple[PreparedCorpus, ...]
     nlp: Any
     backend_info: NLPBackendInfo
@@ -38,7 +38,7 @@ def deduplicate_resolved_paths(paths: Iterable[Path]) -> tuple[Path, ...]:
 @dataclass(frozen=True)
 class RunResult:
     exit_code: int
-    plan: RunPlan
+    plan: AnalysisPlan
     groups_files: Mapping[str, tuple[Path, ...]]
     input_files: tuple[Path, ...]
     cleaned_files: tuple[Path, ...]

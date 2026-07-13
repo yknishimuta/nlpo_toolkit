@@ -11,7 +11,7 @@ from typing import Iterable, Iterator
 from .corpus import PreparedCorpus, prepare_corpora
 from .config_references import ConfigReferenceError
 from .dependencies import ConfigNgramDependencies
-from .run_plan import build_corpus_plan
+from .run_plan import build_analysis_plan
 from .analysis_records import TokenRecord
 from .token_artifact import TokenArtifactError, read_token_records
 
@@ -271,7 +271,7 @@ def execute_config_ngram_command(
             "Use --tokens with a token artifact for lemma n-grams."
         )
     try:
-        plan = build_corpus_plan(
+        plan = build_analysis_plan(
             project_root=request.project_root,
             script_dir=None,
             config_path=request.config_path,

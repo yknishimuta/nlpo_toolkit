@@ -11,7 +11,7 @@ from .dependencies import CorpusPlanningDependencies
 from .config import ConfigError
 from .config_references import ConfigReferenceError
 from .corpus_errors import CorpusPreparationError
-from .run_plan import RunPlan, RunPlanError, build_run_plan
+from .run_plan import AnalysisPlan, AnalysisPlanError, build_count_plan
 
 if TYPE_CHECKING:
     from .count_command import CountRequest
@@ -111,7 +111,7 @@ def _display_path(path: Path, project_root: Path) -> str:
         return str(path)
 
 
-def render_run_plan(plan: RunPlan, *, project_root: Path) -> list[str]:
+def render_analysis_plan(plan: AnalysisPlan, *, project_root: Path) -> list[str]:
     lines: list[str] = []
 
     if plan.auto_mode:
@@ -133,7 +133,7 @@ def render_run_plan(plan: RunPlan, *, project_root: Path) -> list[str]:
     return lines
 
 
-def _render_spec_diagnostics(plan: RunPlan) -> list[DryRunDiagnostic]:
+def _render_spec_diagnostics(plan: AnalysisPlan) -> list[DryRunDiagnostic]:
     diagnostics: list[DryRunDiagnostic] = []
 
     for spec in plan.partition_specs:
@@ -205,7 +205,7 @@ def execute_dry_run(
     add(DiagnosticLevel.OK, "config loaded")
 
     try:
-        plan = build_run_plan(
+        plan = build_count_plan(
             project_root=project_root,
             script_dir=None,
             config_path=config_path,
@@ -220,7 +220,7 @@ def execute_dry_run(
             preprocess_mode="inspect",
             validate_references=False,
         )
-    except (ConfigReferenceError, RunPlanError, CorpusPreparationError) as exc:
+    except (ConfigReferenceError, AnalysisPlanError, CorpusPreparationError) as exc:
         add(DiagnosticLevel.ERROR, str(exc))
     else:
         cleaner_inspection = plan.cleaner_inspection
@@ -241,7 +241,7 @@ def execute_dry_run(
                 "cleaned output dir: "
                 f"{_display_path(cleaner_inspection.config.output_path, project_root)}"
             )
-        for line in render_run_plan(plan, project_root=project_root):
+        for line in render_analysis_plan(plan, project_root=project_root):
             add(DiagnosticLevel.OK, line)
         if request.error_on_empty_group:
             for group_name, files in plan.group_files.items():

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Literal, Mapping, Sequence
 
-from nlpo_toolkit.comparison.configured import ComparisonSpec
 from nlpo_toolkit.cleaner_contracts import CleanerConfigInspection
-from .config import AppConfig
+from nlpo_toolkit.comparison.configured import ComparisonSpec
+
+from .config import AnalysisUnit, AppConfig, GroupingMode
 from .config_references import ResolvedConfigFiles, resolve_config_files
 from .corpus import (
     CleanerPlan,
@@ -21,43 +23,62 @@ from .partition_models import PartitionSpec
 
 
 @dataclass(frozen=True)
-class CorpusPlan:
+class AnalysisPlan:
     project_root: Path
     config_path: Path
     config: AppConfig
     cleaned_dir: Path | None
-    grouping_mode: str
-    per_file: bool
-    auto_mode: bool
+    grouping_mode: GroupingMode
     work_items: tuple[CorpusWorkItem, ...]
     group_files: Mapping[str, tuple[Path, ...]]
     cleaner_inspection: CleanerConfigInspection | None = None
     config_files: ResolvedConfigFiles = ResolvedConfigFiles()
 
+    def __post_init__(self) -> None:
+        immutable_group_files = MappingProxyType(
+            {name: tuple(files) for name, files in self.group_files.items()}
+        )
+        object.__setattr__(self, "work_items", tuple(self.work_items))
+        object.__setattr__(self, "group_files", immutable_group_files)
 
-@dataclass(frozen=True)
-class RunPlan:
-    project_root: Path
-    config_path: Path
-    config: AppConfig
-    out_dir: Path
-    cleaned_dir: Path | None
-    grouping_mode: str
-    per_file: bool
-    auto_mode: bool
-    auto_group_name: str
-    work_items: tuple[CorpusWorkItem, ...]
-    group_files: Mapping[str, tuple[Path, ...]]
-    partition_specs: tuple[PartitionSpec, ...]
-    comparison_specs: tuple[ComparisonSpec, ...]
-    analysis_unit: str
-    use_lemma: bool
-    csv_header: tuple[str, str]
-    cleaner_inspection: CleanerConfigInspection | None = None
-    config_files: ResolvedConfigFiles = ResolvedConfigFiles()
+    @property
+    def per_file(self) -> bool:
+        return self.grouping_mode == "per_file"
+
+    @property
+    def auto_mode(self) -> bool:
+        return self.grouping_mode == "auto_single_cleaned"
+
+    @property
+    def out_dir(self) -> Path:
+        return resolve_out_dir(self.config, self.project_root)
+
+    @property
+    def auto_group_name(self) -> str:
+        return self.config.grouping.auto_group_name
+
+    @property
+    def partition_specs(self) -> tuple[PartitionSpec, ...]:
+        return self.config.partition_validations
+
+    @property
+    def comparison_specs(self) -> tuple[ComparisonSpec, ...]:
+        return self.config.comparisons
+
+    @property
+    def analysis_unit(self) -> AnalysisUnit:
+        return resolve_analysis_unit(self.config)[0]
+
+    @property
+    def use_lemma(self) -> bool:
+        return resolve_analysis_unit(self.config)[1]
+
+    @property
+    def csv_header(self) -> tuple[str, str]:
+        return resolve_analysis_unit(self.config)[2]
 
 
-class RunPlanError(ValueError):
+class AnalysisPlanError(ValueError):
     pass
 
 
@@ -81,18 +102,6 @@ def resolve_run_paths(
     return resolved_root, resolved_config
 
 
-def resolve_grouping_flags(
-    *,
-    config: AppConfig,
-    group_by_file: bool | None,
-    auto_single_cleaned: bool,
-) -> tuple[str, bool, bool]:
-    grouping_mode = config.grouping.mode
-    auto_mode = bool(auto_single_cleaned) or grouping_mode == "auto_single_cleaned"
-    per_file = (bool(group_by_file) or grouping_mode == "per_file") and not auto_mode
-    return grouping_mode, per_file, auto_mode
-
-
 def resolve_out_dir(config: AppConfig, project_root: Path) -> Path:
     out_dir = Path(config.out_dir)
     if not out_dir.is_absolute():
@@ -105,7 +114,9 @@ def ensure_out_dir(out_dir: Path) -> Path:
     return out_dir
 
 
-def resolve_analysis_unit(config: AppConfig) -> tuple[str, bool, tuple[str, str]]:
+def resolve_analysis_unit(
+    config: AppConfig,
+) -> tuple[AnalysisUnit, bool, tuple[str, str]]:
     unit = config.analysis_unit
     use_lemma = unit == "lemma"
     header = ("lemma", "count") if use_lemma else ("word", "frequency")
@@ -121,11 +132,11 @@ def validate_specs_against_grouping(
     per_file: bool,
 ) -> None:
     if partition_specs and per_file:
-        raise RunPlanError(
+        raise AnalysisPlanError(
             "validations.partitions cannot be used with --group-by-file or grouping.mode: per_file"
         )
     if comparison_specs and per_file:
-        raise RunPlanError("comparisons cannot be used with grouping.mode=per_file")
+        raise AnalysisPlanError("comparisons cannot be used with grouping.mode=per_file")
 
 
 def validate_partition_group_references(
@@ -136,7 +147,9 @@ def validate_partition_group_references(
     for spec in partition_specs:
         for name in (spec.whole, *spec.parts):
             if not group_files.get(name):
-                raise RunPlanError(f"Partition {spec.name} references empty group: {name}")
+                raise AnalysisPlanError(
+                    f"Partition {spec.name} references empty group: {name}"
+                )
 
 
 def validate_comparison_group_references(
@@ -147,7 +160,9 @@ def validate_comparison_group_references(
     for spec in comparison_specs:
         for name in (spec.group_a, spec.group_b):
             if not group_files.get(name):
-                raise RunPlanError(f"comparison {spec.name} references empty group: {name}")
+                raise AnalysisPlanError(
+                    f"comparison {spec.name} references empty group: {name}"
+                )
 
 
 def _inspect_cleaner_plan(
@@ -164,7 +179,7 @@ def _inspect_cleaner_plan(
     return plan, plan.inspection if plan is not None else None
 
 
-def build_run_plan(
+def build_analysis_plan(
     *,
     project_root: Path | None,
     script_dir: Path | None,
@@ -174,70 +189,7 @@ def build_run_plan(
     error_on_empty_group: bool,
     dependencies: CorpusPlanningDependencies,
     preprocess_mode: Literal["inspect", "execute"],
-    validate_references: bool = True,
-) -> RunPlan:
-    corpus_plan = build_corpus_plan(
-        project_root=project_root,
-        script_dir=script_dir,
-        config_path=config_path,
-        group_by_file=group_by_file,
-        auto_single_cleaned=auto_single_cleaned,
-        error_on_empty_group=error_on_empty_group,
-        dependencies=dependencies,
-        preprocess_mode=preprocess_mode,
-    )
-    config = corpus_plan.config
-    partition_specs = config.partition_validations
-    comparison_specs = config.comparisons
-    validate_specs_against_grouping(
-        partition_specs=partition_specs,
-        comparison_specs=comparison_specs,
-        per_file=corpus_plan.per_file,
-    )
-    if validate_references:
-        validate_partition_group_references(
-            partition_specs=partition_specs,
-            group_files=corpus_plan.group_files,
-        )
-        validate_comparison_group_references(
-            comparison_specs=comparison_specs,
-            group_files=corpus_plan.group_files,
-        )
-    analysis_unit, use_lemma, csv_header = resolve_analysis_unit(config)
-
-    return RunPlan(
-        project_root=corpus_plan.project_root,
-        config_path=corpus_plan.config_path,
-        config=config,
-        out_dir=resolve_out_dir(config, corpus_plan.project_root),
-        cleaned_dir=corpus_plan.cleaned_dir,
-        grouping_mode=corpus_plan.grouping_mode,
-        per_file=corpus_plan.per_file,
-        auto_mode=corpus_plan.auto_mode,
-        auto_group_name=config.grouping.auto_group_name,
-        work_items=corpus_plan.work_items,
-        group_files=corpus_plan.group_files,
-        partition_specs=partition_specs,
-        comparison_specs=comparison_specs,
-        analysis_unit=analysis_unit,
-        use_lemma=use_lemma,
-        csv_header=csv_header,
-        cleaner_inspection=corpus_plan.cleaner_inspection,
-        config_files=corpus_plan.config_files,
-    )
-
-
-def build_corpus_plan(
-    *,
-    project_root: Path | None,
-    script_dir: Path | None,
-    config_path: Path,
-    group_by_file: bool | None,
-    auto_single_cleaned: bool,
-    error_on_empty_group: bool,
-    dependencies: CorpusPlanningDependencies,
-    preprocess_mode: Literal["inspect", "execute"],
-) -> CorpusPlan:
+) -> AnalysisPlan:
     resolved_root, resolved_config = resolve_run_paths(
         project_root=project_root,
         script_dir=script_dir,
@@ -245,13 +197,8 @@ def build_corpus_plan(
     )
     config = dependencies.load_config(resolved_config)
     if not config.groups:
-        raise RunPlanError("config.groups must be a non-empty mapping")
+        raise AnalysisPlanError("config.groups must be a non-empty mapping")
 
-    grouping_mode, per_file, auto_mode = resolve_grouping_flags(
-        config=config,
-        group_by_file=group_by_file,
-        auto_single_cleaned=auto_single_cleaned,
-    )
     cleaner_plan, cleaner_inspection = _inspect_cleaner_plan(
         config=config,
         project_root=resolved_root,
@@ -272,24 +219,70 @@ def build_corpus_plan(
         )
     else:
         raise ValueError("preprocess_mode must be 'inspect' or 'execute'")
+
     resolved = resolve_corpus_work_items(
         config=config,
         project_root=resolved_root,
         cleaned_dir=cleaned_dir,
-        group_by_file=per_file,
-        auto_single_cleaned=auto_mode,
+        group_by_file=bool(group_by_file),
+        auto_single_cleaned=auto_single_cleaned,
         error_on_empty_group=error_on_empty_group,
     )
-    return CorpusPlan(
+    return AnalysisPlan(
         project_root=resolved_root,
         config_path=resolved_config,
         config=config,
         cleaned_dir=cleaned_dir,
-        grouping_mode=grouping_mode,
-        per_file=per_file,
-        auto_mode=auto_mode,
-        work_items=tuple(resolved.work_items),
+        grouping_mode=resolved.mode,
+        work_items=resolved.work_items,
         group_files=resolved.group_files,
         cleaner_inspection=cleaner_inspection,
         config_files=config_files,
     )
+
+
+def validate_count_plan(
+    plan: AnalysisPlan,
+    *,
+    validate_references: bool = True,
+) -> None:
+    validate_specs_against_grouping(
+        partition_specs=plan.partition_specs,
+        comparison_specs=plan.comparison_specs,
+        per_file=plan.per_file,
+    )
+    if validate_references:
+        validate_partition_group_references(
+            partition_specs=plan.partition_specs,
+            group_files=plan.group_files,
+        )
+        validate_comparison_group_references(
+            comparison_specs=plan.comparison_specs,
+            group_files=plan.group_files,
+        )
+
+
+def build_count_plan(
+    *,
+    project_root: Path | None,
+    script_dir: Path | None,
+    config_path: Path,
+    group_by_file: bool | None,
+    auto_single_cleaned: bool,
+    error_on_empty_group: bool,
+    dependencies: CorpusPlanningDependencies,
+    preprocess_mode: Literal["inspect", "execute"],
+    validate_references: bool = True,
+) -> AnalysisPlan:
+    plan = build_analysis_plan(
+        project_root=project_root,
+        script_dir=script_dir,
+        config_path=config_path,
+        group_by_file=group_by_file,
+        auto_single_cleaned=auto_single_cleaned,
+        error_on_empty_group=error_on_empty_group,
+        dependencies=dependencies,
+        preprocess_mode=preprocess_mode,
+    )
+    validate_count_plan(plan, validate_references=validate_references)
+    return plan

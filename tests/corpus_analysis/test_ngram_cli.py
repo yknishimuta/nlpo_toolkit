@@ -277,7 +277,7 @@ def test_iter_config_token_rows_uses_prepared_text_and_preserves_group_boundary(
     ]
 
 
-def test_config_ngram_uses_canonical_corpus_plan_with_overrides(tmp_path, monkeypatch):
+def test_config_ngram_uses_canonical_analysis_plan_with_overrides(tmp_path, monkeypatch):
     import nlpo_toolkit.corpus_analysis.ngram as ngram_mod
 
     config_path = tmp_path / "groups.yml"
@@ -285,7 +285,7 @@ def test_config_ngram_uses_canonical_corpus_plan_with_overrides(tmp_path, monkey
     config = ensure_app_config({"groups": {"text": {"files": ["input.txt"]}}})
     calls = []
 
-    def fake_build_corpus_plan(**kwargs):
+    def fake_build_analysis_plan(**kwargs):
         calls.append(kwargs)
         return type(
             "Plan",
@@ -298,7 +298,7 @@ def test_config_ngram_uses_canonical_corpus_plan_with_overrides(tmp_path, monkey
             },
         )()
 
-    monkeypatch.setattr(ngram_mod, "build_corpus_plan", fake_build_corpus_plan)
+    monkeypatch.setattr(ngram_mod, "build_analysis_plan", fake_build_analysis_plan)
     monkeypatch.setattr(
         ngram_mod,
         "prepare_corpora",
@@ -343,7 +343,7 @@ def test_config_ngram_rejects_lemma_before_planning(tmp_path, monkeypatch):
 
     monkeypatch.setattr(
         ngram_mod,
-        "build_corpus_plan",
+        "build_analysis_plan",
         lambda **_kwargs: pytest.fail("plan must not be built"),
     )
 
@@ -367,6 +367,45 @@ def test_config_ngram_rejects_lemma_before_planning(tmp_path, monkeypatch):
                 ),
             ),
         )
+
+
+def test_config_ngram_does_not_apply_count_partition_validation(tmp_path) -> None:
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input" / "a.txt").write_text("alpha beta", encoding="utf-8")
+    config_path = tmp_path / "groups.yml"
+    config_path.write_text(
+        "groups:\n"
+        "  whole: {files: [input/a.txt]}\n"
+        "  part_a: {files: [input/a.txt]}\n"
+        "  part_b: {files: [input/a.txt]}\n"
+        "grouping: {mode: per_file}\n"
+        "validations:\n"
+        "  partitions:\n"
+        "    - {name: split, whole: whole, parts: [part_a, part_b]}\n",
+        encoding="utf-8",
+    )
+
+    result = execute_config_ngram_command(
+        request=ConfigNgramRequest(
+            project_root=tmp_path,
+            config_path=config_path,
+            n=2,
+            field="token",
+            by_group=False,
+            min_count=1,
+            top=None,
+        ),
+        dependencies=ConfigNgramDependencies(
+            planning=CorpusPlanningDependencies(
+                load_config=load_config,
+                cleaner_loader=lambda: pytest.fail("cleaner must not run"),
+            )
+        ),
+    )
+
+    assert result.rows == (
+        {"ngram": "alpha beta", "count": 1, "n": 2, "field": "token"},
+    )
 
 
 def test_token_artifact_cli_does_not_create_config_dependencies(tmp_path, monkeypatch, capsys):

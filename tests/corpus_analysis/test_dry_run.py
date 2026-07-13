@@ -10,7 +10,7 @@ from nlpo_toolkit.corpus_analysis.dry_run import DiagnosticLevel, execute_dry_ru
 from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis.config import ConfigError
 from nlpo_toolkit.corpus_analysis.config_references import ConfigReferenceError
-from nlpo_toolkit.corpus_analysis.run_plan import build_run_plan
+from nlpo_toolkit.corpus_analysis.run_plan import build_count_plan
 
 
 def _execute_dry_run(
@@ -335,7 +335,7 @@ def test_dry_run_and_normal_planning_report_same_missing_reference(
     )
 
     with pytest.raises(ConfigReferenceError) as normal:
-        build_run_plan(
+        build_count_plan(
             project_root=tmp_path,
             script_dir=None,
             config_path=config_path,

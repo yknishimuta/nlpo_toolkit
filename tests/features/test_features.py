@@ -457,6 +457,30 @@ def test_run_features_group_by_file(tmp_path: Path) -> None:
     assert all(row["file_count"] == "1" for row in rows)
 
 
+def test_features_does_not_apply_count_partition_validation(tmp_path: Path) -> None:
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input" / "a.txt").write_text("Rosa amat.", encoding="utf-8")
+    config_path = tmp_path / "config.yml"
+    config_path.write_text(
+        "groups:\n"
+        "  whole: {files: [input/a.txt]}\n"
+        "  part_a: {files: [input/a.txt]}\n"
+        "  part_b: {files: [input/a.txt]}\n"
+        "grouping: {mode: per_file}\n"
+        "validations:\n"
+        "  partitions:\n"
+        "    - {name: split, whole: whole, parts: [part_a, part_b]}\n",
+        encoding="utf-8",
+    )
+
+    result = execute_feature_command(
+        FeatureRequest(project_root=tmp_path, config_path=config_path),
+        dependencies=_dependencies(),
+    )
+
+    assert len(result.rows) == 1
+
+
 def test_run_features_auto_single_cleaned(tmp_path: Path) -> None:
     cleaned = tmp_path / "cleaned"
     cleaned.mkdir()

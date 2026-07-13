@@ -9,7 +9,7 @@ from nlpo_toolkit.nlp import load_roman_exceptions
 from .config import AppConfig
 from .corpus import prepare_corpora
 from .dependencies import BackendFactory, RunnerDependencies
-from .run_plan import RunPlan, build_run_plan, ensure_out_dir
+from .run_plan import AnalysisPlan, build_count_plan, ensure_out_dir
 from .runner_types import RunContext
 
 
@@ -45,7 +45,7 @@ def initialize_sentence_splitter(
 
 def load_roman_exceptions_for_run(
     *,
-    plan: RunPlan,
+    plan: AnalysisPlan,
 ) -> frozenset[str]:
     path = plan.config_files.path("filters.roman_exceptions_file")
     if path is None:
@@ -63,7 +63,7 @@ def prepare_run_context(
     error_on_empty_group: bool,
     dependencies: RunnerDependencies,
 ) -> RunContext:
-    plan = build_run_plan(
+    plan = build_count_plan(
         project_root=project_root,
         script_dir=script_dir,
         config_path=config_path,

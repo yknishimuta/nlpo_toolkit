@@ -13,13 +13,16 @@ from nlpo_toolkit.corpus_analysis.archive import (
     sanitize_run_name,
 )
 from nlpo_toolkit.corpus_analysis.config import ensure_app_config
-from nlpo_toolkit.corpus_analysis.config_references import ConfigFileReference
+from nlpo_toolkit.corpus_analysis.config_references import (
+    ConfigFileReference,
+    ResolvedConfigFiles,
+)
 from nlpo_toolkit.corpus_analysis.count_command import CountRequest, execute_count_command
 from nlpo_toolkit.corpus_analysis.dependencies import (
     CountCommandDependencies,
     default_runner_dependencies,
 )
-from nlpo_toolkit.corpus_analysis.run_plan import RunPlan
+from nlpo_toolkit.corpus_analysis.run_plan import AnalysisPlan
 from nlpo_toolkit.corpus_analysis.runner_types import RunResult
 
 
@@ -35,16 +38,19 @@ def make_run_result(
     config_path = tmp_path / "config.yml"
     config_path.write_text("groups: {g: {files: []}}\n", encoding="utf-8")
     config = ensure_app_config({"groups": {"g": {"files": []}}})
-    plan = RunPlan(
-        project_root=tmp_path.resolve(), config_path=config_path.resolve(), config=config,
-        out_dir=(tmp_path / "output").resolve(), cleaned_dir=(tmp_path / "cleaned").resolve(),
-        grouping_mode="groups", per_file=False, auto_mode=False, auto_group_name="text",
-        work_items=(), group_files={"g": tuple(input_files)}, partition_specs=(), comparison_specs=(),
-        analysis_unit="lemma", use_lemma=True, csv_header=("lemma", "count"),
+    plan = AnalysisPlan(
+        project_root=tmp_path.resolve(),
+        config_path=config_path.resolve(),
+        config=config,
+        cleaned_dir=(tmp_path / "cleaned").resolve(),
+        grouping_mode="groups",
+        work_items=(),
+        group_files={"g": tuple(input_files)},
+        config_files=ResolvedConfigFiles(config_files),
     )
     summary = next((p for p in output_files if p.name == "summary.txt"), tmp_path / "summary.txt")
     metadata = next((p for p in output_files if p.name == "run_meta.json"), tmp_path / "run_meta.json")
-    return RunResult(0, plan, {"g": tuple(input_files or cleaned_files)}, tuple(input_files), tuple(cleaned_files), tuple(output_files), tuple(trace_files), tuple(config_files), summary, metadata)
+    return RunResult(0, plan, {"g": tuple(input_files or cleaned_files)}, tuple(input_files), tuple(cleaned_files), tuple(output_files), tuple(trace_files), plan.config_files.references, summary, metadata)
 
 
 def test_sanitize_run_name() -> None:
