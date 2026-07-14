@@ -1,5 +1,4 @@
 import pytest
-from types import SimpleNamespace
 
 from nlpo_toolkit.corpus_analysis.config import NormalizationConfig
 from nlpo_toolkit.corpus_analysis.normalizer import normalize_text
@@ -22,7 +21,7 @@ def test_active_normalization_options_still_apply(
     text: str,
     expected: str,
 ) -> None:
-    assert normalize_text(text, SimpleNamespace(normalization=config)) == expected
+    assert normalize_text(text, config) == expected
 
 
 def test_active_normalization_options_still_combine_in_current_order() -> None:
@@ -38,5 +37,10 @@ def test_active_normalization_options_still_combine_in_current_order() -> None:
 
     assert normalize_text(
         "ÆNEAS VIVIT JÚLIA",
-        SimpleNamespace(normalization=config),
+        config,
     ) == "aeneas uiuit iulia"
+
+
+def test_normalizer_does_not_accept_raw_mapping_config() -> None:
+    with pytest.raises(AttributeError):
+        normalize_text("VIVIT", {"enabled": True})  # type: ignore[arg-type]

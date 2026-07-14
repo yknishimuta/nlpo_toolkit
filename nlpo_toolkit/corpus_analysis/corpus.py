@@ -266,7 +266,7 @@ def prepare_corpus_text(
     ref_tag_patterns: Sequence[RefTagPattern] = (),
 ) -> PreparedCorpus:
     raw_text = read_concat(work_item.files)
-    prepared_text = normalize_text(raw_text, config)
+    prepared_text = normalize_text(raw_text, config.normalization)
     ref_tag_counts: Counter[str] = Counter()
     if config.ref_tags.enabled:
         prepared_text, ref_tag_counts = strip_and_count_ref_tags(prepared_text, ref_tag_patterns)

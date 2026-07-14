@@ -85,15 +85,9 @@ class AnalysisPlanError(ValueError):
 
 def resolve_run_paths(
     *,
-    project_root: Path | None,
-    script_dir: Path | None,
+    project_root: Path,
     config_path: Path,
 ) -> tuple[Path, Path]:
-    if project_root is None:
-        if script_dir is None:
-            raise TypeError("project_root is required")
-        project_root = script_dir
-
     resolved_root = Path(project_root).resolve()
     resolved_config = Path(config_path)
     if not resolved_config.is_absolute():
@@ -185,11 +179,9 @@ def build_analysis_plan(
     *,
     dependencies: CorpusPlanningDependencies,
     preprocess_mode: Literal["inspect", "execute"],
-    script_dir: Path | None = None,
 ) -> AnalysisPlan:
     resolved_root, resolved_config = resolve_run_paths(
         project_root=request.project_root,
-        script_dir=script_dir,
         config_path=request.config_path,
     )
     config = dependencies.load_config(resolved_config)
@@ -265,11 +257,9 @@ def build_count_plan(
     dependencies: CorpusPlanningDependencies,
     preprocess_mode: Literal["inspect", "execute"],
     validate_references: bool = True,
-    script_dir: Path | None = None,
 ) -> AnalysisPlan:
     plan = build_analysis_plan(
         request,
-        script_dir=script_dir,
         dependencies=dependencies,
         preprocess_mode=preprocess_mode,
     )

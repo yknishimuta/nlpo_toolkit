@@ -7,6 +7,11 @@ from pathlib import Path
 
 import pytest
 
+from nlpo_toolkit.corpus_analysis.analysis_records import (
+    TokenRecord,
+    counter_from_token_records,
+    iter_token_records,
+)
 from nlpo_toolkit.corpus_analysis.token_artifact import (
     TOKEN_ARTIFACT_COLUMNS,
     TOKEN_ARTIFACT_SCHEMA_NAME,
@@ -14,9 +19,6 @@ from nlpo_toolkit.corpus_analysis.token_artifact import (
     TokenArtifactError,
     TokenArtifactMetadata,
     TokenArtifactWriter,
-    TokenRecord,
-    counter_from_token_records,
-    iter_token_records,
     read_token_records,
     token_artifact_metadata_path,
     validate_token_artifact,

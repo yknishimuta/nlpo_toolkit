@@ -13,11 +13,11 @@ from typing import Any, Collection
 from .analysis_records import TokenRecord
 
 __all__ = [
+    "DIAGNOSTIC_TRACE_COLUMNS",
     "DiagnosticTraceWriter",
-    "LEGACY_TRACE_COLUMNS",
 ]
 
-LEGACY_TRACE_COLUMNS = (
+DIAGNOSTIC_TRACE_COLUMNS = (
     "label",
     "chunk",
     "sent_idx",
@@ -55,7 +55,7 @@ class DiagnosticTraceWriter:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._file = self.path.open("w", encoding="utf-8", newline="")
         self._writer = csv.writer(self._file, delimiter="\t")
-        self._writer.writerow(LEGACY_TRACE_COLUMNS)
+        self._writer.writerow(DIAGNOSTIC_TRACE_COLUMNS)
         return self
 
     def consider(self, record: TokenRecord) -> None:

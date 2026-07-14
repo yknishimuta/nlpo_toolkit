@@ -232,10 +232,10 @@ def clean_text(
     text: str,
     *,
     kind: str,
-    ref_tsv=None,
+    ref_tsv: str | Path | None = None,
     doc_id: str = "",
-    rules_path=None,
-    lexicon_map_path=None,
+    rules_path: str | Path | None = None,
+    lexicon_map_path: str | Path | None = None,
 ) -> str:
     kind = (kind or "").strip()
 

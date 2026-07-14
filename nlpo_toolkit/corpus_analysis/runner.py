@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from . import analysis_pipeline, post_analysis, run_reporting, runtime
 from .ports import RunnerDependencies
 from .runner_types import RunResult
@@ -12,12 +10,10 @@ def run(
     request: CorpusPreparationRequest,
     *,
     dependencies: RunnerDependencies,
-    script_dir: Path | None = None,
 ) -> RunResult:
     """Core runner. Dependencies are injectable for CLI and tests."""
     context = runtime.prepare_run_context(
         request,
-        script_dir=script_dir,
         dependencies=dependencies,
     )
     analysis = analysis_pipeline.analyze_corpora(context)

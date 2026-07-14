@@ -50,6 +50,7 @@ def test_main_uses_default_config(tmp_path, monkeypatch):
         ref_tsv=None,
         doc_id: str = "",
         rules_path=None,
+        lexicon_map_path=None,
     ) -> str:
         # Verify that raw and kind are passed correctly
         assert raw == "Salve mundi"
@@ -61,6 +62,7 @@ def test_main_uses_default_config(tmp_path, monkeypatch):
 
         # (NEW) rules_path should be resolved relative to config_dir
         assert Path(rules_path) == rules_abs
+        assert lexicon_map_path is None
 
         return raw.upper()
 
@@ -92,7 +94,8 @@ def test_main_with_explicit_config_path(tmp_path, monkeypatch):
         "kind: scholastic_text\n"
         "input: in.txt\n"
         "output: out/cleaned2.txt\n"
-        "rules_path: config/latin_cleaners/custom_rules.yml\n",
+        "rules_path: config/latin_cleaners/custom_rules.yml\n"
+        "lexicon_map_path: config/latin_cleaners/lexicon_map.tsv\n",
         encoding="utf-8",
     )
 
@@ -106,6 +109,8 @@ def test_main_with_explicit_config_path(tmp_path, monkeypatch):
     rules_abs = (config_dir / rules_rel).resolve()
     rules_abs.parent.mkdir(parents=True, exist_ok=True)
     rules_abs.write_text("# dummy rules\n", encoding="utf-8")
+    lexicon_abs = (config_dir / "config/latin_cleaners/lexicon_map.tsv").resolve()
+    lexicon_abs.write_text("source\ttarget\n", encoding="utf-8")
 
     def fake_clean_text(
         raw: str,
@@ -114,6 +119,7 @@ def test_main_with_explicit_config_path(tmp_path, monkeypatch):
         ref_tsv=None,
         doc_id: str = "",
         rules_path=None,
+        lexicon_map_path=None,
     ) -> str:
         assert raw == "Puella rosam amat."
         assert kind == "scholastic_text"
@@ -124,6 +130,7 @@ def test_main_with_explicit_config_path(tmp_path, monkeypatch):
 
         # (NEW) rules_path should be resolved relative to config_dir
         assert Path(rules_path) == rules_abs
+        assert Path(lexicon_map_path) == lexicon_abs
 
         return raw.replace(" ", "_")
 
@@ -136,3 +143,44 @@ def test_main_with_explicit_config_path(tmp_path, monkeypatch):
     assert expected_output.is_file()
     out_text = expected_output.read_text(encoding="utf-8")
     assert out_text == "Puella_rosam_amat."
+
+
+def test_clean_single_file_passes_optional_paths_explicitly_when_none(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    input_path = tmp_path / "input.txt"
+    output_path = tmp_path / "output.txt"
+    input_path.write_text("Salve", encoding="utf-8")
+    received = {}
+
+    def fake_clean_text(
+        raw: str,
+        *,
+        kind: str,
+        ref_tsv,
+        doc_id: str,
+        rules_path,
+        lexicon_map_path,
+    ) -> str:
+        received.update(
+            raw=raw,
+            kind=kind,
+            ref_tsv=ref_tsv,
+            doc_id=doc_id,
+            rules_path=rules_path,
+            lexicon_map_path=lexicon_map_path,
+        )
+        return raw
+
+    monkeypatch.setattr(mod, "clean_text", fake_clean_text)
+    mod._clean_single_file(input_path, output_path, kind="scholastic_text")
+
+    assert received == {
+        "raw": "Salve",
+        "kind": "scholastic_text",
+        "ref_tsv": None,
+        "doc_id": "",
+        "rules_path": None,
+        "lexicon_map_path": None,
+    }

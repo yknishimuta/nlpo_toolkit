@@ -13,15 +13,7 @@ from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Iterator, Mapping
 
-from .analysis_records import (
-    AnalysisOptions,
-    NLPAnalysisRecord,
-    TokenRecord,
-    counter_from_token_records,
-    evaluate_analysis_record,
-    iter_nlp_analysis_records_from_text,
-    iter_token_records,
-)
+from .analysis_records import TokenRecord as _TokenRecord
 
 TOKEN_ARTIFACT_SCHEMA_NAME = "nlpo-token-artifact"
 TOKEN_ARTIFACT_SCHEMA_VERSION = 1
@@ -49,7 +41,6 @@ TOKEN_ARTIFACT_COLUMNS = (
 )
 
 __all__ = [
-    # Canonical token artifact API
     "TOKEN_ARTIFACT_COLUMNS",
     "TOKEN_ARTIFACT_SCHEMA_NAME",
     "TOKEN_ARTIFACT_SCHEMA_VERSION",
@@ -60,14 +51,6 @@ __all__ = [
     "read_token_records",
     "token_artifact_metadata_path",
     "validate_token_artifact",
-    # Compatibility re-exports
-    "AnalysisOptions",
-    "NLPAnalysisRecord",
-    "TokenRecord",
-    "counter_from_token_records",
-    "evaluate_analysis_record",
-    "iter_nlp_analysis_records_from_text",
-    "iter_token_records",
 ]
 
 
@@ -151,7 +134,7 @@ def _parse_bool(value: str, *, path: Path, line_number: int, column: str) -> boo
     )
 
 
-def _record_to_row(record: TokenRecord) -> dict[str, str]:
+def _record_to_row(record: _TokenRecord) -> dict[str, str]:
     def opt(value: object) -> str:
         return "" if value is None else str(value)
 
@@ -178,8 +161,8 @@ def _record_to_row(record: TokenRecord) -> dict[str, str]:
     }
 
 
-def _row_to_record(row: Mapping[str, str], *, path: Path, line_number: int) -> TokenRecord:
-    return TokenRecord(
+def _row_to_record(row: Mapping[str, str], *, path: Path, line_number: int) -> _TokenRecord:
+    return _TokenRecord(
         group=row.get("group", ""),
         source_file=row.get("source_file") or None,
         section=row.get("section") or None,
@@ -228,7 +211,7 @@ class TokenArtifactWriter:
         self._writer.writeheader()
         return self
 
-    def write(self, record: TokenRecord) -> None:
+    def write(self, record: _TokenRecord) -> None:
         if self._writer is None:
             raise TokenArtifactError("TokenArtifactWriter is not open")
         self._writer.writerow(_record_to_row(record))
@@ -313,7 +296,7 @@ def read_token_records(
     *,
     require_complete: bool = True,
     verify_hash: bool = False,
-) -> Iterator[TokenRecord]:
+) -> Iterator[_TokenRecord]:
     path = Path(path)
     if not path.exists():
         raise TokenArtifactError(f"Token artifact not found: {path}")

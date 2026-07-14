@@ -14,17 +14,20 @@ from nlpo_toolkit.corpus_analysis.token_artifact import (
 )
 
 
-def test_token_artifact_analysis_record_reexports_are_identical() -> None:
-    from nlpo_toolkit.corpus_analysis import analysis_records
+def test_token_artifact_does_not_reexport_analysis_record_api() -> None:
     from nlpo_toolkit.corpus_analysis import token_artifact
 
-    assert token_artifact.NLPAnalysisRecord is analysis_records.NLPAnalysisRecord
-    assert token_artifact.TokenRecord is analysis_records.TokenRecord
-    assert token_artifact.AnalysisOptions is analysis_records.AnalysisOptions
-    assert (
-        token_artifact.evaluate_analysis_record
-        is analysis_records.evaluate_analysis_record
-    )
+    for name in (
+        "AnalysisOptions",
+        "NLPAnalysisRecord",
+        "TokenRecord",
+        "counter_from_token_records",
+        "evaluate_analysis_record",
+        "iter_nlp_analysis_records_from_text",
+        "iter_token_records",
+    ):
+        assert not hasattr(token_artifact, name)
+        assert name not in token_artifact.__all__
 
 
 def test_analysis_cache_imports_analysis_record_from_canonical_module() -> None:

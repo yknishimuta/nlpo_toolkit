@@ -116,12 +116,9 @@ the project root, and referenced-file existence is checked during planning.
 
 ### Frequency Output Naming
 
-Frequency output naming changed from `noun_frequency_<label>.csv` to
-`frequency_<label>.csv`, with dictcheck outputs named
-`frequency_<label>.known.csv` and `frequency_<label>.unknown.csv`. The generic
-name reflects that analyses may target surface forms or UPOS categories other
-than nouns. Old output files are not deleted automatically. `nlpo compare` can
-still read old CSV files when their columns are valid.
+Frequency outputs are named `frequency_<label>.csv`. Dictionary-check outputs
+are named `frequency_<label>.known.csv` and
+`frequency_<label>.unknown.csv`.
 
 ## Cache Management
 

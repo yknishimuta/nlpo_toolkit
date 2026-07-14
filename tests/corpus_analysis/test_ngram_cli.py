@@ -7,6 +7,7 @@ import pytest
 
 from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.config import ensure_app_config, load_config
+from nlpo_toolkit.corpus_analysis.analysis_records import TokenRecord
 from nlpo_toolkit.corpus_analysis.config_references import ResolvedConfigFiles
 from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
 from nlpo_toolkit.corpus_analysis.ports import (
@@ -25,7 +26,6 @@ from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 from nlpo_toolkit.corpus_analysis.token_artifact import (
     TokenArtifactMetadata,
     TokenArtifactWriter,
-    TokenRecord,
 )
 
 

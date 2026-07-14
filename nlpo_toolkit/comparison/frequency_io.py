@@ -75,9 +75,9 @@ def labels_from_paths(paths: list[Path]) -> list[str]:
     used: set[str] = set()
     for path in paths:
         label = Path(path).stem
-        for prefix in ("frequency_", "noun_frequency_"):
-            if label.startswith(prefix):
-                label = label[len(prefix):]
+        prefix = "frequency_"
+        if label.startswith(prefix):
+            label = label[len(prefix):]
         label = label or "input"
         base = label
         index = 2

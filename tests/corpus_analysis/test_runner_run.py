@@ -65,7 +65,6 @@ def test_run_minimal_success(tmp_path: Path, monkeypatch):
 
     rc = runner_mod.run(
         corpus_request(script_dir, config_path),
-        script_dir=script_dir,
         dependencies=runner_dependencies(
             load_config_fn,
             fake_backend_factory(
@@ -117,7 +116,6 @@ def test_run_analysis_unit_surface_uses_surface_form(tmp_path: Path, monkeypatch
 
     rc = runner_mod.run(
         corpus_request(script_dir, config_path),
-        script_dir=script_dir,
         dependencies=runner_dependencies(
             load_config_fn,
             fake_backend_factory([("X", "lemma_x", "NOUN")]),
@@ -146,7 +144,6 @@ def test_run_dictcheck_requires_wordlist(tmp_path: Path, monkeypatch):
     with pytest.raises(ValueError):
         runner_mod.run(
             corpus_request(script_dir, config_path),
-            script_dir=script_dir,
             dependencies=runner_dependencies(
                 load_config_fn,
                 fake_backend_factory([("a", "a", "NOUN")]),
@@ -180,7 +177,6 @@ def test_run_dictcheck_writes_known_unknown(tmp_path: Path, monkeypatch):
 
     rc = runner_mod.run(
         corpus_request(script_dir, config_path),
-        script_dir=script_dir,
         dependencies=runner_dependencies(
             load_config_fn,
             fake_backend_factory(
@@ -230,7 +226,6 @@ def test_run_applies_filter_options_in_record_pipeline(tmp_path: Path, monkeypat
 
     rc = runner_mod.run(
         corpus_request(script_dir, config_path),
-        script_dir=script_dir,
         dependencies=runner_dependencies(
             load_config_fn,
             fake_backend_factory(

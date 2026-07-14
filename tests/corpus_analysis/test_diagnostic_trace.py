@@ -5,7 +5,7 @@ from pathlib import Path
 
 from nlpo_toolkit.corpus_analysis.analysis_records import TokenRecord
 from nlpo_toolkit.corpus_analysis.diagnostic_trace import (
-    LEGACY_TRACE_COLUMNS,
+    DIAGNOSTIC_TRACE_COLUMNS,
     DiagnosticTraceWriter,
 )
 
@@ -41,8 +41,8 @@ def _rows(path: Path) -> list[list[str]]:
         return list(csv.reader(f, delimiter="\t"))
 
 
-def test_legacy_trace_columns_are_stable() -> None:
-    assert LEGACY_TRACE_COLUMNS == (
+def test_diagnostic_trace_columns_are_stable() -> None:
+    assert DIAGNOSTIC_TRACE_COLUMNS == (
         "label",
         "chunk",
         "sent_idx",
@@ -73,7 +73,7 @@ def test_diagnostic_trace_writes_only_included_rows(tmp_path: Path) -> None:
         )
 
     rows = _rows(path)
-    assert rows[0] == list(LEGACY_TRACE_COLUMNS)
+    assert rows[0] == list(DIAGNOSTIC_TRACE_COLUMNS)
     assert [row[7] for row in rows[1:]] == ["Arma"]
 
 

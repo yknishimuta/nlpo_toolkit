@@ -3,11 +3,11 @@ from __future__ import annotations
 import csv
 
 from nlpo_toolkit.corpus_analysis import cli
+from nlpo_toolkit.corpus_analysis.analysis_records import TokenRecord
 from nlpo_toolkit.corpus_analysis.concordance import build_concordance_rows
 from nlpo_toolkit.corpus_analysis.token_artifact import (
     TokenArtifactMetadata,
     TokenArtifactWriter,
-    TokenRecord,
 )
 
 

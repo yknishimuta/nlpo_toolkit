@@ -43,7 +43,6 @@ class CountRunner(Protocol):
         request: CorpusPreparationRequest,
         *,
         dependencies: RunnerDependencies,
-        script_dir: Path | None = None,
     ) -> RunResult: ...
 
 

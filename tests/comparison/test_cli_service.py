@@ -12,7 +12,11 @@ from nlpo_toolkit.comparison.cli_service import (
     compare_frequency_tables,
     execute_compare_command,
 )
-from nlpo_toolkit.comparison.frequency_io import detect_columns, load_frequency_csv
+from nlpo_toolkit.comparison.frequency_io import (
+    detect_columns,
+    labels_from_paths,
+    load_frequency_csv,
+)
 from nlpo_toolkit.corpus_analysis.cli.output import write_compare_result
 
 
@@ -133,17 +137,10 @@ def test_run_compare_top_and_output_file(tmp_path: Path) -> None:
     assert rows[0]["term"] == "x"
 
 
-def test_run_compare_accepts_new_and_legacy_frequency_names(tmp_path: Path) -> None:
-    new_name = _write_csv(tmp_path / "frequency_text.csv", "lemma,count", ["x,2"])
-    legacy_name = _write_csv(tmp_path / "noun_frequency_text.csv", "lemma,count", ["x,1"])
-    out = tmp_path / "compare.csv"
-
-    rc = run_compare(inputs=[new_name, legacy_name], labels=["new", "legacy"], out=out)
-
-    assert rc == 0
-    rows = list(csv.DictReader(out.open(encoding="utf-8")))
-    assert rows[0]["new_count"] == "2"
-    assert rows[0]["legacy_count"] == "1"
+def test_labels_from_paths_strips_only_canonical_frequency_prefix() -> None:
+    assert labels_from_paths(
+        [Path("frequency_text.csv"), Path("noun_frequency_text.csv")]
+    ) == ["text", "noun_frequency_text"]
 
 
 def test_three_input_compare_has_range_columns() -> None:

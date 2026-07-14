@@ -24,15 +24,14 @@ def _clean_single_file(
 ) -> None:
     raw = input_path.read_text(encoding="utf-8")
 
-    # Backward-compatible kwargs:
-    # - only pass optional args when they are not None
-    kwargs: dict[str, object] = {"kind": kind, "ref_tsv": ref_tsv, "doc_id": doc_id}
-    if rules_path is not None:
-        kwargs["rules_path"] = rules_path
-    if lexicon_map_path is not None:
-        kwargs["lexicon_map_path"] = lexicon_map_path
-
-    cleaned = clean_text(raw, **kwargs)
+    cleaned = clean_text(
+        raw,
+        kind=kind,
+        ref_tsv=ref_tsv,
+        doc_id=doc_id,
+        rules_path=rules_path,
+        lexicon_map_path=lexicon_map_path,
+    )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(cleaned, encoding="utf-8")

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from nlpo_toolkit.backends import NLPBackendInfo
@@ -58,11 +57,9 @@ def prepare_run_context(
     request: CorpusPreparationRequest,
     *,
     dependencies: RunnerDependencies,
-    script_dir: Path | None = None,
 ) -> RunContext:
     plan = build_count_plan(
         request,
-        script_dir=script_dir,
         dependencies=dependencies.planning,
         preprocess_mode="execute",
     )
