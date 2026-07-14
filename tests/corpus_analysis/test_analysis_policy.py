@@ -6,7 +6,7 @@ import pytest
 
 from nlpo_toolkit.backends import NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.analysis_cache import build_analysis_cache_key
-from nlpo_toolkit.corpus_analysis.analysis_pipeline import build_analysis_fingerprint
+from nlpo_toolkit.corpus_analysis.analysis_execution import build_analysis_fingerprint
 from nlpo_toolkit.corpus_analysis.analysis_policy import (
     AnalysisExtractionPolicy,
     DEFAULT_ANALYSIS_EXTRACTION_POLICY,

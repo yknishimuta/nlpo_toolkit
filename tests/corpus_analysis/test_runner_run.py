@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-import nlpo_toolkit.corpus_analysis.analysis_pipeline as analysis_pipeline_mod
+import nlpo_toolkit.corpus_analysis.analysis_outputs as analysis_outputs_mod
 import nlpo_toolkit.corpus_analysis.run_reporting as run_reporting_mod
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
 from tests.corpus_analysis.fake_nlp import fake_backend_factory, runner_dependencies
@@ -55,7 +55,7 @@ def test_run_minimal_success(tmp_path: Path, monkeypatch):
     def write_frequency_csv(path, counter, header):
         calls.append((Path(path), dict(counter), header))
 
-    monkeypatch.setattr(analysis_pipeline_mod, "write_frequency_csv", write_frequency_csv)
+    monkeypatch.setattr(analysis_outputs_mod, "write_frequency_csv", write_frequency_csv)
 
     # --- meta
     monkeypatch.setattr(run_reporting_mod, "build_run_meta", lambda **kwargs: {"ok": True})
@@ -109,7 +109,7 @@ def test_run_analysis_unit_surface_uses_surface_form(tmp_path: Path, monkeypatch
 
     calls = []
     monkeypatch.setattr(
-            analysis_pipeline_mod,
+            analysis_outputs_mod,
             "write_frequency_csv",
         lambda path, counter, header: calls.append(dict(counter)),
     )
@@ -172,7 +172,7 @@ def test_run_dictcheck_writes_known_unknown(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(run_reporting_mod, "write_run_meta", lambda meta, out_dir: None)
 
     calls = []
-    monkeypatch.setattr(analysis_pipeline_mod, "write_frequency_csv",
+    monkeypatch.setattr(analysis_outputs_mod, "write_frequency_csv",
                         lambda path, c, header: calls.append(Path(path).name))
 
     rc = runner_mod.run(
@@ -219,7 +219,7 @@ def test_run_applies_filter_options_in_record_pipeline(tmp_path: Path, monkeypat
     monkeypatch.setattr(run_reporting_mod, "write_run_meta", lambda meta, out_dir: None)
     counters = []
     monkeypatch.setattr(
-            analysis_pipeline_mod,
+            analysis_outputs_mod,
             "write_frequency_csv",
         lambda path, counter, header: counters.append(dict(counter)),
     )
@@ -260,7 +260,7 @@ def test_run_group_by_file_writes_one_csv_per_input_file(tmp_path: Path, monkeyp
 
     csv_calls = []
     monkeypatch.setattr(
-            analysis_pipeline_mod,
+            analysis_outputs_mod,
             "write_frequency_csv",
         lambda path, c, header: csv_calls.append((Path(path).name, dict(c))),
     )
@@ -303,7 +303,7 @@ def test_run_group_by_file_cli_override(tmp_path: Path, monkeypatch):
 
     csv_names = []
     monkeypatch.setattr(
-            analysis_pipeline_mod,
+            analysis_outputs_mod,
             "write_frequency_csv",
         lambda path, c, header: csv_names.append(Path(path).name),
     )

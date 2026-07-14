@@ -3,11 +3,12 @@ from __future__ import annotations
 from tests.corpus_analysis.fake_nlp import corpus_request
 
 from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 
 from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
-from nlpo_toolkit.corpus_analysis.analysis_pipeline import (
-    analyze_one_corpus,
+from nlpo_toolkit.corpus_analysis.analysis_orchestration import analyze_corpora
+from nlpo_toolkit.corpus_analysis.analysis_outputs import (
     apply_lemma_normalization,
     split_known_unknown,
 )
@@ -73,13 +74,13 @@ def test_apply_lemma_normalization_is_pure() -> None:
 
 
 def test_split_known_unknown() -> None:
-    known, unknown = split_known_unknown(
+    split = split_known_unknown(
         Counter({"arma": 2, "ignotus": 1}),
         {"arma"},
     )
 
-    assert known == Counter({"arma": 2})
-    assert unknown == Counter({"ignotus": 1})
+    assert split.known == Counter({"arma": 2})
+    assert split.unknown == Counter({"ignotus": 1})
 
 
 def test_prepare_run_context_resolves_per_file_work_items(tmp_path: Path) -> None:
@@ -106,7 +107,7 @@ def test_prepare_run_context_resolves_per_file_work_items(tmp_path: Path) -> Non
     assert context.plan.out_dir == (tmp_path / "output").resolve()
 
 
-def test_analyze_one_corpus_writes_expected_outputs_from_record_pipeline(tmp_path: Path) -> None:
+def test_analyze_corpora_writes_expected_outputs_from_record_pipeline(tmp_path: Path) -> None:
     (tmp_path / "input").mkdir()
     input_path = tmp_path / "input" / "a.txt"
     input_path.write_text("ignored", encoding="utf-8")
@@ -151,12 +152,7 @@ def test_analyze_one_corpus_writes_expected_outputs_from_record_pipeline(tmp_pat
         ref_tag_counts=Counter({"tag_a": 1}),
     )
 
-    result = analyze_one_corpus(
-        context=context,
-        corpus=corpus,
-        trace_paths={"group_a": tmp_path / "output" / "trace_group_a.tsv"},
-        lemma_normalization_map=None,
-    )
+    result = analyze_corpora(replace(context, prepared_corpora=(corpus,))).groups[0]
 
     assert result.counter == Counter({"item_a": 2, "item_b": 1})
     generated_names = [path.name for path in result.generated_outputs]

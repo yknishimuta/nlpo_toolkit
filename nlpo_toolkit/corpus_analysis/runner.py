@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from . import analysis_pipeline, post_analysis, run_reporting, runtime
+from . import post_analysis, run_reporting, runtime
+from .analysis_orchestration import analyze_corpora
 from .ports import RunnerDependencies
 from .runner_types import RunResult
 from .requests import CorpusPreparationRequest
@@ -16,7 +17,7 @@ def run(
         request,
         dependencies=dependencies,
     )
-    analysis = analysis_pipeline.analyze_corpora(context)
+    analysis = analyze_corpora(context)
     partitions = post_analysis.execute_partition_validations(
         context=context,
         analysis=analysis,

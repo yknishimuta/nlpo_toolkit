@@ -50,7 +50,7 @@ def test_features_imports_only_the_shared_record_extraction_boundary() -> None:
     assert ("analysis_records", "iter_nlp_analysis_records_from_text") in imports
     assert ("nlpo_toolkit.nlp", "should_drop_roman_numeral") in imports
     assert not any(
-        module in {"runner", "analysis_pipeline", "token_artifact", "diagnostic_trace"}
+        module in {"runner", "token_artifact", "diagnostic_trace"}
         for module, _name in imports
     )
 

@@ -51,7 +51,7 @@ def test_archive_and_preprocess_do_not_parse_cleaner_yaml() -> None:
 def test_config_reference_consumers_do_not_resolve_config_strings() -> None:
     forbidden = {
         Path("nlpo_toolkit/corpus_analysis/runtime.py"): "resolve_project_path",
-        Path("nlpo_toolkit/corpus_analysis/analysis_pipeline.py"): "plan.config.dictcheck.lemma_normalize",
+        Path("nlpo_toolkit/corpus_analysis/analysis_outputs.py"): "plan.config.dictcheck.lemma_normalize",
         Path("nlpo_toolkit/corpus_analysis/corpus.py"): "resolve_project_path(project_root, config.ref_tags.patterns)",
     }
     for path, text in forbidden.items():

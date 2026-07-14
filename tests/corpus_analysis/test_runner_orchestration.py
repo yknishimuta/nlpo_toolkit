@@ -25,7 +25,7 @@ def test_run_orchestrates_steps_in_order(monkeypatch, tmp_path: Path) -> None:
         lambda *_args, **_kwargs: calls.append("prepare") or context,
     )
     monkeypatch.setattr(
-        runner_mod.analysis_pipeline,
+        runner_mod,
         "analyze_corpora",
         lambda ctx: calls.append("analyze") or analysis,
     )

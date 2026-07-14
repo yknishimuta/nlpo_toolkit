@@ -66,12 +66,10 @@ def test_analysis_records_has_no_artifact_cache_or_pipeline_dependencies() -> No
         ".diagnostic_trace",
         ".analysis_cache",
         ".runner",
-        ".analysis_pipeline",
         "nlpo_toolkit.corpus_analysis.token_artifact",
         "nlpo_toolkit.corpus_analysis.diagnostic_trace",
         "nlpo_toolkit.corpus_analysis.analysis_cache",
         "nlpo_toolkit.corpus_analysis.runner",
-        "nlpo_toolkit.corpus_analysis.analysis_pipeline",
     }
     assert modules.isdisjoint(forbidden)
 

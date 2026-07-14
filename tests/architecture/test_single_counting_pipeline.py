@@ -8,7 +8,7 @@ import nlpo_toolkit.nlp as nlp
 from nlpo_toolkit.corpus_analysis.ports import RunnerDependencies
 
 
-def test_analysis_pipeline_does_not_call_legacy_counter() -> None:
+def test_analysis_execution_does_not_call_legacy_counter() -> None:
     path = Path("nlpo_toolkit/corpus_analysis/runner.py")
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     violations: list[str] = []
