@@ -17,7 +17,7 @@ from .analysis_policy import AnalysisExtractionPolicy
 from .config import AppConfig, NLPConfig
 
 if TYPE_CHECKING:
-    from .archive_types import ArchiveOptions, RunArchiveResult
+    from .archive_types import RunArchiveRequest, RunArchiveResult
     from .requests import CorpusPreparationRequest
     from .runner_types import RunResult
 
@@ -32,8 +32,8 @@ class ArchiveCreator(Protocol):
     def __call__(
         self,
         *,
-        result: RunResult,
-        options: ArchiveOptions,
+        run_result: RunResult,
+        request: RunArchiveRequest,
     ) -> RunArchiveResult: ...
 
 

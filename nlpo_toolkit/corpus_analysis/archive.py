@@ -11,12 +11,19 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Mapping, Sequence
 
-from .archive_types import ArchiveOptions, RunArchiveResult
+from .archive_types import ArchivedFileCounts, RunArchiveRequest, RunArchiveResult
+from .config_references import ConfigArchivePolicy, ConfigFileReference
 from .runner_types import RunResult
 
-_IGNORED_ARCHIVE_NAMES = {".DS_Store", ".gitkeep"}
+__all__ = [
+    "ArchivedFileCounts",
+    "RunArchiveError",
+    "RunArchiveRequest",
+    "RunArchiveResult",
+    "create_run_archive",
+]
 
 
 class RunArchiveError(RuntimeError):
@@ -24,16 +31,41 @@ class RunArchiveError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class ArchiveFile:
+class ArchiveCopySource:
     source_path: Path
-    archive_path: Path
+    destination_relative_path: Path
+
+
+@dataclass(frozen=True)
+class ArchivedFile:
+    source_path: Path
+    archive_relative_path: Path
     sha256: str
-    size: int
+    size_bytes: int
+
+    def __post_init__(self) -> None:
+        if not self.source_path.is_absolute():
+            raise ValueError("ArchivedFile source_path must be absolute")
+        if (
+            self.archive_relative_path.is_absolute()
+            or ".." in self.archive_relative_path.parts
+        ):
+            raise ValueError("archive_relative_path must be a safe relative path")
+        if self.size_bytes < 0:
+            raise ValueError("size_bytes must be non-negative")
+        if not re.fullmatch(r"[0-9a-f]{64}", self.sha256):
+            raise ValueError("sha256 must be 64 lowercase hexadecimal characters")
 
 
 def sanitize_run_name(name: str) -> str:
     raw = str(name).strip()
-    if not raw or Path(raw).is_absolute() or "/" in raw or "\\" in raw or ".." in raw:
+    if (
+        not raw
+        or Path(raw).is_absolute()
+        or "/" in raw
+        or "\\" in raw
+        or ".." in raw
+    ):
         raise ValueError("run name must be a safe directory name")
     sanitized = re.sub(r"\s+", "_", raw)
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", sanitized):
@@ -49,134 +81,343 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _require_file(path: Path, kind: str) -> Path:
-    path = Path(path).resolve()
-    if not path.exists() or not path.is_file():
-        raise RunArchiveError(f"Declared {kind} does not exist: {path}")
-    return path
+def _validate_archive_source_file(path: Path, kind: str) -> Path:
+    resolved = Path(path).resolve()
+    if not resolved.exists() or not resolved.is_file():
+        raise RunArchiveError(
+            f"Archive source file is missing or not a regular file: {kind}: {resolved}"
+        )
+    return resolved
 
 
-def _unique_dest(root: Path, relative: Path, used: set[Path]) -> Path:
-    relative = Path(*[part for part in relative.parts if part not in {"", ".", ".."}])
-    candidate = relative
+def _allocate_unique_archive_path(
+    *, destination_root: Path, requested_relative_path: Path, used: set[Path]
+) -> Path:
+    safe_relative_path = Path(
+        *[
+            part
+            for part in requested_relative_path.parts
+            if part not in {"", ".", ".."}
+        ]
+    )
+    candidate = safe_relative_path
     index = 2
-    while candidate in used or (root / candidate).exists():
-        candidate = relative.with_name(f"{relative.stem}_{index}{relative.suffix}")
+    while candidate in used or (destination_root / candidate).exists():
+        candidate = safe_relative_path.with_name(
+            f"{safe_relative_path.stem}_{index}{safe_relative_path.suffix}"
+        )
         index += 1
     used.add(candidate)
-    return root / candidate
+    return destination_root / candidate
 
 
-def _copy(files: Iterable[tuple[Path, Path]], root: Path, run_dir: Path) -> list[ArchiveFile]:
-    copied: list[ArchiveFile] = []
+def _copy_files_into_archive(
+    files: Iterable[ArchiveCopySource],
+    *,
+    destination_root: Path,
+    archive_directory: Path,
+) -> tuple[ArchivedFile, ...]:
+    archived_files: list[ArchivedFile] = []
     used: set[Path] = set()
-    for source, relative in files:
-        destination = _unique_dest(root, relative, used)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, destination)
-        copied.append(
-            ArchiveFile(source, destination.relative_to(run_dir), file_sha256(destination), destination.stat().st_size)
+    for item in files:
+        destination = _allocate_unique_archive_path(
+            destination_root=destination_root,
+            requested_relative_path=item.destination_relative_path,
+            used=used,
         )
-    return copied
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(item.source_path, destination)
+        archived_files.append(
+            ArchivedFile(
+                source_path=item.source_path,
+                archive_relative_path=destination.relative_to(archive_directory),
+                sha256=file_sha256(destination),
+                size_bytes=destination.stat().st_size,
+            )
+        )
+    return tuple(archived_files)
 
 
-def _source_metadata(files: Iterable[Path]) -> list[dict[str, object]]:
+def _build_source_file_metadata(files: Iterable[Path]) -> list[dict[str, object]]:
     return [
-        {"path": str(path), "sha256": file_sha256(path), "size": path.stat().st_size}
+        {
+            "path": str(path),
+            "sha256": file_sha256(path),
+            "size": path.stat().st_size,
+        }
         for path in files
     ]
 
 
-def _archive_metadata(files: Iterable[ArchiveFile]) -> list[dict[str, object]]:
+def _build_archived_file_metadata(
+    files: Iterable[ArchivedFile],
+) -> list[dict[str, object]]:
     return [
-        {"source_path": str(item.source_path), "archive_path": str(item.archive_path), "sha256": item.sha256, "size": item.size}
+        {
+            "source_path": str(item.source_path),
+            "archive_path": str(item.archive_relative_path),
+            "sha256": item.sha256,
+            "size": item.size_bytes,
+        }
         for item in files
     ]
 
 
-def _git(project_root: Path, *args: str) -> str | None:
+def _read_git_value(project_root: Path, *args: str) -> str | None:
     try:
-        process = subprocess.run(["git", *args], cwd=project_root, capture_output=True, text=True, check=False)
+        process = subprocess.run(
+            ["git", *args],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
     except OSError:
         return None
     return process.stdout.strip() or None if process.returncode == 0 else None
 
 
-def create_run_archive(*, result: RunResult, options: ArchiveOptions) -> RunArchiveResult:
-    project_root = result.plan.project_root.resolve()
-    created = options.created_at or datetime.now().astimezone()
-    run_name = sanitize_run_name(options.run_name or created.strftime("%Y%m%d-%H%M%S"))
-    runs_root = Path(options.runs_dir)
-    if not runs_root.is_absolute():
-        runs_root = (project_root / runs_root).resolve()
-    run_dir = runs_root / run_name
-    if run_dir.exists():
-        raise RunArchiveError(f"Run archive already exists: {run_dir}")
+def _build_metadata_only_config_entries(
+    references: Sequence[ConfigFileReference],
+) -> list[dict[str, object]]:
+    return [
+        {
+            "kind": reference.kind,
+            "path": str(reference.source_path),
+            "exists": True,
+            "sha256": file_sha256(reference.source_path),
+            "size": reference.source_path.stat().st_size,
+        }
+        for reference in references
+    ]
 
-    outputs = tuple(_require_file(path, "run output") for path in result.output_files)
-    traces = tuple(_require_file(path, "run trace") for path in result.trace_files)
-    inputs = tuple(_require_file(path, "run input") for path in result.input_files)
-    cleaned = tuple(_require_file(path, "cleaned run file") for path in result.cleaned_files)
-    snapshots = tuple(item for item in result.config_files if item.copy_to_snapshot)
-    externals = tuple(item for item in result.config_files if not item.copy_to_snapshot)
-    for item in (*snapshots, *externals):
-        _require_file(item.path, f"config reference {item.kind}")
+
+def _build_archive_manifest(
+    *,
+    run_result: RunResult,
+    request: RunArchiveRequest,
+    run_name: str,
+    creation_time: datetime,
+    git_metadata: Mapping[str, object],
+    input_file_metadata: Sequence[Mapping[str, object]],
+    cleaned_file_metadata: Sequence[Mapping[str, object]],
+    generated_output_metadata: Sequence[Mapping[str, object]],
+    archived_output_files: Sequence[ArchivedFile],
+    archived_trace_files: Sequence[ArchivedFile],
+    archived_config_files: Sequence[ArchivedFile],
+    archived_input_files: Sequence[ArchivedFile],
+    archived_cleaned_files: Sequence[ArchivedFile],
+    metadata_only_config_entries: Sequence[Mapping[str, object]],
+) -> dict[str, object]:
+    return {
+        "run_name": run_name,
+        "created_at": creation_time.isoformat(),
+        "command_line": list(request.command_line or tuple(sys.argv)),
+        "project_root": str(run_result.plan.project_root.resolve()),
+        "config_path": str(run_result.plan.config_path.resolve()),
+        "output_dir": str(run_result.plan.out_dir.resolve()),
+        "git": dict(git_metadata),
+        "groups_files": {
+            name: [str(path) for path in files]
+            for name, files in run_result.groups_files.items()
+        },
+        "input_files": list(input_file_metadata),
+        "cleaned_files": list(cleaned_file_metadata),
+        "generated_outputs": list(generated_output_metadata),
+        "output_files": _build_archived_file_metadata(archived_output_files),
+        "copied_outputs": _build_archived_file_metadata(archived_output_files),
+        "trace_files": _build_archived_file_metadata(archived_trace_files),
+        "config_snapshot_files": _build_archived_file_metadata(
+            archived_config_files
+        ),
+        "external_references": list(metadata_only_config_entries),
+        "included_input_files": _build_archived_file_metadata(archived_input_files),
+        "included_cleaned_files": _build_archived_file_metadata(
+            archived_cleaned_files
+        ),
+        "copied_input_files": _build_archived_file_metadata(archived_input_files),
+        "copied_cleaned_files": _build_archived_file_metadata(
+            archived_cleaned_files
+        ),
+    }
+
+
+def create_run_archive(
+    *, run_result: RunResult, request: RunArchiveRequest
+) -> RunArchiveResult:
+    project_root = run_result.plan.project_root.resolve()
+    creation_time = request.created_at or datetime.now().astimezone()
+    run_name = sanitize_run_name(
+        request.run_name or creation_time.strftime("%Y%m%d-%H%M%S")
+    )
+    archive_root = request.archive_root
+    if not archive_root.is_absolute():
+        archive_root = (project_root / archive_root).resolve()
+    archive_directory = archive_root / run_name
+    if archive_directory.exists():
+        raise RunArchiveError(f"Run archive already exists: {archive_directory}")
+
+    output_files = tuple(
+        _validate_archive_source_file(path, "run output")
+        for path in run_result.output_files
+    )
+    trace_files = tuple(
+        _validate_archive_source_file(path, "run trace")
+        for path in run_result.trace_files
+    )
+    input_files = tuple(
+        _validate_archive_source_file(path, "run input")
+        for path in run_result.input_files
+    )
+    cleaned_files = tuple(
+        _validate_archive_source_file(path, "cleaned run file")
+        for path in run_result.cleaned_files
+    )
+    snapshot_references = tuple(
+        reference
+        for reference in run_result.config_references
+        if reference.archive_policy is ConfigArchivePolicy.SNAPSHOT
+    )
+    metadata_only_references = tuple(
+        reference
+        for reference in run_result.config_references
+        if reference.archive_policy is ConfigArchivePolicy.METADATA_ONLY
+    )
+    for reference in (*snapshot_references, *metadata_only_references):
+        _validate_archive_source_file(
+            reference.source_path, f"config reference {reference.kind}"
+        )
 
     try:
-        run_dir.mkdir(parents=True)
-        output_copied = _copy(((path, Path(path.name)) for path in outputs), run_dir / "outputs", run_dir)
-        trace_copied = _copy(((path, Path(path.name)) for path in traces), run_dir / "trace", run_dir)
-        config_copied = _copy(
-            ((_require_file(item.path, "config snapshot"), item.snapshot_path or Path(item.path.name)) for item in snapshots),
-            run_dir / "config_snapshot", run_dir,
+        archive_directory.mkdir(parents=True)
+        archived_output_files = _copy_files_into_archive(
+            (
+                ArchiveCopySource(
+                    source_path=path,
+                    destination_relative_path=Path(path.name),
+                )
+                for path in output_files
+            ),
+            destination_root=archive_directory / "outputs",
+            archive_directory=archive_directory,
         )
-        input_copied = _copy(
-            ((path, path.relative_to(project_root) if path.is_relative_to(project_root) else Path(path.name)) for path in inputs),
-            run_dir / "input", run_dir,
-        ) if options.include_input else []
-        cleaned_root = result.plan.cleaned_dir.resolve() if result.plan.cleaned_dir else project_root
-        cleaned_copied = _copy(
-            ((path, path.relative_to(cleaned_root) if path.is_relative_to(cleaned_root) else Path(path.name)) for path in cleaned),
-            run_dir / "cleaned", run_dir,
-        ) if options.include_cleaned else []
-        external_metadata = [
-            {"kind": item.kind, "path": str(item.path.resolve()), "exists": True, "sha256": file_sha256(item.path), "size": item.path.stat().st_size}
-            for item in externals
-        ]
-        manifest = {
-            "run_name": run_name,
-            "created_at": created.isoformat(),
-            "command_line": list(options.command_line or tuple(sys.argv)),
-            "project_root": str(project_root),
-            "config_path": str(result.plan.config_path.resolve()),
-            "output_dir": str(result.plan.out_dir.resolve()),
-            "git": {"branch": _git(project_root, "branch", "--show-current"), "commit": _git(project_root, "rev-parse", "HEAD"), "dirty": bool(_git(project_root, "status", "--porcelain"))},
-            "groups_files": {name: [str(path) for path in files] for name, files in result.groups_files.items()},
-            "input_files": _source_metadata(inputs),
-            "cleaned_files": _source_metadata(cleaned),
-            "generated_outputs": _source_metadata(result.generated_outputs),
-            "output_files": _archive_metadata(output_copied),
-            "copied_outputs": _archive_metadata(output_copied),
-            "trace_files": _archive_metadata(trace_copied),
-            "config_snapshot_files": _archive_metadata(config_copied),
-            "external_references": external_metadata,
-            "included_input_files": _archive_metadata(input_copied),
-            "included_cleaned_files": _archive_metadata(cleaned_copied),
-            "copied_input_files": _archive_metadata(input_copied),
-            "copied_cleaned_files": _archive_metadata(cleaned_copied),
+        archived_trace_files = _copy_files_into_archive(
+            (
+                ArchiveCopySource(
+                    source_path=path,
+                    destination_relative_path=Path(path.name),
+                )
+                for path in trace_files
+            ),
+            destination_root=archive_directory / "trace",
+            archive_directory=archive_directory,
+        )
+        archived_config_files = _copy_files_into_archive(
+            (
+                ArchiveCopySource(
+                    source_path=reference.source_path,
+                    destination_relative_path=reference.snapshot_relative_path,
+                )
+                for reference in snapshot_references
+                if reference.snapshot_relative_path is not None
+            ),
+            destination_root=archive_directory / "config_snapshot",
+            archive_directory=archive_directory,
+        )
+        archived_input_files = (
+            _copy_files_into_archive(
+                (
+                    ArchiveCopySource(
+                        source_path=path,
+                        destination_relative_path=path.relative_to(project_root)
+                        if path.is_relative_to(project_root)
+                        else Path(path.name),
+                    )
+                    for path in input_files
+                ),
+                destination_root=archive_directory / "input",
+                archive_directory=archive_directory,
+            )
+            if request.include_input_files
+            else ()
+        )
+        cleaned_root = (
+            run_result.plan.cleaned_dir.resolve()
+            if run_result.plan.cleaned_dir
+            else project_root
+        )
+        archived_cleaned_files = (
+            _copy_files_into_archive(
+                (
+                    ArchiveCopySource(
+                        source_path=path,
+                        destination_relative_path=path.relative_to(cleaned_root)
+                        if path.is_relative_to(cleaned_root)
+                        else Path(path.name),
+                    )
+                    for path in cleaned_files
+                ),
+                destination_root=archive_directory / "cleaned",
+                archive_directory=archive_directory,
+            )
+            if request.include_cleaned_files
+            else ()
+        )
+        metadata_only_config_entries = _build_metadata_only_config_entries(
+            metadata_only_references
+        )
+        input_file_metadata = _build_source_file_metadata(input_files)
+        cleaned_file_metadata = _build_source_file_metadata(cleaned_files)
+        generated_output_metadata = _build_source_file_metadata(
+            run_result.generated_outputs
+        )
+        git_metadata = {
+            "branch": _read_git_value(project_root, "branch", "--show-current"),
+            "commit": _read_git_value(project_root, "rev-parse", "HEAD"),
+            "dirty": bool(
+                _read_git_value(project_root, "status", "--porcelain")
+            ),
         }
-        (run_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        (run_dir / "README.md").write_text(
+        manifest = _build_archive_manifest(
+            run_result=run_result,
+            request=request,
+            run_name=run_name,
+            creation_time=creation_time,
+            git_metadata=git_metadata,
+            input_file_metadata=input_file_metadata,
+            cleaned_file_metadata=cleaned_file_metadata,
+            generated_output_metadata=generated_output_metadata,
+            archived_output_files=archived_output_files,
+            archived_trace_files=archived_trace_files,
+            archived_config_files=archived_config_files,
+            archived_input_files=archived_input_files,
+            archived_cleaned_files=archived_cleaned_files,
+            metadata_only_config_entries=metadata_only_config_entries,
+        )
+        (archive_directory / "manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        (archive_directory / "README.md").write_text(
             "# Run Archive\n\n"
-            f"- input files: {len(inputs)}\n"
-            f"- Included input files: {len(input_copied)}\n"
-            f"- Included cleaned files: {len(cleaned_copied)}\n",
+            f"- input files: {len(input_files)}\n"
+            f"- Included input files: {len(archived_input_files)}\n"
+            f"- Included cleaned files: {len(archived_cleaned_files)}\n",
             encoding="utf-8",
         )
     except Exception as exc:
-        if run_dir.exists():
-            shutil.rmtree(run_dir)
+        if archive_directory.exists():
+            shutil.rmtree(archive_directory)
         if isinstance(exc, RunArchiveError):
             raise
         raise RunArchiveError(f"Failed to create run archive: {exc}") from exc
-    return RunArchiveResult(run_dir, len(output_copied), len(trace_copied), len(input_copied), len(cleaned_copied), len(config_copied))
+    return RunArchiveResult(
+        archive_directory=archive_directory,
+        copied_files=ArchivedFileCounts(
+            outputs=len(archived_output_files),
+            traces=len(archived_trace_files),
+            inputs=len(archived_input_files),
+            cleaned=len(archived_cleaned_files),
+            config_snapshots=len(archived_config_files),
+        ),
+    )

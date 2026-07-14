@@ -10,6 +10,7 @@ from nlpo_toolkit.cleaner_contracts import (
 from nlpo_toolkit.corpus_analysis.config import ensure_app_config
 from nlpo_toolkit.corpus_analysis.config_references import (
     ConfigFileReference,
+    ConfigArchivePolicy,
     ConfigReferenceError,
     ResolvedConfigFiles,
     resolve_config_files,
@@ -78,14 +79,15 @@ def test_resolves_all_typed_references_and_snapshot_policy(tmp_path: Path) -> No
         "ref_tags.patterns",
         "filters.roman_exceptions_file",
     ]
-    assert resolved.require("root_config").path == root_config.resolve()
+    assert resolved.require("root_config").source_path == root_config.resolve()
     assert resolved.path("preprocess.rules_path") == rules.resolve()
     assert resolved.path("dictcheck.lemma_normalize") == lemma.resolve()
     assert resolved.path("dictcheck.wordlist") == wordlist.resolve()
     assert resolved.path("ref_tags.patterns") == patterns.resolve()
     assert resolved.path("filters.roman_exceptions_file") == roman.resolve()
-    assert resolved.require("dictcheck.wordlist").copy_to_snapshot is False
-    assert resolved.require("dictcheck.wordlist").snapshot_path is None
+    assert resolved.require("root_config").archive_policy is ConfigArchivePolicy.SNAPSHOT
+    assert resolved.require("dictcheck.wordlist").archive_policy is ConfigArchivePolicy.METADATA_ONLY
+    assert resolved.require("dictcheck.wordlist").snapshot_relative_path is None
 
 
 def test_absolute_path_and_external_snapshot_path(tmp_path: Path) -> None:
@@ -107,8 +109,8 @@ def test_absolute_path_and_external_snapshot_path(tmp_path: Path) -> None:
     )
 
     reference = resolved.require("dictcheck.lemma_normalize")
-    assert reference.path == external.resolve()
-    assert reference.snapshot_path == Path("external/lemma.tsv")
+    assert reference.source_path == external.resolve()
+    assert reference.snapshot_relative_path == Path("external/lemma.tsv")
 
 
 def test_unset_optional_references_are_omitted(tmp_path: Path) -> None:
@@ -125,9 +127,39 @@ def test_unset_optional_references_are_omitted(tmp_path: Path) -> None:
 
 def test_duplicate_kind_is_rejected(tmp_path: Path) -> None:
     path = _touch(tmp_path / "same.yml")
-    reference = ConfigFileReference("duplicate", path, True, True, Path("same.yml"))
+    reference = ConfigFileReference(
+        kind="duplicate",
+        source_path=path.resolve(),
+        archive_policy=ConfigArchivePolicy.SNAPSHOT,
+        snapshot_relative_path=Path("same.yml"),
+    )
     with pytest.raises(ConfigReferenceError, match="duplicate"):
         ResolvedConfigFiles((reference, reference))
+
+
+@pytest.mark.parametrize(
+    "policy,snapshot_relative_path",
+    [
+        (ConfigArchivePolicy.SNAPSHOT, None),
+        (ConfigArchivePolicy.SNAPSHOT, Path("/absolute.yml")),
+        (ConfigArchivePolicy.SNAPSHOT, Path("../escape.yml")),
+        (ConfigArchivePolicy.SNAPSHOT, Path(".")),
+        (ConfigArchivePolicy.METADATA_ONLY, Path("unexpected.yml")),
+    ],
+)
+def test_config_reference_rejects_invalid_archive_policy_combinations(
+    tmp_path: Path,
+    policy: ConfigArchivePolicy,
+    snapshot_relative_path: Path | None,
+) -> None:
+    source = _touch(tmp_path / "source.yml").resolve()
+    with pytest.raises(ValueError):
+        ConfigFileReference(
+            kind="test",
+            source_path=source,
+            archive_policy=policy,
+            snapshot_relative_path=snapshot_relative_path,
+        )
 
 
 @pytest.mark.parametrize("make_path", [lambda path: path, lambda path: path.mkdir() or path])

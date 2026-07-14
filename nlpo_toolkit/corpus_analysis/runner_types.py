@@ -44,7 +44,7 @@ class RunResult:
     cleaned_files: tuple[Path, ...]
     output_files: tuple[Path, ...]
     trace_files: tuple[Path, ...]
-    config_files: tuple[ConfigFileReference, ...]
+    config_references: tuple[ConfigFileReference, ...]
     summary_path: Path
     metadata_path: Path
     partition_mismatches: tuple[tuple[str, str, int, int], ...] = ()

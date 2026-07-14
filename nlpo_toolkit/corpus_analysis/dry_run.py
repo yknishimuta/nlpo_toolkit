@@ -244,7 +244,7 @@ def execute_dry_run(
             add(
                 DiagnosticLevel.OK,
                 f"{reference.kind} found: "
-                f"{_display_path(reference.path, project_root)}",
+                f"{_display_path(reference.source_path, project_root)}",
             )
 
     for key in duplicate_keys:

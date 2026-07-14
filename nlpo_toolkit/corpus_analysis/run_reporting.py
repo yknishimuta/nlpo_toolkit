@@ -288,7 +288,7 @@ def build_run_result(
         cleaned_files=cleaned_files,
         output_files=output_files,
         trace_files=trace_files,
-        config_files=plan.config_files.references,
+        config_references=plan.config_files.references,
         summary_path=report.summary_path.resolve(),
         metadata_path=report.metadata_path.resolve(),
         partition_mismatches=partitions.mismatches,

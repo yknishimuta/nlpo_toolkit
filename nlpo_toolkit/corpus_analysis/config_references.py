@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 from nlpo_toolkit.cleaner_contracts import CleanerConfigInspection
@@ -14,13 +15,31 @@ class ConfigReferenceError(RuntimeError):
     """A configured file reference is missing or is not a regular file."""
 
 
+class ConfigArchivePolicy(StrEnum):
+    SNAPSHOT = "snapshot"
+    METADATA_ONLY = "metadata_only"
+
+
 @dataclass(frozen=True)
 class ConfigFileReference:
     kind: str
-    path: Path
-    required: bool
-    copy_to_snapshot: bool
-    snapshot_path: Path | None = None
+    source_path: Path
+    archive_policy: ConfigArchivePolicy
+    snapshot_relative_path: Path | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.archive_policy, ConfigArchivePolicy):
+            raise TypeError("archive_policy must be a ConfigArchivePolicy")
+        if not self.source_path.is_absolute():
+            raise ValueError("Config reference source_path must be absolute")
+        snapshot_relative_path = self.snapshot_relative_path
+        if self.archive_policy is ConfigArchivePolicy.SNAPSHOT:
+            if snapshot_relative_path is None or snapshot_relative_path in {Path(), Path(".")}:
+                raise ValueError("Snapshot references require a relative snapshot path")
+            if snapshot_relative_path.is_absolute() or ".." in snapshot_relative_path.parts:
+                raise ValueError("Snapshot path must be a safe relative path")
+        elif snapshot_relative_path is not None:
+            raise ValueError("Metadata-only references cannot have a snapshot path")
 
 
 @dataclass(frozen=True)
@@ -52,7 +71,7 @@ class ResolvedConfigFiles:
 
     def path(self, kind: str) -> Path | None:
         reference = self.get(kind)
-        return reference.path if reference is not None else None
+        return reference.source_path if reference is not None else None
 
 
 def _resolve_path(project_root: Path, raw_path: str | Path) -> Path:
@@ -62,42 +81,43 @@ def _resolve_path(project_root: Path, raw_path: str | Path) -> Path:
     return path.resolve()
 
 
-def _snapshot_path(path: Path, project_root: Path) -> Path:
+def _snapshot_relative_path(path: Path, project_root: Path) -> Path:
     try:
         return path.relative_to(project_root)
     except ValueError:
         return Path("external") / path.name
 
 
-def _reference(
+def _snapshot_reference(
     *,
     kind: str,
     path: Path,
     project_root: Path,
-    required: bool = True,
-    copy_to_snapshot: bool = True,
 ) -> ConfigFileReference:
     return ConfigFileReference(
         kind=kind,
-        path=path,
-        required=required,
-        copy_to_snapshot=copy_to_snapshot,
-        snapshot_path=(
-            _snapshot_path(path, project_root) if copy_to_snapshot else None
-        ),
+        source_path=path.resolve(),
+        archive_policy=ConfigArchivePolicy.SNAPSHOT,
+        snapshot_relative_path=_snapshot_relative_path(path, project_root),
+    )
+
+
+def _metadata_only_reference(*, kind: str, path: Path) -> ConfigFileReference:
+    return ConfigFileReference(
+        kind=kind,
+        source_path=path.resolve(),
+        archive_policy=ConfigArchivePolicy.METADATA_ONLY,
     )
 
 
 def _validate(reference: ConfigFileReference) -> None:
-    if not reference.required:
-        return
-    if not reference.path.exists():
+    if not reference.source_path.exists():
         raise ConfigReferenceError(
-            f"Configured file does not exist: {reference.kind}: {reference.path}"
+            f"Configured file does not exist: {reference.kind}: {reference.source_path}"
         )
-    if not reference.path.is_file():
+    if not reference.source_path.is_file():
         raise ConfigReferenceError(
-            f"Configured path is not a file: {reference.kind}: {reference.path}"
+            f"Configured path is not a file: {reference.kind}: {reference.source_path}"
         )
 
 
@@ -111,7 +131,7 @@ def resolve_config_files(
     """Resolve and validate every explicitly configured file reference once."""
     root = Path(project_root).resolve()
     items = [
-        _reference(
+        _snapshot_reference(
             kind="root_config",
             path=_resolve_path(root, config_path),
             project_root=root,
@@ -123,7 +143,7 @@ def resolve_config_files(
         preprocess_path = cleaner_inspection.config.source_path
     if preprocess_path is not None:
         items.append(
-            _reference(
+            _snapshot_reference(
                 kind="preprocess.config",
                 path=_resolve_path(root, preprocess_path),
                 project_root=root,
@@ -133,33 +153,36 @@ def resolve_config_files(
     if cleaner_inspection is not None:
         for cleaner_reference in cleaner_inspection.referenced_files:
             items.append(
-                _reference(
+                _snapshot_reference(
                     kind=cleaner_reference.kind,
                     path=_resolve_path(root, cleaner_reference.path),
                     project_root=root,
-                    # An inspection entry represents an explicitly configured
-                    # path. Absence is represented by no entry at all.
-                    required=True,
                 )
             )
 
-    for kind, raw_path, copy_to_snapshot in (
-        ("dictcheck.lemma_normalize", config.dictcheck.lemma_normalize, True),
-        ("dictcheck.wordlist", config.dictcheck.wordlist, False),
-        ("ref_tags.patterns", config.ref_tags.patterns, True),
+    for kind, raw_path, archive_policy in (
+        ("dictcheck.lemma_normalize", config.dictcheck.lemma_normalize, ConfigArchivePolicy.SNAPSHOT),
+        ("dictcheck.wordlist", config.dictcheck.wordlist, ConfigArchivePolicy.METADATA_ONLY),
+        ("ref_tags.patterns", config.ref_tags.patterns, ConfigArchivePolicy.SNAPSHOT),
         (
             "filters.roman_exceptions_file",
             config.filters.roman_exceptions_file,
-            True,
+            ConfigArchivePolicy.SNAPSHOT,
         ),
     ):
         if raw_path:
             items.append(
-                _reference(
-                    kind=kind,
-                    path=_resolve_path(root, raw_path),
-                    project_root=root,
-                    copy_to_snapshot=copy_to_snapshot,
+                (
+                    _snapshot_reference(
+                        kind=kind,
+                        path=_resolve_path(root, raw_path),
+                        project_root=root,
+                    )
+                    if archive_policy is ConfigArchivePolicy.SNAPSHOT
+                    else _metadata_only_reference(
+                        kind=kind,
+                        path=_resolve_path(root, raw_path),
+                    )
                 )
             )
 

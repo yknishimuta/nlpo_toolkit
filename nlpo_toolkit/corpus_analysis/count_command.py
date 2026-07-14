@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .archive import RunArchiveError
-from .archive_types import ArchiveOptions, RunArchiveResult
+from .archive_types import RunArchiveRequest, RunArchiveResult
 from .cleaner_runtime import CleanerError
 from .config_references import ConfigReferenceError
 from .corpus_errors import CorpusPreparationError
@@ -66,22 +66,22 @@ def execute_count_command(
     if result.exit_code != 0 or not should_archive:
         return CountCommandResult(run=result, archive=None)
 
-    runs_dir = (
+    archive_root = (
         request.runs_dir
         if request.runs_dir is not None
         else Path(config.archive.runs_dir)
     )
     try:
         archive_result = dependencies.archive_creator(
-            result=result,
-            options=ArchiveOptions(
+            run_result=result,
+            request=RunArchiveRequest(
+                archive_root=archive_root,
                 run_name=request.run_name,
-                runs_dir=runs_dir,
-                include_cleaned=(
+                include_cleaned_files=(
                     request.include_cleaned
                     or config.archive.include_cleaned
                 ),
-                include_input=(
+                include_input_files=(
                     request.include_input
                     or config.archive.include_input
                 ),

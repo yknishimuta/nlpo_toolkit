@@ -11,7 +11,7 @@ import pytest
 
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
 from nlpo_toolkit.corpus_analysis.archive import create_run_archive
-from nlpo_toolkit.corpus_analysis.archive_types import ArchiveOptions
+from nlpo_toolkit.corpus_analysis.archive_types import RunArchiveRequest
 from nlpo_toolkit.corpus_analysis.ports import CorpusPlanningDependencies
 from nlpo_toolkit.corpus_analysis.dry_run import execute_dry_run
 from nlpo_toolkit.corpus_analysis.config import load_config
@@ -320,8 +320,8 @@ def test_archive_includes_current_comparison_outputs_from_generated_outputs(
     )
     assert rc.exit_code == 0
 
-    archive = create_run_archive(result=rc, options=ArchiveOptions(run_name="comparison_1"))
-    run_dir = archive.run_dir
+    archive = create_run_archive(run_result=rc, request=RunArchiveRequest(run_name="comparison_1"))
+    run_dir = archive.archive_directory
 
     copied = {path.name for path in (run_dir / "outputs").iterdir()}
     assert "group_comparison_comparison_1.csv" in copied

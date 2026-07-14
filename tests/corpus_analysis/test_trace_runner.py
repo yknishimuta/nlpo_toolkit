@@ -8,7 +8,7 @@ from pathlib import Path
 
 from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis.archive import create_run_archive
-from nlpo_toolkit.corpus_analysis.archive_types import ArchiveOptions
+from nlpo_toolkit.corpus_analysis.archive_types import RunArchiveRequest
 from nlpo_toolkit.corpus_analysis import runner as runner_mod
 from tests.corpus_analysis.fake_nlp import fake_backend_factory, runner_dependencies
 
@@ -184,8 +184,8 @@ def test_archive_includes_all_trace_files_from_run_meta(tmp_path: Path) -> None:
     result = _run(tmp_path, config_path)
     assert result.exit_code == 0
 
-    archive = create_run_archive(result=result, options=ArchiveOptions(run_name="trace_run"))
-    run_dir = archive.run_dir
+    archive = create_run_archive(run_result=result, request=RunArchiveRequest(run_name="trace_run"))
+    run_dir = archive.archive_directory
 
     copied = {p.name for p in (run_dir / "trace").iterdir()}
     assert copied == {"trace_group_a.tsv", "trace_group_b.tsv"}

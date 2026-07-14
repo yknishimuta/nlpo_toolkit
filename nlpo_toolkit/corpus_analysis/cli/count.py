@@ -38,12 +38,12 @@ def _present_count_result(result, *, project_root: Path, stdout, stderr) -> None
     if archive is None:
         return
     try:
-        run_dir = archive.run_dir.relative_to(project_root)
+        archive_directory = archive.archive_directory.relative_to(project_root)
     except ValueError:
-        run_dir = archive.run_dir
-    print(f"[ARCHIVE] saved run archive: {run_dir}", file=stdout)
-    print(f"[ARCHIVE] included input files: {archive.copied_input_count}", file=stdout)
-    print(f"[ARCHIVE] included cleaned files: {archive.copied_cleaned_count}", file=stdout)
+        archive_directory = archive.archive_directory
+    print(f"[ARCHIVE] saved run archive: {archive_directory}", file=stdout)
+    print(f"[ARCHIVE] included input files: {archive.copied_files.inputs}", file=stdout)
+    print(f"[ARCHIVE] included cleaned files: {archive.copied_files.cleaned}", file=stdout)
 
 def register(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser(
