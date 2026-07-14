@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any
 
 from nlpo_toolkit.backends import BuiltNLPBackend, create_nlp_backend
+from nlpo_toolkit.backends.stanza_backend import StanzaBackend
 from nlpo_toolkit.cleaner_contracts import CleanerConfigInspection
-from nlpo_toolkit.nlp import build_sentence_splitter
 
 from .analysis_policy import (
     AnalysisExtractionPolicy,
@@ -36,10 +36,11 @@ def _inspect_cleaner_config(path: Path) -> CleanerConfigInspection:
 
 
 def _create_sentence_splitter(config: NLPConfig) -> Any:
-    return build_sentence_splitter(
-        config.language,
-        config.stanza_package or "perseus",
-        config.cpu_only,
+    return StanzaBackend(
+        lang=config.language,
+        package=config.stanza_package or "perseus",
+        use_gpu=not config.cpu_only,
+        processors="tokenize",
     )
 
 

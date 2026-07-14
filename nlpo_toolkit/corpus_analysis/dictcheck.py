@@ -5,7 +5,8 @@ import csv
 from pathlib import Path
 from typing import Iterable, Set, Tuple
 
-from nlpo_toolkit.nlp import load_vocab, normalize_token
+from nlpo_toolkit.nlp.normalization import normalize_token
+from nlpo_toolkit.nlp.vocabulary import load_wordlist
 
 _STRIP_RE = re.compile(
     rf"^[{re.escape(string.punctuation)}“”‘’«»…—–\-­]+|"
@@ -54,9 +55,9 @@ def split_frequency_csv(
     if normalize_map_path is not None:
         lemma_map = load_lemma_normalize_map(normalize_map_path)
 
-    raw_vocab: Set[str] = load_vocab(wordlist_path)
+    raw_wordlist = load_wordlist(wordlist_path)
     vocab: Set[str] = set()
-    for w in raw_vocab:
+    for w in raw_wordlist:
         k = _dictcheck_key(w, normalize=normalize)
         if k:
             vocab.add(k)

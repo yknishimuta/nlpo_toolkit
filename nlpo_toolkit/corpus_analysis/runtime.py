@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from nlpo_toolkit.backends import NLPBackendInfo
-from nlpo_toolkit.nlp import load_roman_exceptions
+from nlpo_toolkit.nlp.roman_numerals import load_roman_exceptions
 
 from .config import AppConfig
 from .corpus import prepare_corpora

@@ -226,14 +226,20 @@ def test_sentence_splitter_adapter_passes_nlp_configuration(monkeypatch) -> None
     sentinel = object()
     monkeypatch.setattr(
         composition,
-        "build_sentence_splitter",
-        lambda language, package, cpu_only: calls.append((language, package, cpu_only))
-        or sentinel,
+        "StanzaBackend",
+        lambda **kwargs: calls.append(kwargs) or sentinel,
     )
     config = NLPConfig(language="grc", stanza_package=None, cpu_only=True)
 
     assert composition._create_sentence_splitter(config) is sentinel
-    assert calls == [("grc", "perseus", True)]
+    assert calls == [
+        {
+            "lang": "grc",
+            "package": "perseus",
+            "use_gpu": False,
+            "processors": "tokenize",
+        }
+    ]
 
 
 def test_default_factories_do_not_return_global_container_singletons() -> None:

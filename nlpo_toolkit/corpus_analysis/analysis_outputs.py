@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
-import nlpo_toolkit.nlp as nlp
+import nlpo_toolkit.nlp.vocabulary as vocabulary
 
 from .config import TraceConfig
 from .corpus import PreparedCorpus, sanitize_label
@@ -185,7 +185,7 @@ def load_configured_known_words(plan: AnalysisPlan) -> frozenset[str] | None:
             "dictcheck.wordlist is required when dictcheck.enabled=true "
             f"(analysis_unit={plan.analysis_unit})"
         )
-    return frozenset(nlp.load_vocab(path)) if plan.config.dictcheck.enabled else None
+    return vocabulary.load_wordlist(path) if plan.config.dictcheck.enabled else None
 
 
 def write_dictcheck_outputs(

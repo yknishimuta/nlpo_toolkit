@@ -11,9 +11,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Collection, Iterable, Iterator, Sequence
 
-from nlpo_toolkit.nlp import (
+from nlpo_toolkit.nlp.roman_numerals import (
     effective_roman_exceptions,
-    resolve_roman_exceptions,
+    normalize_roman_exceptions,
     should_drop_roman_numeral,
 )
 from .analysis_policy import (
@@ -237,7 +237,7 @@ def iter_token_records(
         upos_targets=frozenset(upos_targets),
         min_token_length=min_token_length,
         drop_roman_numerals=drop_roman_numerals,
-        roman_exceptions=resolve_roman_exceptions(roman_exceptions=roman_exceptions),
+        roman_exceptions=normalize_roman_exceptions(roman_exceptions or ()),
         ref_tag_detector=ref_tag_detector,
         ref_tag_counter=ref_tag_counter,
     )

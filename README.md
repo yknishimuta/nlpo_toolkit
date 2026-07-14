@@ -12,7 +12,9 @@ Each command module defines its parser registration and execution handler.
 ## What Is Included
 
 - Latin corpus cleaning utilities under `nlpo_toolkit.latin.cleaners`
-- Stanza-backed NLP helpers under `nlpo_toolkit.nlp`
+- Low-level chunking, normalization, Roman-numeral policy, and vocabulary
+  loading utilities under `nlpo_toolkit.nlp`; backend construction lives under
+  `nlpo_toolkit.backends`
 - Vocabulary counting CLI:
   - `nlpo count`
 - Config-driven grouping, preprocessing, normalization, dictionary checks,

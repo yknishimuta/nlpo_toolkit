@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
-from nlpo_toolkit.nlp import (
+from nlpo_toolkit.nlp.roman_numerals import (
     RomanExceptionsError,
     effective_roman_exceptions,
     load_roman_exceptions,

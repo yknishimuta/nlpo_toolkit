@@ -65,16 +65,16 @@ def test_dictcheck_enabled_creates_known_unknown(tmp_path, monkeypatch):
             [("rosa", "rosa", "NOUN"), ("rosa", "rosa", "NOUN"), ("puella", "puella", "NOUN")]
         ),
     )
-    import nlpo_toolkit.nlp as nlp_mod
+    import nlpo_toolkit.nlp.vocabulary as vocabulary_mod
 
-    original_loader = nlp_mod.load_vocab
+    original_loader = vocabulary_mod.load_wordlist
     loaded_paths: list[Path] = []
 
     def recording_loader(path: Path):
         loaded_paths.append(path)
         return original_loader(path)
 
-    monkeypatch.setattr(nlp_mod, "load_vocab", recording_loader)
+    monkeypatch.setattr(vocabulary_mod, "load_wordlist", recording_loader)
     result = run(
         corpus_request(script_dir, config_path),
         dependencies=dependencies,

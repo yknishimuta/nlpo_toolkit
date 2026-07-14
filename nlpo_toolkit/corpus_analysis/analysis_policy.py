@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterator, Literal
 
-from nlpo_toolkit.nlp import iter_char_chunks
+from nlpo_toolkit.nlp.chunking import iter_char_chunks
 
 
 ChunkStrategy = Literal["char_whitespace"]
