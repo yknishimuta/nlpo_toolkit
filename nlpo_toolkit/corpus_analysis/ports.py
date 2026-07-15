@@ -49,8 +49,12 @@ class CountRunner(Protocol):
 @dataclass(frozen=True)
 class CorpusPlanningDependencies:
     load_config: ConfigLoader
-    cleaner_loader: CleanerLoader
     cleaner_inspector: CleanerConfigInspector
+
+
+@dataclass(frozen=True)
+class CorpusPreparationDependencies:
+    cleaner_loader: CleanerLoader
 
 
 @dataclass(frozen=True)
@@ -63,6 +67,7 @@ class AnalysisDependencies:
 @dataclass(frozen=True)
 class RunnerDependencies:
     planning: CorpusPlanningDependencies
+    preparation: CorpusPreparationDependencies
     analysis: AnalysisDependencies
 
 
@@ -76,9 +81,11 @@ class CountCommandDependencies:
 @dataclass(frozen=True)
 class FeatureCommandDependencies:
     planning: CorpusPlanningDependencies
+    preparation: CorpusPreparationDependencies
     analysis: AnalysisDependencies
 
 
 @dataclass(frozen=True)
 class ConfigNgramDependencies:
     planning: CorpusPlanningDependencies
+    preparation: CorpusPreparationDependencies

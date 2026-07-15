@@ -13,6 +13,7 @@ from nlpo_toolkit.corpus_analysis.analysis_policy import (
 from nlpo_toolkit.corpus_analysis.ports import (
     AnalysisDependencies,
     CorpusPlanningDependencies,
+    CorpusPreparationDependencies,
     RunnerDependencies,
 )
 from nlpo_toolkit.corpus_analysis.features import execute_feature_command
@@ -79,11 +80,12 @@ def test_cli_modules_do_not_import_low_level_dependencies() -> None:
 def test_dependency_objects_are_frozen() -> None:
     planning = CorpusPlanningDependencies(
         load_config=lambda _path: None,  # type: ignore[return-value]
-        cleaner_loader=lambda: None,  # type: ignore[return-value]
         cleaner_inspector=lambda _path: None,  # type: ignore[return-value]
     )
+    preparation = CorpusPreparationDependencies(cleaner_loader=lambda: None)
     dependencies = RunnerDependencies(
         planning=planning,
+        preparation=preparation,
         analysis=AnalysisDependencies(
             backend_factory=lambda _config: None,  # type: ignore[return-value]
             extraction_policy=DEFAULT_ANALYSIS_EXTRACTION_POLICY,

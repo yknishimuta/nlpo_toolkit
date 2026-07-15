@@ -86,6 +86,17 @@ single `grouping_override` value represents CLI grouping overrides. Config-input
 N-grams always use tokens; dry-run is an independent use case rather than a
 Count request mode.
 
+Corpus preparation uses four explicit stages. `build_analysis_plan()` validates
+configuration, paths, cleaner configuration, and referenced files and returns a
+static plan without running the cleaner or resolving corpus globs.
+`inspect_analysis_plan()` resolves currently existing inputs for dry-run and
+never runs the cleaner. Count, Features, and config-input N-gram use
+`prepare_analysis_plan()`, which runs the cleaner first and resolves inputs
+afterwards. Finally, `prepare_corpora()` reads the resolved inputs and applies
+normalization and reference-tag removal. Planning dependencies contain only
+configuration loading and cleaner inspection; cleaner execution is supplied by
+separate preparation dependencies.
+
 To validate the config without running preprocessing or NLP, use `--dry-run`:
 
 ```bash

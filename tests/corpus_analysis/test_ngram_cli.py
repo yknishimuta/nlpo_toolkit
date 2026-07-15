@@ -13,6 +13,7 @@ from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
 from nlpo_toolkit.corpus_analysis.ports import (
     ConfigNgramDependencies,
     CorpusPlanningDependencies,
+    CorpusPreparationDependencies,
 )
 from nlpo_toolkit.corpus_analysis.ngram import (
     ConfigNgramRequest,
@@ -302,6 +303,13 @@ def test_config_ngram_uses_canonical_analysis_plan_with_overrides(tmp_path, monk
     monkeypatch.setattr(ngram_mod, "build_analysis_plan", fake_build_analysis_plan)
     monkeypatch.setattr(
         ngram_mod,
+        "prepare_analysis_plan",
+        lambda definition, **_kwargs: type(
+            "ResolvedPlan", (), {"definition": definition, "work_items": ()}
+        )(),
+    )
+    monkeypatch.setattr(
+        ngram_mod,
         "prepare_corpora",
         lambda **_kwargs: (PreparedCorpus("text", (), "raw", "alpha beta", Counter()),),
     )
@@ -322,10 +330,10 @@ def test_config_ngram_uses_canonical_analysis_plan_with_overrides(tmp_path, monk
         dependencies=ConfigNgramDependencies(
             planning=CorpusPlanningDependencies(
                 load_config=load_config,
-                cleaner_loader=lambda: pytest.fail(
-                    "cleaner loader must not be called"
-                ),
                 cleaner_inspector=inspect_cleaner_config,
+            ),
+            preparation=CorpusPreparationDependencies(
+                cleaner_loader=lambda: pytest.fail("cleaner loader must not be called")
             ),
         ),
     )
@@ -337,7 +345,7 @@ def test_config_ngram_uses_canonical_analysis_plan_with_overrides(tmp_path, monk
     assert calls[0][0].config_path == config_path
     assert calls[0][0].grouping_override == "auto_single_cleaned"
     assert calls[0][0].error_on_empty_group is True
-    assert calls[0][1]["preprocess_mode"] == "execute"
+    assert set(calls[0][1]) == {"dependencies"}
 
 
 def test_config_ngram_does_not_apply_count_partition_validation(tmp_path) -> None:
@@ -368,9 +376,11 @@ def test_config_ngram_does_not_apply_count_partition_validation(tmp_path) -> Non
         dependencies=ConfigNgramDependencies(
             planning=CorpusPlanningDependencies(
                 load_config=load_config,
-                cleaner_loader=lambda: pytest.fail("cleaner must not run"),
                 cleaner_inspector=inspect_cleaner_config,
-            )
+            ),
+            preparation=CorpusPreparationDependencies(
+                cleaner_loader=lambda: pytest.fail("cleaner must not run")
+            ),
         ),
     )
 

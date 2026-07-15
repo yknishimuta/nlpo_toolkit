@@ -11,7 +11,8 @@ from .ports import CorpusPlanningDependencies
 from .config import ConfigError
 from .config_references import ConfigReferenceError
 from .corpus_errors import CorpusPreparationError
-from .run_plan import AnalysisPlan, AnalysisPlanError, build_count_plan
+from .preprocessing import inspect_analysis_plan
+from .run_plan import ResolvedAnalysisPlan, AnalysisPlanError, build_count_plan
 from .requests import CorpusPreparationRequest
 
 
@@ -109,7 +110,7 @@ def _display_path(path: Path, project_root: Path) -> str:
         return str(path)
 
 
-def render_analysis_plan(plan: AnalysisPlan, *, project_root: Path) -> list[str]:
+def render_analysis_plan(plan: ResolvedAnalysisPlan, *, project_root: Path) -> list[str]:
     lines: list[str] = []
 
     if plan.auto_mode:
@@ -131,7 +132,7 @@ def render_analysis_plan(plan: AnalysisPlan, *, project_root: Path) -> list[str]
     return lines
 
 
-def _render_spec_diagnostics(plan: AnalysisPlan) -> list[DryRunDiagnostic]:
+def _render_spec_diagnostics(plan: ResolvedAnalysisPlan) -> list[DryRunDiagnostic]:
     diagnostics: list[DryRunDiagnostic] = []
 
     for spec in plan.partition_specs:
@@ -203,20 +204,18 @@ def execute_dry_run(
     add(DiagnosticLevel.OK, "config loaded")
 
     try:
-        plan = build_count_plan(
+        definition = build_count_plan(
             request,
             dependencies=CorpusPlanningDependencies(
                 load_config=lambda _path: cfg,
-                cleaner_loader=dependencies.cleaner_loader,
                 cleaner_inspector=dependencies.cleaner_inspector,
             ),
-            preprocess_mode="inspect",
-            validate_references=False,
         )
+        plan = inspect_analysis_plan(definition)
     except (ConfigReferenceError, AnalysisPlanError, CorpusPreparationError) as exc:
         add(DiagnosticLevel.ERROR, str(exc))
     else:
-        cleaner_inspection = plan.cleaner_inspection
+        cleaner_inspection = definition.cleaner_inspection
         if cleaner_inspection is None:
             add(
                 DiagnosticLevel.OK,
@@ -237,8 +236,8 @@ def execute_dry_run(
         for line in render_analysis_plan(plan, project_root=project_root):
             add(DiagnosticLevel.OK, line)
         diagnostics.extend(_render_spec_diagnostics(plan))
-        add(DiagnosticLevel.OK, f"output dir: {_display_path(plan.out_dir, project_root)}")
-        for reference in plan.config_files.references:
+        add(DiagnosticLevel.OK, f"output dir: {_display_path(definition.out_dir, project_root)}")
+        for reference in definition.config_files.references:
             if reference.kind == "root_config":
                 continue
             add(

@@ -21,6 +21,7 @@ from nlpo_toolkit.corpus_analysis.ports import (
     AnalysisDependencies,
     BackendFactory,
     CorpusPlanningDependencies,
+    CorpusPreparationDependencies,
     CountCommandDependencies,
     RunnerDependencies,
 )
@@ -131,9 +132,9 @@ def runner_dependencies(
     return RunnerDependencies(
         planning=CorpusPlanningDependencies(
             load_config=canonical_loader,
-            cleaner_loader=cleaner_loader,
             cleaner_inspector=inspect_cleaner_config,
         ),
+        preparation=CorpusPreparationDependencies(cleaner_loader=cleaner_loader),
         analysis=AnalysisDependencies(
             backend_factory=backend_factory,
             extraction_policy=extraction_policy,

@@ -7,17 +7,9 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Iterable, Mapping, Sequence
 
-from nlpo_toolkit.cleaner_contracts import (
-    CleanerConfigError,
-    CleanerConfigInspection,
-    CleanerLoader,
-    CleanerRunner,
-)
-
 from .config import AppConfig, GroupConfig, GroupingMode
 from .config_references import ResolvedConfigFiles
-from .cleaner_runtime import load_default_cleaner, run_cleaner
-from .corpus_errors import CleanerInspectionError, CorpusPreparationError
+from .corpus_errors import CorpusPreparationError
 from .io_utils import expand_globs, read_concat
 from .normalizer import normalize_text
 from .preprocess import expand_cleaned_dir_placeholders
@@ -51,12 +43,6 @@ class ResolvedCorpora:
     mode: GroupingMode
 
 
-@dataclass(frozen=True)
-class CleanerPlan:
-    config_path: Path
-    inspection: CleanerConfigInspection
-
-
 def resolve_project_path(project_root: Path, raw: object) -> Path:
     path = Path(str(raw))
     if path.is_absolute():
@@ -81,50 +67,6 @@ def _unique_label(base: str, used: set[str]) -> str:
         i += 1
     used.add(label)
     return label
-
-
-def resolve_cleaner_plan(
-    config: AppConfig,
-    project_root: Path,
-    *,
-    inspector,
-) -> CleanerPlan | None:
-    if config.preprocess.kind != "cleaner":
-        return None
-    if not config.preprocess.config:
-        raise CorpusPreparationError("'preprocess.config' is required when preprocess.kind=cleaner")
-    config_path = resolve_project_path(project_root, config.preprocess.config)
-    try:
-        inspection = inspector(config_path)
-    except CleanerConfigError as exc:
-        raise CleanerInspectionError(str(exc)) from exc
-    return CleanerPlan(config_path=config_path, inspection=inspection)
-
-
-def execute_preprocess(
-    plan: CleanerPlan | None,
-    *,
-    cleaner: CleanerRunner | None = None,
-    cleaner_loader: CleanerLoader = load_default_cleaner,
-) -> Path | None:
-    if plan is None:
-        return None
-    if not plan.config_path.exists():
-        raise CleanerInspectionError(f"Cleaner config file not found: {plan.config_path}")
-    run_cleaner(
-        config_path=plan.config_path,
-        cleaner=cleaner,
-        cleaner_loader=cleaner_loader,
-    )
-    return plan.inspection.config.output_path
-
-
-def inspect_preprocess(plan: CleanerPlan | None) -> Path | None:
-    if plan is None:
-        return None
-    if not plan.config_path.exists():
-        raise CleanerInspectionError(f"Cleaner config file not found: {plan.config_path}")
-    return plan.inspection.config.output_path
 
 
 def resolve_group_files(
@@ -211,13 +153,11 @@ def resolve_corpus_work_items(
     config: AppConfig,
     project_root: Path,
     cleaned_dir: Path | None,
-    group_by_file: bool = False,
-    auto_single_cleaned: bool = False,
+    grouping_mode: GroupingMode,
     error_on_empty_group: bool = False,
 ) -> ResolvedCorpora:
-    grouping_mode = config.grouping.mode
-    auto_mode = bool(auto_single_cleaned) or grouping_mode == "auto_single_cleaned"
-    per_file = (bool(group_by_file) or grouping_mode == "per_file") and not auto_mode
+    auto_mode = grouping_mode == "auto_single_cleaned"
+    per_file = grouping_mode == "per_file"
 
     if auto_mode:
         group_files = resolve_auto_single_cleaned_group(
@@ -236,12 +176,11 @@ def resolve_corpus_work_items(
         names = ", ".join(empty_groups)
         raise CorpusPreparationError(f"No files matched for group(s): {names}")
 
-    mode = "auto_single_cleaned" if auto_mode else ("per_file" if per_file else "groups")
     return ResolvedCorpora(
         cleaned_dir=cleaned_dir,
         group_files=group_files,
         work_items=build_corpus_work_items(group_files=group_files, group_by_file=per_file),
-        mode=mode,
+        mode=grouping_mode,
     )
 
 

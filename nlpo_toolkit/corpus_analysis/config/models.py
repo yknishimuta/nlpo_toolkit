@@ -179,28 +179,18 @@ class AppConfig(ConfigModel):
     validations: ValidationsConfig = Field(default_factory=ValidationsConfig)
 
     @model_validator(mode="after")
-    def validate_references(self) -> AppConfig:
-        group_names = set(self.groups)
+    def validate_spec_structure(self) -> AppConfig:
         comparison_names: set[str] = set()
         for spec in self.comparisons:
             if spec.name in comparison_names:
                 raise ValueError(f"duplicate comparison name: {spec.name}")
             comparison_names.add(spec.name)
-            if spec.group_a not in group_names:
-                raise ValueError(f"comparison {spec.name}: unknown group_a '{spec.group_a}'")
-            if spec.group_b not in group_names:
-                raise ValueError(f"comparison {spec.name}: unknown group_b '{spec.group_b}'")
 
         partition_names: set[str] = set()
         for spec in self.validations.partitions:
             if spec.name in partition_names:
                 raise ValueError(f"duplicate partition name: {spec.name}")
             partition_names.add(spec.name)
-            missing = [name for name in (spec.whole, *spec.parts) if name not in group_names]
-            if missing:
-                raise ValueError(
-                    f"partition {spec.name}: unknown group(s): {', '.join(missing)}"
-                )
 
         if self.grouping.mode == "per_file" and self.comparisons:
             raise ValueError("comparisons cannot be used with grouping.mode=per_file")

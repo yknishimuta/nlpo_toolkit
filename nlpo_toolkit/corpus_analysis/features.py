@@ -23,6 +23,7 @@ from .analysis_policy import AnalysisExtractionPolicy, DEFAULT_ANALYSIS_EXTRACTI
 from .ports import FeatureCommandDependencies
 from .corpus import prepare_corpora
 from .config_references import ConfigReferenceError
+from .preprocessing import prepare_analysis_plan
 from .run_plan import build_analysis_plan
 from .requests import CorpusPreparationRequest
 from .runtime import build_nlp_runtime
@@ -326,16 +327,19 @@ def execute_feature_command(
     dependencies: FeatureCommandDependencies,
 ) -> FeatureCommandResult:
     try:
-        plan = build_analysis_plan(
+        definition = build_analysis_plan(
             request.corpus,
             dependencies=dependencies.planning,
-            preprocess_mode="execute",
         )
     except (ConfigReferenceError, FileNotFoundError) as exc:
         raise FeatureError(str(exc)) from exc
-    config = plan.config
+    plan = prepare_analysis_plan(
+        definition,
+        dependencies=dependencies.preparation,
+    )
+    config = definition.config
 
-    roman_exceptions_path = plan.config_files.path("filters.roman_exceptions_file")
+    roman_exceptions_path = definition.config_files.path("filters.roman_exceptions_file")
     try:
         configured_roman_exceptions = (
             load_roman_exceptions(roman_exceptions_path)
@@ -363,7 +367,7 @@ def execute_feature_command(
     for corpus in prepare_corpora(
         work_items=plan.work_items,
         config=config,
-        config_files=plan.config_files,
+        config_files=definition.config_files,
     ):
         groups_texts.append((corpus.label, list(corpus.files), corpus.prepared_text))
 

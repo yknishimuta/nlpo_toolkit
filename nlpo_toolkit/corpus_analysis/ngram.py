@@ -11,6 +11,7 @@ from typing import Iterable, Iterator
 from .corpus import PreparedCorpus, prepare_corpora
 from .config_references import ConfigReferenceError
 from .ports import ConfigNgramDependencies
+from .preprocessing import prepare_analysis_plan
 from .run_plan import build_analysis_plan
 from .requests import CorpusPreparationRequest
 from .analysis_records import TokenRecord
@@ -262,17 +263,20 @@ def execute_config_ngram_command(
     dependencies: ConfigNgramDependencies,
 ) -> NgramCommandResult:
     try:
-        plan = build_analysis_plan(
+        definition = build_analysis_plan(
             request.corpus,
             dependencies=dependencies.planning,
-            preprocess_mode="execute",
         )
     except ConfigReferenceError as exc:
         raise NgramError(str(exc)) from exc
+    plan = prepare_analysis_plan(
+        definition,
+        dependencies=dependencies.preparation,
+    )
     corpora = prepare_corpora(
         work_items=plan.work_items,
-        config=plan.config,
-        config_files=plan.config_files,
+        config=definition.config,
+        config_files=definition.config_files,
     )
     rows = build_ngrams_from_rows(
         iter_config_token_rows(corpora),

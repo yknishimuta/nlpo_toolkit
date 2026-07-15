@@ -21,6 +21,7 @@ PORTS_PATH = PROJECT_ROOT / "nlpo_toolkit/corpus_analysis/ports.py"
 COMPOSITION_PATH = PROJECT_ROOT / "nlpo_toolkit/corpus_analysis/composition.py"
 CONTAINERS = (
     ports.CorpusPlanningDependencies,
+    ports.CorpusPreparationDependencies,
     ports.AnalysisDependencies,
     ports.RunnerDependencies,
     ports.CountCommandDependencies,
@@ -98,6 +99,7 @@ def test_composition_owns_production_factories_but_no_ports() -> None:
 
     assert default_functions == {
         "default_corpus_planning_dependencies",
+        "default_corpus_preparation_dependencies",
         "default_analysis_dependencies",
         "default_runner_dependencies",
         "default_count_command_dependencies",
@@ -114,7 +116,7 @@ def test_dependency_containers_are_frozen_and_have_no_production_defaults() -> N
         assert container.__dataclass_params__.frozen is True
 
     planning_fields = {field.name: field for field in fields(ports.CorpusPlanningDependencies)}
-    assert set(planning_fields) == {"load_config", "cleaner_loader", "cleaner_inspector"}
+    assert set(planning_fields) == {"load_config", "cleaner_inspector"}
     assert all(
         field.default is MISSING and field.default_factory is MISSING
         for field in planning_fields.values()
@@ -122,7 +124,6 @@ def test_dependency_containers_are_frozen_and_have_no_production_defaults() -> N
 
     planning = ports.CorpusPlanningDependencies(
         load_config=lambda _path: None,  # type: ignore[return-value]
-        cleaner_loader=lambda: None,  # type: ignore[return-value]
         cleaner_inspector=lambda _path: None,  # type: ignore[return-value]
     )
     with pytest.raises(FrozenInstanceError):
@@ -188,19 +189,21 @@ def test_legacy_dependencies_module_and_imports_are_absent() -> None:
 
 def test_production_composition_selects_expected_implementations() -> None:
     planning = composition.default_corpus_planning_dependencies()
+    preparation = composition.default_corpus_preparation_dependencies()
     count = composition.default_count_command_dependencies()
 
     assert planning.load_config is load_config
-    assert planning.cleaner_loader is composition.load_default_cleaner
+    assert preparation.cleaner_loader is composition.load_default_cleaner
     assert planning.cleaner_inspector is composition._inspect_cleaner_config
     assert count.run_analysis is run
     assert count.archive_creator is create_run_archive
-    assert set(field.name for field in fields(type(count.runner))) == {"planning", "analysis"}
+    assert set(field.name for field in fields(type(count.runner))) == {"planning", "preparation", "analysis"}
     assert set(field.name for field in fields(ports.FeatureCommandDependencies)) == {
         "planning",
+        "preparation",
         "analysis",
     }
-    assert set(field.name for field in fields(ports.ConfigNgramDependencies)) == {"planning"}
+    assert set(field.name for field in fields(ports.ConfigNgramDependencies)) == {"planning", "preparation"}
 
 
 def test_analysis_composition_binds_the_same_extraction_policy(monkeypatch) -> None:

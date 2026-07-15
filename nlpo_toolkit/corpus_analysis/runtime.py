@@ -5,8 +5,9 @@ from nlpo_toolkit.nlp.roman_numerals import load_roman_exceptions
 
 from .config import AppConfig
 from .corpus import prepare_corpora
+from .io_utils import ensure_out_dir
 from .ports import BackendFactory, RunnerDependencies
-from .run_plan import AnalysisPlan, build_count_plan, ensure_out_dir
+from .run_plan import ResolvedAnalysisPlan, build_count_plan, prepare_count_plan
 from .requests import CorpusPreparationRequest
 from .runner_types import RunContext
 
@@ -42,7 +43,7 @@ def initialize_sentence_splitter(
 
 def load_roman_exceptions_for_run(
     *,
-    plan: AnalysisPlan,
+    plan: ResolvedAnalysisPlan,
 ) -> frozenset[str]:
     path = plan.config_files.path("filters.roman_exceptions_file")
     if path is None:
@@ -55,11 +56,11 @@ def prepare_run_context(
     *,
     dependencies: RunnerDependencies,
 ) -> RunContext:
-    plan = build_count_plan(
+    definition = build_count_plan(
         request,
         dependencies=dependencies.planning,
-        preprocess_mode="execute",
     )
+    plan = prepare_count_plan(definition, dependencies=dependencies.preparation)
     prepared_corpora = prepare_corpora(
         work_items=plan.work_items,
         config=plan.config,

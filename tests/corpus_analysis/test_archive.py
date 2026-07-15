@@ -26,7 +26,7 @@ from nlpo_toolkit.corpus_analysis.count_command import CountRequest, execute_cou
 from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
 from nlpo_toolkit.corpus_analysis.composition import default_runner_dependencies
 from nlpo_toolkit.corpus_analysis.ports import CountCommandDependencies
-from nlpo_toolkit.corpus_analysis.run_plan import AnalysisPlan
+from nlpo_toolkit.corpus_analysis.run_plan import AnalysisPlan, ResolvedAnalysisPlan
 from nlpo_toolkit.corpus_analysis.runner_types import RunResult
 
 
@@ -42,15 +42,20 @@ def make_run_result(
     config_path = tmp_path / "config.yml"
     config_path.write_text("groups: {g: {files: []}}\n", encoding="utf-8")
     config = ensure_app_config({"groups": {"g": {"files": []}}})
-    plan = AnalysisPlan(
+    definition = AnalysisPlan(
         project_root=tmp_path.resolve(),
         config_path=config_path.resolve(),
         config=config,
-        cleaned_dir=(tmp_path / "cleaned").resolve(),
         grouping_mode="groups",
+        error_on_empty_group=False,
+        cleaner_plan=None,
+        config_files=ResolvedConfigFiles(config_references),
+    )
+    plan = ResolvedAnalysisPlan(
+        definition=definition,
+        cleaned_dir=(tmp_path / "cleaned").resolve(),
         work_items=(),
         group_files={"g": tuple(input_files)},
-        config_files=ResolvedConfigFiles(config_references),
     )
     summary = next((p for p in output_files if p.name == "summary.txt"), tmp_path / "summary.txt")
     metadata = next((p for p in output_files if p.name == "run_meta.json"), tmp_path / "run_meta.json")

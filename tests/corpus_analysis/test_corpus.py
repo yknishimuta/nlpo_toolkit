@@ -34,6 +34,7 @@ from nlpo_toolkit.corpus_analysis.ports import (
     AnalysisDependencies,
     ConfigNgramDependencies,
     CorpusPlanningDependencies,
+    CorpusPreparationDependencies,
     FeatureCommandDependencies,
 )
 from nlpo_toolkit.corpus_analysis.ngram import ConfigNgramRequest
@@ -93,6 +94,7 @@ def test_resolve_corpus_work_items_errors_on_empty_group(tmp_path: Path) -> None
             config=cfg,
             project_root=tmp_path,
             cleaned_dir=None,
+            grouping_mode="groups",
             error_on_empty_group=True,
         )
 
@@ -312,8 +314,10 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
 
     planning = CorpusPlanningDependencies(
         load_config=load_config,
-        cleaner_loader=lambda: pytest.fail("cleaner loader must not be called"),
         cleaner_inspector=inspect_cleaner_config,
+    )
+    preparation = CorpusPreparationDependencies(
+        cleaner_loader=lambda: pytest.fail("cleaner loader must not be called")
     )
     features_mod.execute_feature_command(
             FeatureRequest(
@@ -321,6 +325,7 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
             ),
         dependencies=FeatureCommandDependencies(
             planning=planning,
+            preparation=preparation,
             analysis=AnalysisDependencies(
                 backend_factory=lambda _config: BuiltNLPBackend(
                     backend=CaptureNLP(),
@@ -349,6 +354,7 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
         ),
         dependencies=ConfigNgramDependencies(
             planning=planning,
+            preparation=preparation,
         ),
     )
 

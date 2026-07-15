@@ -5,6 +5,11 @@ from collections.abc import Sequence
 from pathlib import Path
 
 
+def ensure_out_dir(out_dir: Path) -> Path:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    return out_dir
+
+
 from .corpus_errors import CorpusReadError
 
 

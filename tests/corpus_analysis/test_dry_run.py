@@ -36,9 +36,6 @@ def _execute_dry_run(
         ),
         dependencies=CorpusPlanningDependencies(
             load_config=load_config,
-            cleaner_loader=lambda: pytest.fail(
-                "cleaner loader must not be called"
-            ),
             cleaner_inspector=inspect_cleaner_config,
         ),
     )
@@ -322,7 +319,6 @@ def test_dry_run_and_normal_planning_report_same_missing_reference(
     )
     dependencies = CorpusPlanningDependencies(
         load_config=load_config,
-        cleaner_loader=lambda: pytest.fail("cleaner must not run"),
         cleaner_inspector=inspect_cleaner_config,
     )
 
@@ -343,7 +339,6 @@ def test_dry_run_and_normal_planning_report_same_missing_reference(
         build_count_plan(
             CorpusPreparationRequest(tmp_path, config_path),
             dependencies=dependencies,
-            preprocess_mode="execute",
         )
 
     assert dry_error == str(normal.value)
@@ -377,9 +372,6 @@ def test_dry_run_does_not_hide_programmer_errors(
             ),
             dependencies=CorpusPlanningDependencies(
                 load_config=broken_loader,
-                cleaner_loader=lambda: pytest.fail(
-                    "cleaner loader must not be called"
-                ),
                 cleaner_inspector=inspect_cleaner_config,
             ),
         )

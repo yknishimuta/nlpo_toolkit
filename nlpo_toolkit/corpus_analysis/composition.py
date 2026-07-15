@@ -24,6 +24,7 @@ from .ports import (
     BackendFactory,
     ConfigNgramDependencies,
     CorpusPlanningDependencies,
+    CorpusPreparationDependencies,
     CountCommandDependencies,
     FeatureCommandDependencies,
     RunnerDependencies,
@@ -72,9 +73,12 @@ def _backend_factory_for(
 def default_corpus_planning_dependencies() -> CorpusPlanningDependencies:
     return CorpusPlanningDependencies(
         load_config=load_config,
-        cleaner_loader=load_default_cleaner,
         cleaner_inspector=_inspect_cleaner_config,
     )
+
+
+def default_corpus_preparation_dependencies() -> CorpusPreparationDependencies:
+    return CorpusPreparationDependencies(cleaner_loader=load_default_cleaner)
 
 
 def default_analysis_dependencies(
@@ -91,6 +95,7 @@ def default_analysis_dependencies(
 def default_runner_dependencies() -> RunnerDependencies:
     return RunnerDependencies(
         planning=default_corpus_planning_dependencies(),
+        preparation=default_corpus_preparation_dependencies(),
         analysis=default_analysis_dependencies(),
     )
 
@@ -106,6 +111,7 @@ def default_count_command_dependencies() -> CountCommandDependencies:
 def default_feature_command_dependencies() -> FeatureCommandDependencies:
     return FeatureCommandDependencies(
         planning=default_corpus_planning_dependencies(),
+        preparation=default_corpus_preparation_dependencies(),
         analysis=default_analysis_dependencies(),
     )
 
@@ -113,4 +119,5 @@ def default_feature_command_dependencies() -> FeatureCommandDependencies:
 def default_config_ngram_dependencies() -> ConfigNgramDependencies:
     return ConfigNgramDependencies(
         planning=default_corpus_planning_dependencies(),
+        preparation=default_corpus_preparation_dependencies(),
     )

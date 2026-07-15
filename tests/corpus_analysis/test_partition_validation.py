@@ -134,18 +134,18 @@ def _write_cfg(tmp_path: Path, body: str) -> Path:
     return path
 
 
-def test_parse_partition_specs_rejects_unknown_group() -> None:
-    with pytest.raises(ValueError, match="unknown group"):
-        ensure_app_config(
-            {
-                "groups": {"whole": {"files": []}, "part_a": {"files": []}},
-                "validations": {
-                    "partitions": [
-                        {"name": "split", "whole": "whole", "parts": ["part_a", "part_b"]}
-                    ]
-                },
-            }
-        )
+def test_parse_partition_specs_defers_group_references() -> None:
+    config = ensure_app_config(
+        {
+            "groups": {"whole": {"files": []}, "part_a": {"files": []}},
+            "validations": {
+                "partitions": [
+                    {"name": "split", "whole": "whole", "parts": ["part_a", "part_b"]}
+                ]
+            },
+        }
+    )
+    assert config.validations.partitions[0].parts == ("part_a", "part_b")
 
 
 def test_load_config_rejects_non_mapping_validations(tmp_path: Path) -> None:

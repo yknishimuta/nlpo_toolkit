@@ -265,9 +265,6 @@ def test_dry_run_reports_comparison_and_empty_reference(tmp_path: Path, capsys: 
         request=CorpusPreparationRequest(project_root, config_path),
         dependencies=CorpusPlanningDependencies(
             load_config=load_config,
-            cleaner_loader=lambda: pytest.fail(
-                "cleaner loader must not be called"
-            ),
             cleaner_inspector=inspect_cleaner_config,
         ),
     )

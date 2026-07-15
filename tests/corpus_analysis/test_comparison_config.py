@@ -68,10 +68,6 @@ def test_load_config_accepts_valid_comparison(tmp_path: Path) -> None:
             "must be different",
         ),
         (
-            "- {name: comparison_1, group_a: corpus_a, group_b: missing_group}",
-            "unknown group_b",
-        ),
-        (
             "- {name: comparison_1, group_a: corpus_a, group_b: corpus_b, scale: 0}",
             "scale",
         ),

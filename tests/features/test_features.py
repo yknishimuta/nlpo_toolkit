@@ -40,6 +40,7 @@ from nlpo_toolkit.corpus_analysis.config import NLPConfig
 from nlpo_toolkit.corpus_analysis.ports import (
     AnalysisDependencies,
     CorpusPlanningDependencies,
+    CorpusPreparationDependencies,
     FeatureCommandDependencies,
 )
 from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
@@ -84,9 +85,9 @@ def _dependencies(cleaner=None) -> FeatureCommandDependencies:
     return FeatureCommandDependencies(
         planning=CorpusPlanningDependencies(
             load_config=load_config,
-            cleaner_loader=cleaner_loader,
             cleaner_inspector=inspect_cleaner_config,
         ),
+        preparation=CorpusPreparationDependencies(cleaner_loader=cleaner_loader),
         analysis=AnalysisDependencies(
             backend_factory=_backend_factory,
             extraction_policy=AnalysisExtractionPolicy(),
@@ -425,9 +426,10 @@ def test_run_features_accepts_backend_factory(tmp_path: Path) -> None:
         FeatureRequest(
             corpus=CorpusPreparationRequest(tmp_path, config_path),
         ),
-        dependencies=FeatureCommandDependencies(
-            planning=base.planning,
-            analysis=AnalysisDependencies(
+            dependencies=FeatureCommandDependencies(
+                planning=base.planning,
+                preparation=base.preparation,
+                analysis=AnalysisDependencies(
                 backend_factory=recording_factory,
                 extraction_policy=base.analysis.extraction_policy,
             ),
@@ -544,6 +546,7 @@ def test_feature_command_applies_one_shared_filter_and_loads_roman_exceptions_on
     dependencies = _dependencies()
     dependencies = FeatureCommandDependencies(
         planning=dependencies.planning,
+        preparation=dependencies.preparation,
         analysis=AnalysisDependencies(
             backend_factory=lambda config: BuiltNLPBackend(
                 backend=nlp,

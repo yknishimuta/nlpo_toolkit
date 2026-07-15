@@ -6,7 +6,8 @@ from nlpo_toolkit.corpus_analysis.cleaner_runtime import (
     CleanerExecutionError,
     CleanerUnavailableError,
 )
-from nlpo_toolkit.corpus_analysis.corpus import CleanerPlan, execute_preprocess
+from nlpo_toolkit.corpus_analysis.ports import CorpusPreparationDependencies
+from nlpo_toolkit.corpus_analysis.preprocessing import CleanerPlan, execute_preprocess
 from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 
 
@@ -28,7 +29,8 @@ def test_no_preprocess_does_not_load_cleaner() -> None:
     def failing_loader():
         raise AssertionError("cleaner must not be loaded")
 
-    assert execute_preprocess(None, cleaner_loader=failing_loader) is None
+    dependencies = CorpusPreparationDependencies(cleaner_loader=failing_loader)
+    assert execute_preprocess(None, dependencies=dependencies) is None
 
 
 def test_cleaner_loader_failure_is_not_silent(tmp_path: Path) -> None:
@@ -36,7 +38,10 @@ def test_cleaner_loader_failure_is_not_silent(tmp_path: Path) -> None:
         raise CleanerUnavailableError("cleaner unavailable")
 
     with pytest.raises(CleanerUnavailableError, match="cleaner unavailable"):
-        execute_preprocess(_plan(tmp_path), cleaner_loader=failing_loader)
+        execute_preprocess(
+            _plan(tmp_path),
+            dependencies=CorpusPreparationDependencies(cleaner_loader=failing_loader),
+        )
 
 
 def test_cleaner_exception_keeps_cause(tmp_path: Path) -> None:
@@ -46,7 +51,10 @@ def test_cleaner_exception_keeps_cause(tmp_path: Path) -> None:
             raise RuntimeError("clean failed")
 
     with pytest.raises(CleanerExecutionError, match="clean failed") as caught:
-        execute_preprocess(_plan(tmp_path), cleaner=FailingCleaner())
+        execute_preprocess(
+            _plan(tmp_path),
+            dependencies=CorpusPreparationDependencies(cleaner_loader=lambda: FailingCleaner()),
+        )
     assert isinstance(caught.value.__cause__, RuntimeError)
 
 
@@ -58,7 +66,10 @@ def test_failure_status_is_rejected(tmp_path: Path, status: object) -> None:
             return status
 
     with pytest.raises(CleanerExecutionError, match="exit code"):
-        execute_preprocess(_plan(tmp_path), cleaner=Cleaner())
+        execute_preprocess(
+            _plan(tmp_path),
+            dependencies=CorpusPreparationDependencies(cleaner_loader=lambda: Cleaner()),
+        )
 
 
 @pytest.mark.parametrize("status", [0, None])
@@ -68,11 +79,17 @@ def test_success_status_is_accepted(tmp_path: Path, status: object) -> None:
         def main(argv):
             return status
 
-    assert execute_preprocess(_plan(tmp_path), cleaner=Cleaner()) == (
+    assert execute_preprocess(
+        _plan(tmp_path),
+        dependencies=CorpusPreparationDependencies(cleaner_loader=lambda: Cleaner()),
+    ) == (
         tmp_path / "cleaned"
     ).resolve()
 
 
 def test_missing_main_is_rejected(tmp_path: Path) -> None:
     with pytest.raises(CleanerUnavailableError, match="callable.*main"):
-        execute_preprocess(_plan(tmp_path), cleaner=object())
+        execute_preprocess(
+            _plan(tmp_path),
+            dependencies=CorpusPreparationDependencies(cleaner_loader=object),
+        )

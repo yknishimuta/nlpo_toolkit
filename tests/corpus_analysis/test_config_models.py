@@ -207,8 +207,7 @@ def test_app_config_cross_section_validation() -> None:
             }
         },
     ):
-        with pytest.raises(ValueError, match="unknown group"):
-            parse_config({**groups_raw(), **section})
+        assert parse_config({**groups_raw(), **section})
 
 
 def test_yaml_per_file_rejects_count_only_specs_but_groups_accepts_them() -> None:
