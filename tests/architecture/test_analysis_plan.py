@@ -86,7 +86,7 @@ def test_consumers_use_the_correct_planning_stage() -> None:
         Path("nlpo_toolkit/corpus_analysis/dry_run.py")
     )
     features_imports = _imported_names(
-        Path("nlpo_toolkit/corpus_analysis/features.py")
+        Path("nlpo_toolkit/corpus_analysis/features/service.py")
     )
     ngram_imports = _imported_names(
         Path("nlpo_toolkit/corpus_analysis/ngram.py")
@@ -171,7 +171,7 @@ def test_dry_run_has_no_preparation_dependencies_or_calls() -> None:
 
 def test_command_routes_use_explicit_planning_stages() -> None:
     runtime = _imported_names(Path("nlpo_toolkit/corpus_analysis/runtime.py"))
-    features = _imported_names(Path("nlpo_toolkit/corpus_analysis/features.py"))
+    features = _imported_names(Path("nlpo_toolkit/corpus_analysis/features/service.py"))
     ngram = _imported_names(Path("nlpo_toolkit/corpus_analysis/ngram.py"))
     dry_run = _imported_names(Path("nlpo_toolkit/corpus_analysis/dry_run.py"))
     assert {"prepare_count_corpus_session", "start_nlp_execution_session"} <= runtime

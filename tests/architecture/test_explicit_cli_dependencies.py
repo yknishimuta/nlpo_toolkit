@@ -1,7 +1,7 @@
 from pathlib import Path
 import inspect
 
-from nlpo_toolkit.corpus_analysis import features
+from nlpo_toolkit.corpus_analysis.features.service import execute_feature_command
 from nlpo_toolkit.corpus_analysis.cli import count as count_cli
 from nlpo_toolkit.corpus_analysis.cli import features as features_cli
 from nlpo_toolkit.corpus_analysis.runner import run
@@ -31,7 +31,7 @@ def test_cli_has_no_monkeypatch_detection() -> None:
 def test_runner_and_features_have_no_legacy_pipeline_arguments() -> None:
     runner_parameters = inspect.signature(run).parameters
     feature_parameters = inspect.signature(
-        features.execute_feature_command
+        execute_feature_command
     ).parameters
     assert "build_pipeline_fn" not in runner_parameters
     assert "build_sentence_splitter_fn" not in runner_parameters

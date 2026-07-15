@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from tests.corpus_analysis.fake_nlp import corpus_request
 from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
+from nlpo_toolkit.corpus_analysis.analysis_policy import AnalysisExtractionPolicy
 from collections import Counter
 
 import sys
@@ -33,7 +34,8 @@ from nlpo_toolkit.backends.transformers_backend import (
     TransformersBackend,
 )
 from nlpo_toolkit.corpus_analysis.config import NLPConfig, load_config
-from nlpo_toolkit.corpus_analysis.features import FeatureOptions, build_feature_rows
+from nlpo_toolkit.corpus_analysis.features.models import FeatureOptions
+from nlpo_toolkit.corpus_analysis.features.engine import build_feature_matrix
 from tests.corpus_analysis.fake_nlp import runner_dependencies
 
 
@@ -84,10 +86,11 @@ def test_backend_package_imports_without_legacy_adapter() -> None:
 def test_fake_backend_works_for_features() -> None:
     backend = FakeBackend()
 
-    rows = build_feature_rows(
-        (PreparedCorpus("group_a", (Path("a.txt"),), "ignored", "ignored", Counter()),),
-        backend,
-        FeatureOptions(),
+    rows = build_feature_matrix(
+        corpora=(PreparedCorpus("group_a", (Path("a.txt"),), "ignored", "ignored", Counter()),),
+        nlp=backend,
+        extraction_policy=AnalysisExtractionPolicy(),
+        options=FeatureOptions(),
     )
     assert rows[0]["token_count"] == 2
 

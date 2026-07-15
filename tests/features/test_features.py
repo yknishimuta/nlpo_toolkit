@@ -8,21 +8,17 @@ from pathlib import Path
 import pytest
 
 from nlpo_toolkit.corpus_analysis import cli
-from nlpo_toolkit.corpus_analysis.features import (
-    FeatureError,
-    FeatureCommandResult,
-    FeatureFilterPolicy,
-    FeatureOptions,
-    FeatureRequest,
-    build_feature_rows,
-    compute_basic_features,
-    compute_mfw_features,
-    compute_upos_features,
-    select_mfw,
-    execute_feature_command,
-    filter_feature_records,
-    safe_feature_name,
+from nlpo_toolkit.corpus_analysis.features.errors import FeatureError
+from nlpo_toolkit.corpus_analysis.features.models import (
+    AnalyzedFeatureCorpus, FeatureCommandResult, FeatureFilterPolicy,
+    FeatureOptions, FeatureRequest, FeatureRow,
 )
+from nlpo_toolkit.corpus_analysis.features.engine import build_feature_matrix
+from nlpo_toolkit.corpus_analysis.features.filtering import filter_feature_records, safe_feature_name
+from nlpo_toolkit.corpus_analysis.features.lexical import compute_basic_features
+from nlpo_toolkit.corpus_analysis.features.mfw import compute_mfw_features, select_mfw_terms
+from nlpo_toolkit.corpus_analysis.features.upos import compute_upos_features
+from nlpo_toolkit.corpus_analysis.features.service import execute_feature_command
 from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
 from nlpo_toolkit.corpus_analysis.cli.output import write_feature_result
 from nlpo_toolkit.corpus_analysis.analysis_records import (
@@ -79,6 +75,11 @@ def _backend_factory(config: NLPConfig) -> BuiltNLPBackend:
 
 def _prepared(group: str, path: Path, text: str) -> PreparedCorpus:
     return PreparedCorpus(group, (path,), text, text, Counter())
+
+
+def _analyzed(records, text: str, *, raw: int, sentences: int, files: int = 1):
+    source = PreparedCorpus("g", tuple(Path(f"{index}.txt") for index in range(files)), text, text, Counter())
+    return AnalyzedFeatureCorpus(source, raw, sentences, tuple(records))
 
 
 def _dependencies(cleaner=None) -> FeatureCommandDependencies:
@@ -163,14 +164,7 @@ def test_compute_basic_features_values() -> None:
     ]
 
     feature_records = filter_feature_records(records, policy=FeatureFilterPolicy())
-    row = compute_basic_features(
-        feature_records,
-        "Rosa amat. Rosa",
-        "g",
-        1,
-        raw_token_count=len(records),
-        sentence_count=2,
-    )
+    row = compute_basic_features(_analyzed(feature_records, "Rosa amat. Rosa", raw=len(records), sentences=2))
 
     assert row["sentence_count"] == 2
     assert row["token_count"] == 4
@@ -202,18 +196,12 @@ def test_compute_upos_features_values() -> None:
 def test_missing_lemma_falls_back_to_surface_for_basic_and_mfw() -> None:
     records = [_record("Rosa", None, "NOUN", 0)]
 
-    row = compute_basic_features(
-        records,
-        "Rosa",
-        "g",
-        1,
-        raw_token_count=1,
-        sentence_count=1,
-    )
+    analyzed = _analyzed(records, "Rosa", raw=1, sentences=1)
+    row = compute_basic_features(analyzed)
 
     assert row["lemma_type_count"] == 1
-    assert select_mfw([records], 1, "lemma") == ["rosa"]
-    assert compute_mfw_features(records, ["rosa"], "lemma")["mfw_rosa"] == 1.0
+    assert select_mfw_terms([analyzed], count=1, field="lemma") == ("rosa",)
+    assert compute_mfw_features(records, terms=["rosa"], field="lemma")["mfw_rosa"] == 1.0
 
 
 def test_sentence_count_uses_chunk_and_sentence_index() -> None:
@@ -222,14 +210,7 @@ def test_sentence_count_uses_chunk_and_sentence_index() -> None:
         _record("b", "b", "NOUN", 0, chunk_index=1),
     ]
 
-    row = compute_basic_features(
-        records,
-        "a b",
-        "g",
-        1,
-        raw_token_count=2,
-        sentence_count=2,
-    )
+    row = compute_basic_features(_analyzed(records, "a b", raw=2, sentences=2))
 
     assert row["sentence_count"] == 2
 
@@ -241,21 +222,15 @@ def test_missing_upos_and_punctuation_preserve_feature_denominators() -> None:
     ]
 
     feature_records = filter_feature_records(records, policy=FeatureFilterPolicy())
-    basic = compute_basic_features(
-        feature_records,
-        "Rosa.",
-        "g",
-        1,
-        raw_token_count=2,
-        sentence_count=1,
-    )
+    analyzed = _analyzed(feature_records, "Rosa.", raw=2, sentences=1)
+    basic = compute_basic_features(analyzed)
     upos = compute_upos_features(feature_records)
 
     assert basic["token_count"] == 2
     assert basic["word_token_count"] == 1
     assert upos["upos_NOUN_count"] == 0
     assert upos["content_word_ratio"] == 0.0
-    assert select_mfw([feature_records], 5, "token") == ["rosa"]
+    assert select_mfw_terms([analyzed], count=5, field="token") == ("rosa",)
 
 
 def test_feature_filter_is_shared_by_basic_upos_and_mfw() -> None:
@@ -272,17 +247,11 @@ def test_feature_filter_is_shared_by_basic_upos_and_mfw() -> None:
             drop_roman_numerals=True,
         ),
     )
-    basic = compute_basic_features(
-        feature_records,
-        "xiv a rosa",
-        "g",
-        1,
-        raw_token_count=4,
-        sentence_count=1,
-    )
+    analyzed = _analyzed(feature_records, "xiv a rosa", raw=4, sentences=1)
+    basic = compute_basic_features(analyzed)
     upos = compute_upos_features(feature_records)
-    terms = select_mfw([feature_records], 3, "token")
-    mfw = compute_mfw_features(feature_records, terms, "token")
+    terms = select_mfw_terms([analyzed], count=3, field="token")
+    mfw = compute_mfw_features(feature_records, terms=terms, field="token")
 
     assert [record.token for record in feature_records] == ["rosa"]
     assert basic["word_token_count"] == 1
@@ -290,7 +259,7 @@ def test_feature_filter_is_shared_by_basic_upos_and_mfw() -> None:
     assert upos["upos_NOUN_count"] == 1
     assert upos["upos_NUM_count"] == 0
     assert upos["upos_NOUN_ratio"] == 1.0
-    assert terms == ["rosa"]
+    assert terms == ("rosa",)
     assert mfw["mfw_rosa"] == 1.0
 
 
@@ -303,7 +272,7 @@ def test_features_roman_policy_uses_shared_surface_exceptions() -> None:
     ) == records
 
 
-def test_build_feature_rows_chunks_through_shared_extractor() -> None:
+def test_build_feature_matrix_chunks_through_shared_extractor() -> None:
     calls: list[str] = []
 
     class ChunkNLP:
@@ -320,10 +289,11 @@ def test_build_feature_rows_chunks_through_shared_extractor() -> None:
                 text=text,
             )
 
-    rows = build_feature_rows(
-        (_prepared("g", Path("a.txt"), "Rosa amat"),),
-        ChunkNLP(),
-        FeatureOptions(extraction_policy=AnalysisExtractionPolicy(chunk_chars=5)),
+    rows = build_feature_matrix(
+        corpora=(_prepared("g", Path("a.txt"), "Rosa amat"),),
+        nlp=ChunkNLP(),
+        extraction_policy=AnalysisExtractionPolicy(chunk_chars=5),
+        options=FeatureOptions(),
     )
 
     assert len(calls) == 2
@@ -360,22 +330,23 @@ def test_count_and_features_share_chunk_boundaries() -> None:
             policy=policy,
         )
     )
-    build_feature_rows(
-        (_prepared("g", Path("a.txt"), "Rosa amat"),),
-        feature_backend,
-        FeatureOptions(extraction_policy=policy),
+    build_feature_matrix(
+        corpora=(_prepared("g", Path("a.txt"), "Rosa amat"),),
+        nlp=feature_backend,
+        extraction_policy=policy,
+        options=FeatureOptions(),
     )
     assert count_backend.calls == feature_backend.calls
 
 
-def test_build_feature_rows_mfw_lemma_and_token() -> None:
-    groups_texts = (
+def test_build_feature_matrix_mfw_lemma_and_token() -> None:
+    corpora = (
         _prepared("g1", Path("a.txt"), "Rosa amat et puella."),
         _prepared("g2", Path("b.txt"), "Rosa in villa currit."),
     )
 
-    lemma_rows = build_feature_rows(groups_texts, DummyNLP(), FeatureOptions(mfw=2, field="lemma"))
-    token_rows = build_feature_rows(groups_texts, DummyNLP(), FeatureOptions(mfw=2, field="token"))
+    lemma_rows = build_feature_matrix(corpora=corpora, nlp=DummyNLP(), extraction_policy=AnalysisExtractionPolicy(), options=FeatureOptions(mfw=2, field="lemma"))
+    token_rows = build_feature_matrix(corpora=corpora, nlp=DummyNLP(), extraction_policy=AnalysisExtractionPolicy(), options=FeatureOptions(mfw=2, field="token"))
 
     assert "mfw_rosa" in lemma_rows[0]
     assert "mfw_amo" in lemma_rows[0] or "mfw_curro" in lemma_rows[0]
@@ -384,16 +355,25 @@ def test_build_feature_rows_mfw_lemma_and_token() -> None:
 
 
 def test_write_feature_matrix_csv_and_tsv() -> None:
-    rows = [{"group": "g", "token_count": 2, "mean_token_length": 4.5}]
+    rows = (FeatureRow.from_mapping({"group": "g", "token_count": 2, "mean_token_length": 4.5}),)
     csv_out = io.StringIO()
     tsv_out = io.StringIO()
 
-    result = FeatureCommandResult(rows=tuple(rows))
+    result = FeatureCommandResult(rows=rows)
     write_feature_result(result, stream=csv_out, output_format="csv")
     write_feature_result(result, stream=tsv_out, output_format="tsv")
 
     assert "group,token_count,mean_token_length" in csv_out.getvalue()
     assert "group\ttoken_count\tmean_token_length" in tsv_out.getvalue()
+
+
+def test_feature_row_copies_and_freezes_its_mapping() -> None:
+    source = {"group": "g", "token_count": 2}
+    row = FeatureRow.from_mapping(source)
+    source["token_count"] = 3
+    assert row["token_count"] == 2
+    with pytest.raises(TypeError):
+        row.values["token_count"] = 4  # type: ignore[index]
 
 
 def test_run_features_one_group_writes_csv(tmp_path: Path) -> None:
@@ -492,7 +472,7 @@ def test_feature_command_applies_one_shared_filter_and_loads_roman_exceptions_on
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    import nlpo_toolkit.corpus_analysis.features as features_mod
+    import nlpo_toolkit.corpus_analysis.features.engine as features_mod
     import nlpo_toolkit.corpus_analysis.execution_session as session_mod
 
     (tmp_path / "input").mkdir()
@@ -713,7 +693,7 @@ def test_run_features_auto_single_cleaned_errors_on_multiple(tmp_path: Path) -> 
 
 def test_mfw_negative_errors(tmp_path: Path) -> None:
     with pytest.raises(FeatureError, match="non-negative"):
-        build_feature_rows([], DummyNLP(), FeatureOptions(mfw=-1))
+        build_feature_matrix(corpora=(), nlp=DummyNLP(), extraction_policy=AnalysisExtractionPolicy(), options=FeatureOptions(mfw=-1))
 
 
 def test_safe_feature_name_replaces_punctuation() -> None:

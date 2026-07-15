@@ -147,7 +147,7 @@ def test_application_services_use_ports_not_composition() -> None:
         "runtime.py",
         "run_plan.py",
         "count_command.py",
-        "features.py",
+        "features/service.py",
         "ngram.py",
         "dry_run.py",
     )
@@ -266,7 +266,7 @@ def test_fresh_interpreter_imports_all_dependency_consumers() -> None:
         "nlpo_toolkit.corpus_analysis.runner",
         "nlpo_toolkit.corpus_analysis.runtime",
         "nlpo_toolkit.corpus_analysis.count_command",
-        "nlpo_toolkit.corpus_analysis.features",
+        "nlpo_toolkit.corpus_analysis.features.service",
         "nlpo_toolkit.corpus_analysis.ngram",
     )
     code = "; ".join(f"import {module}" for module in modules)

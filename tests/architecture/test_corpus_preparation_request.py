@@ -5,7 +5,7 @@ from dataclasses import fields
 from pathlib import Path
 
 from nlpo_toolkit.corpus_analysis.count_command import CountRequest
-from nlpo_toolkit.corpus_analysis.features import FeatureRequest
+from nlpo_toolkit.corpus_analysis.features.models import FeatureRequest
 from nlpo_toolkit.corpus_analysis.ngram import ConfigNgramRequest
 from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
 
@@ -37,7 +37,7 @@ def test_command_requests_do_not_redeclare_corpus_preparation_fields() -> None:
 def test_command_services_pass_composed_request_without_expanding_old_kwargs() -> None:
     paths = (
         Path("nlpo_toolkit/corpus_analysis/count_command.py"),
-        Path("nlpo_toolkit/corpus_analysis/features.py"),
+        Path("nlpo_toolkit/corpus_analysis/features/service.py"),
         Path("nlpo_toolkit/corpus_analysis/ngram.py"),
     )
     forbidden_keywords = {

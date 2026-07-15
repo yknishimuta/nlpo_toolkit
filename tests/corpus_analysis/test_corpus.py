@@ -39,7 +39,8 @@ from nlpo_toolkit.corpus_analysis.ports import (
     NLPExecutionDependencies,
 )
 from nlpo_toolkit.corpus_analysis.ngram import ConfigNgramRequest
-from nlpo_toolkit.corpus_analysis.features import FeatureRequest
+from nlpo_toolkit.corpus_analysis.features.models import FeatureRequest
+from nlpo_toolkit.corpus_analysis.features.service import execute_feature_command
 from tests.corpus_analysis.fake_nlp import (
     FakeNLPBackend,
     fake_backend_factory,
@@ -262,7 +263,7 @@ def test_prepare_corpus_text_fails_before_normalization_on_read_error(
 
 
 def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Path, monkeypatch) -> None:
-    import nlpo_toolkit.corpus_analysis.features as features_mod
+    import nlpo_toolkit.corpus_analysis.features.service as features_mod
     import nlpo_toolkit.corpus_analysis.ngram as ngram_mod
     import nlpo_toolkit.corpus_analysis.runner as runner_mod
 

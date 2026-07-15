@@ -4,7 +4,7 @@ import ast
 from dataclasses import fields
 from pathlib import Path
 
-from nlpo_toolkit.corpus_analysis.features import FeatureOptions
+from nlpo_toolkit.corpus_analysis.features.models import FeatureOptions
 
 
 def test_default_chunk_size_has_one_source() -> None:
@@ -30,7 +30,7 @@ def test_cache_has_no_independent_chunk_defaults() -> None:
     assert "DEFAULT_PROCESSORS" not in source
 
 
-def test_feature_options_uses_extraction_policy() -> None:
+def test_feature_options_does_not_store_extraction_policy() -> None:
     names = {field.name for field in fields(FeatureOptions)}
     assert "chunk_chars" not in names
-    assert "extraction_policy" in names
+    assert "extraction_policy" not in names

@@ -6,6 +6,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, TextIO
 
+from ..features.models import FeatureCommandResult, FeatureScalar
+
 
 @contextmanager
 def open_cli_output(*, path: Path | None, stdout: TextIO) -> Iterator[TextIO]:
@@ -34,7 +36,12 @@ def write_mapping_rows(
     writer.writerows(rows)
 
 
-def write_feature_result(result, *, stream: TextIO, output_format: str) -> None:
+def write_feature_result(
+    result: FeatureCommandResult,
+    *,
+    stream: TextIO,
+    output_format: str,
+) -> None:
     rows = list(result.rows)
     columns: list[str] = []
     for row in rows:
@@ -42,7 +49,7 @@ def write_feature_result(result, *, stream: TextIO, output_format: str) -> None:
             if key not in columns:
                 columns.append(key)
 
-    def format_value(value: Any) -> Any:
+    def format_value(value: FeatureScalar | str) -> FeatureScalar:
         if isinstance(value, float):
             if value.is_integer():
                 return str(int(value))

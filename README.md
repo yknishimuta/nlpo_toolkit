@@ -104,6 +104,12 @@ backend, extraction policy, and Roman-numeral exceptions shared by Count and
 Features. Count then adds its sentence splitter and output/analysis pipeline;
 config-input N-gram uses only the corpus session and starts no NLP backend.
 
+Features keeps application orchestration separate from calculation:
+`features.service` connects the execution sessions to `features.engine`, while
+the engine extracts analysis records once per prepared corpus and applies the
+eligibility filter once. Lexical, UPOS, and MFW modules then calculate their
+columns from that shared filtered record population.
+
 Group analysis state has one canonical store: the immutable
 `AnalysisResults.groups` mapping. Each `GroupAnalysisResult` owns its files,
 counter, reference-tag counts, output files, trace path, and token artifact.

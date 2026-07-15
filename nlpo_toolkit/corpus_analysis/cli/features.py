@@ -5,7 +5,9 @@ from pathlib import Path
 
 from ..cleaner_runtime import CleanerError
 from ..composition import default_feature_command_dependencies
-from ..features import FeatureError, FeatureRequest, execute_feature_command
+from ..features.errors import FeatureError
+from ..features.models import FeatureRequest
+from ..features.service import execute_feature_command
 from .common import (
     CLIContext,
     add_empty_group_argument,

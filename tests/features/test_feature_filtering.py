@@ -7,18 +7,20 @@ from pathlib import Path
 import pytest
 
 from nlpo_toolkit.corpus_analysis.analysis_records import NLPAnalysisRecord
-from nlpo_toolkit.corpus_analysis.features import (
-    FeatureFilterPolicy,
-    FeatureOptions,
-    build_feature_rows,
-    compute_basic_features,
-    compute_mfw_features,
-    compute_upos_features,
-    filter_feature_records,
-    select_mfw,
-)
+from nlpo_toolkit.corpus_analysis.features.models import AnalyzedFeatureCorpus, FeatureFilterPolicy, FeatureOptions
+from nlpo_toolkit.corpus_analysis.features.engine import build_feature_matrix
+from nlpo_toolkit.corpus_analysis.features.filtering import filter_feature_records
+from nlpo_toolkit.corpus_analysis.features.lexical import compute_basic_features
+from nlpo_toolkit.corpus_analysis.features.mfw import compute_mfw_features, select_mfw_terms
+from nlpo_toolkit.corpus_analysis.features.upos import compute_upos_features
 from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
 from nlpo_toolkit.nlp.contracts import NLPDocument, NLPSentence, NLPToken
+from nlpo_toolkit.corpus_analysis.analysis_policy import AnalysisExtractionPolicy
+
+
+def _analyzed(records, text: str, *, raw: int, sentences: int, files: int = 1):
+    source = PreparedCorpus("g", tuple(Path(f"{index}.txt") for index in range(files)), text, text, Counter())
+    return AnalyzedFeatureCorpus(source, raw, sentences, tuple(records))
 
 
 def _record(
@@ -123,14 +125,7 @@ def test_filter_policy_validates_and_is_frozen() -> None:
 
 def test_basic_calculator_trusts_filtered_contract_and_structural_metadata() -> None:
     records = (_record(".", ".", "PUNCT"),)
-    row = compute_basic_features(
-        records,
-        ".",
-        "g",
-        2,
-        raw_token_count=7,
-        sentence_count=2,
-    )
+    row = compute_basic_features(_analyzed(records, ".", raw=7, sentences=2, files=2))
     assert row["file_count"] == 2
     assert row["token_count"] == 7
     assert row["word_token_count"] == 1
@@ -139,14 +134,8 @@ def test_basic_calculator_trusts_filtered_contract_and_structural_metadata() -> 
 
 
 def test_empty_filtered_records_are_safe_for_all_calculators() -> None:
-    basic = compute_basic_features(
-        (),
-        "xiv",
-        "g",
-        1,
-        raw_token_count=1,
-        sentence_count=1,
-    )
+    analyzed = _analyzed((), "xiv", raw=1, sentences=1)
+    basic = compute_basic_features(analyzed)
     upos = compute_upos_features(())
     assert basic["token_count"] == 1
     assert basic["word_token_count"] == 0
@@ -159,8 +148,8 @@ def test_empty_filtered_records_are_safe_for_all_calculators() -> None:
     ):
         assert basic[key] == 0.0
     assert all(value == 0 or value == 0.0 for value in upos.values())
-    assert select_mfw([()], 10, "lemma") == []
-    assert compute_mfw_features((), ["rosa"], "lemma") == {"mfw_rosa": 0.0}
+    assert select_mfw_terms([analyzed], count=10, field="lemma") == ()
+    assert compute_mfw_features((), terms=["rosa"], field="lemma") == {"mfw_rosa": 0.0}
 
 
 def test_upos_and_mfw_denominators_use_the_same_filtered_records() -> None:
@@ -172,8 +161,9 @@ def test_upos_and_mfw_denominators_use_the_same_filtered_records() -> None:
     assert upos["upos_NOUN_count"] == 1
     assert upos["upos_NOUN_ratio"] == 0.5
     assert upos["content_word_ratio"] == 0.5
-    assert select_mfw([records], 2, "lemma") == ["amo", "rosa"]
-    assert compute_mfw_features(records, ["amo", "rosa"], "lemma") == {
+    analyzed = _analyzed(records, "rosa amat", raw=2, sentences=1)
+    assert select_mfw_terms([analyzed], count=2, field="lemma") == ("amo", "rosa")
+    assert compute_mfw_features(records, terms=["amo", "rosa"], field="lemma") == {
         "mfw_amo": 0.5,
         "mfw_rosa": 0.5,
     }
@@ -181,7 +171,8 @@ def test_upos_and_mfw_denominators_use_the_same_filtered_records() -> None:
 
 def test_mfw_tie_breaking_remains_deterministic() -> None:
     records = (_record("beta", "beta"), _record("alpha", "alpha"))
-    assert select_mfw([records], 2, "lemma") == ["alpha", "beta"]
+    analyzed = _analyzed(records, "beta alpha", raw=2, sentences=1)
+    assert select_mfw_terms([analyzed], count=2, field="lemma") == ("alpha", "beta")
 
 
 def test_mfw_field_changes_values_but_not_basic_or_upos_population() -> None:
@@ -209,15 +200,17 @@ def test_mfw_field_changes_values_but_not_basic_or_upos_population() -> None:
     source = (
         PreparedCorpus("g", (Path("a.txt"),), "xiv a Rosa .", "xiv a Rosa .", Counter()),
     )
-    lemma_row = build_feature_rows(
-        source,
-        NLP(),
-        FeatureOptions(field="lemma", mfw=1, filter_policy=policy),
+    lemma_row = build_feature_matrix(
+        corpora=source,
+        nlp=NLP(),
+        extraction_policy=AnalysisExtractionPolicy(),
+        options=FeatureOptions(field="lemma", mfw=1, filter_policy=policy),
     )[0]
-    token_row = build_feature_rows(
-        source,
-        NLP(),
-        FeatureOptions(field="token", mfw=1, filter_policy=policy),
+    token_row = build_feature_matrix(
+        corpora=source,
+        nlp=NLP(),
+        extraction_policy=AnalysisExtractionPolicy(),
+        options=FeatureOptions(field="token", mfw=1, filter_policy=policy),
     )[0]
 
     lemma_shared = {key: value for key, value in lemma_row.items() if not key.startswith("mfw_")}

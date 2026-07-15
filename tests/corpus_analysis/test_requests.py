@@ -11,7 +11,7 @@ from nlpo_toolkit.corpus_analysis.cli.common import (
 )
 from nlpo_toolkit.corpus_analysis.cli.main import build_parser
 from nlpo_toolkit.corpus_analysis.count_command import CountRequest
-from nlpo_toolkit.corpus_analysis.features import FeatureRequest
+from nlpo_toolkit.corpus_analysis.features.models import FeatureRequest
 from nlpo_toolkit.corpus_analysis.ngram import ConfigNgramRequest, TokenNgramRequest
 from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
 

@@ -28,7 +28,7 @@ def test_session_and_dependency_fields_are_nonduplicating() -> None:
 
 def test_commands_delegate_preparation_to_session_owner() -> None:
     forbidden = {
-        ROOT / "features.py": {"build_analysis_plan", "prepare_analysis_plan", "prepare_corpora"},
+        ROOT / "features/service.py": {"build_analysis_plan", "prepare_analysis_plan", "prepare_corpora"},
         ROOT / "ngram.py": {"build_analysis_plan", "prepare_analysis_plan", "prepare_corpora", "start_nlp_execution_session"},
         ROOT / "runtime.py": {"build_count_plan", "prepare_count_plan", "prepare_corpora"},
     }

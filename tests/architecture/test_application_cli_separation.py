@@ -11,7 +11,7 @@ from nlpo_toolkit.corpus_analysis.cli.common import CLIContext
 from nlpo_toolkit.corpus_analysis.concordance import build_concordance
 from nlpo_toolkit.corpus_analysis.count_command import execute_count_command
 from nlpo_toolkit.corpus_analysis.dry_run import execute_dry_run
-from nlpo_toolkit.corpus_analysis.features import execute_feature_command
+from nlpo_toolkit.corpus_analysis.features.service import execute_feature_command
 from nlpo_toolkit.corpus_analysis.ngram import (
     execute_config_ngram_command,
     execute_token_ngram_command,
@@ -21,7 +21,7 @@ from nlpo_toolkit.corpus_analysis.ngram import (
 APPLICATION_MODULES = (
     Path("nlpo_toolkit/corpus_analysis/count_command.py"),
     Path("nlpo_toolkit/corpus_analysis/dry_run.py"),
-    Path("nlpo_toolkit/corpus_analysis/features.py"),
+    Path("nlpo_toolkit/corpus_analysis/features/service.py"),
     Path("nlpo_toolkit/corpus_analysis/ngram.py"),
     Path("nlpo_toolkit/corpus_analysis/concordance.py"),
     Path("nlpo_toolkit/corpus_analysis/cache.py"),

@@ -18,7 +18,7 @@ from nlpo_toolkit.corpus_analysis.ports import (
     NLPExecutionDependencies,
     RunnerDependencies,
 )
-from nlpo_toolkit.corpus_analysis.features import execute_feature_command
+from nlpo_toolkit.corpus_analysis.features.service import execute_feature_command
 from nlpo_toolkit.corpus_analysis.ngram import execute_config_ngram_command
 from nlpo_toolkit.corpus_analysis.runner import run
 
