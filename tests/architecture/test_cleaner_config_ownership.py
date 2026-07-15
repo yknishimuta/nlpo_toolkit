@@ -40,9 +40,12 @@ def test_config_references_does_not_interpret_cleaner_keys() -> None:
 
 def test_archive_and_preprocess_do_not_parse_cleaner_yaml() -> None:
     for path in (
-        Path("nlpo_toolkit/corpus_analysis/archive.py"),
         Path("nlpo_toolkit/corpus_analysis/preprocess.py"),
     ):
+        source = path.read_text(encoding="utf-8")
+        assert "yaml" not in source
+        assert "resolve_cleaner_output_dir" not in source
+    for path in Path("nlpo_toolkit/corpus_analysis/archive").glob("*.py"):
         source = path.read_text(encoding="utf-8")
         assert "yaml" not in source
         assert "resolve_cleaner_output_dir" not in source

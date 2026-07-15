@@ -5,13 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from nlpo_toolkit.corpus_analysis.archive import (
-    ArchivedFile,
-    RunArchiveError,
-    create_run_archive,
-    file_sha256,
-    sanitize_run_name,
-)
+from nlpo_toolkit.corpus_analysis.archive.errors import RunArchiveError
+from nlpo_toolkit.corpus_analysis.archive.file_metadata import file_sha256
+from nlpo_toolkit.corpus_analysis.archive.models import ArchivedFile
+from nlpo_toolkit.corpus_analysis.archive.service import create_run_archive
 from nlpo_toolkit.corpus_analysis.archive_types import (
     ArchivedFileCounts,
     RunArchiveRequest,
@@ -71,12 +68,6 @@ def make_run_result(
         summary_path=summary,
         metadata_path=metadata,
     )
-
-
-def test_sanitize_run_name() -> None:
-    assert sanitize_run_name("virgil noun 01") == "virgil_noun_01"
-    with pytest.raises(ValueError):
-        sanitize_run_name("../bad")
 
 
 def test_archive_dtos_reject_ambiguous_or_invalid_values(tmp_path: Path) -> None:

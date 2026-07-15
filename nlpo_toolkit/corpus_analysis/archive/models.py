@@ -1,0 +1,86 @@
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from types import MappingProxyType
+from typing import Mapping
+
+from ..config_references import ConfigFileReference
+
+
+def _validate_relative(path: Path, field: str) -> None:
+    if path.is_absolute() or ".." in path.parts or path in {Path(""), Path(".")}:
+        raise ValueError(f"{field} must be a safe relative path")
+
+
+@dataclass(frozen=True)
+class ArchiveCopySource:
+    source_path: Path
+    destination_relative_path: Path
+
+    def __post_init__(self) -> None:
+        if not self.source_path.is_absolute():
+            raise ValueError("source_path must be absolute")
+        _validate_relative(self.destination_relative_path, "destination_relative_path")
+
+
+@dataclass(frozen=True)
+class ArchivedFile:
+    source_path: Path
+    archive_relative_path: Path
+    sha256: str
+    size_bytes: int
+
+    def __post_init__(self) -> None:
+        if not self.source_path.is_absolute():
+            raise ValueError("ArchivedFile source_path must be absolute")
+        _validate_relative(self.archive_relative_path, "archive_relative_path")
+        if self.size_bytes < 0:
+            raise ValueError("size_bytes must be non-negative")
+        if not re.fullmatch(r"[0-9a-f]{64}", self.sha256):
+            raise ValueError("sha256 must be 64 lowercase hexadecimal characters")
+
+
+@dataclass(frozen=True)
+class ExternalReferenceMetadata:
+    kind: str
+    path: Path
+    sha256: str
+    size_bytes: int
+
+
+@dataclass(frozen=True)
+class ArchiveInventory:
+    project_root: Path
+    archive_directory: Path
+    run_name: str
+    creation_time: datetime
+    command_line: tuple[str, ...]
+    config_path: Path
+    output_dir: Path
+    groups_files: Mapping[str, tuple[Path, ...]]
+    output_sources: tuple[ArchiveCopySource, ...]
+    trace_sources: tuple[ArchiveCopySource, ...]
+    config_snapshot_sources: tuple[ArchiveCopySource, ...]
+    input_sources: tuple[ArchiveCopySource, ...]
+    cleaned_sources: tuple[ArchiveCopySource, ...]
+    input_files: tuple[Path, ...]
+    cleaned_files: tuple[Path, ...]
+    generated_outputs: tuple[Path, ...]
+    metadata_only_references: tuple[ConfigFileReference, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "groups_files", MappingProxyType({
+            name: tuple(files) for name, files in self.groups_files.items()
+        }))
+
+
+@dataclass(frozen=True)
+class ArchiveCopyResult:
+    outputs: tuple[ArchivedFile, ...] = ()
+    traces: tuple[ArchivedFile, ...] = ()
+    config_snapshots: tuple[ArchivedFile, ...] = ()
+    inputs: tuple[ArchivedFile, ...] = ()
+    cleaned: tuple[ArchivedFile, ...] = ()

@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from nlpo_toolkit.corpus_analysis import composition, ports
-from nlpo_toolkit.corpus_analysis.archive import create_run_archive
+from nlpo_toolkit.corpus_analysis.archive.service import create_run_archive
 from nlpo_toolkit.corpus_analysis.config import NLPConfig, load_config
 from nlpo_toolkit.corpus_analysis.runner import run
 

@@ -1,0 +1,2 @@
+class RunArchiveError(RuntimeError):
+    pass

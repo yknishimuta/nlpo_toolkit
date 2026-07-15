@@ -759,6 +759,12 @@ The archive uses the exact input, cleaned, trace, and output paths recorded
 during the current run; it does not rescan corpus or output directories after
 execution.
 
+Internally, archive inventory validates and classifies that exact `RunResult`
+file set, copying executes only the resulting copy plan, and manifest generation
+converts typed file and Git metadata into the existing schema. A thin archive
+service orchestrates those stages and removes only the directory it created if
+any stage fails.
+
 ```bash
 nlpo count \
   --project-root . \

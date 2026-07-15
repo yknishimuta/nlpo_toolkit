@@ -2,11 +2,11 @@ import ast
 from pathlib import Path
 
 
-ARCHIVE = Path("nlpo_toolkit/corpus_analysis/archive.py")
+ARCHIVE = Path("nlpo_toolkit/corpus_analysis/archive")
 
 
 def test_archive_does_not_import_or_call_inventory_discovery_helpers() -> None:
-    source = ARCHIVE.read_text(encoding="utf-8")
+    source = "\n".join(path.read_text(encoding="utf-8") for path in ARCHIVE.glob("*.py"))
     tree = ast.parse(source)
     forbidden = {
         "expand_globs",
@@ -26,7 +26,7 @@ def test_archive_does_not_import_or_call_inventory_discovery_helpers() -> None:
 
 
 def test_archive_does_not_parse_run_metadata_or_config_schema() -> None:
-    source = ARCHIVE.read_text(encoding="utf-8")
+    source = "\n".join(path.read_text(encoding="utf-8") for path in ARCHIVE.glob("*.py"))
     assert "run_meta.json" not in source
     for fragment in (
         "config.groups",

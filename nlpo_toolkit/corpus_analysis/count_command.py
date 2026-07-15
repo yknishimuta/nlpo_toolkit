@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .archive import RunArchiveError
+from .archive.errors import RunArchiveError
 from .archive_types import RunArchiveRequest, RunArchiveResult
 from .cleaner_runtime import CleanerError
 from .config_references import ConfigReferenceError

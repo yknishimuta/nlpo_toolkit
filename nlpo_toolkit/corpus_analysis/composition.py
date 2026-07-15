@@ -16,7 +16,7 @@ from .analysis_policy import (
     AnalysisExtractionPolicy,
     DEFAULT_ANALYSIS_EXTRACTION_POLICY,
 )
-from .archive import create_run_archive
+from .archive.service import create_run_archive
 from .cleaner_runtime import load_default_cleaner
 from .config import NLPConfig, load_config
 from .ports import (

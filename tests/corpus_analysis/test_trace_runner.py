@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from nlpo_toolkit.corpus_analysis.config import load_config
-from nlpo_toolkit.corpus_analysis.archive import create_run_archive
+from nlpo_toolkit.corpus_analysis.archive.service import create_run_archive
 from nlpo_toolkit.corpus_analysis.archive_types import RunArchiveRequest
 from nlpo_toolkit.corpus_analysis import runner as runner_mod
 from tests.corpus_analysis.fake_nlp import fake_backend_factory, runner_dependencies

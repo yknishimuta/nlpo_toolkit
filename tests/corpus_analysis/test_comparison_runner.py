@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
-from nlpo_toolkit.corpus_analysis.archive import create_run_archive
+from nlpo_toolkit.corpus_analysis.archive.service import create_run_archive
 from nlpo_toolkit.corpus_analysis.archive_types import RunArchiveRequest
 from nlpo_toolkit.corpus_analysis.ports import CorpusPlanningDependencies
 from nlpo_toolkit.corpus_analysis.dry_run import execute_dry_run

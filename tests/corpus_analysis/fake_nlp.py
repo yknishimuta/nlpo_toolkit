@@ -26,7 +26,7 @@ from nlpo_toolkit.corpus_analysis.ports import (
     RunnerDependencies,
 )
 from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
-from nlpo_toolkit.corpus_analysis.archive import create_run_archive
+from nlpo_toolkit.corpus_analysis.archive.service import create_run_archive
 from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 
 
