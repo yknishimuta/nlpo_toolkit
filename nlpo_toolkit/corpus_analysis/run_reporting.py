@@ -9,8 +9,8 @@ from typing import Iterable, Sequence
 from nlpo_toolkit.backends import render_backend_info
 
 from .outputs import build_run_meta, collect_runtime_environment, write_run_meta
+from .analysis_results import AnalysisResults
 from .runner_types import (
-    AnalysisResults,
     ComparisonRunResult,
     PartitionRunResult,
     RunContext,
@@ -79,14 +79,15 @@ def build_summary_lines(
     lines.append("")
 
     if plan.config.ref_tags.enabled:
-        for label, counts in analysis.ref_tags_by_group.items():
+        for label, group in analysis.groups.items():
+            counts = group.ref_tag_counts
             lines.append(
                 f"- group={label} ref_tag_types={len(counts)} ref_tag_tokens={sum(counts.values())}"
             )
 
-    if analysis.token_artifacts:
+    if analysis.token_artifact_metadata:
         lines.extend(["", "# Token artifacts", ""])
-        for artifact in analysis.token_artifacts:
+        for artifact in analysis.token_artifact_metadata:
             lines.append(
                 f"- token_artifact={artifact.get('group', '')} "
                 f"path={artifact.get('path', '')} "
@@ -95,8 +96,8 @@ def build_summary_lines(
                 f"schema={artifact.get('schema_version', '')}"
             )
 
-    if analysis.analysis_cache:
-        cache_meta = analysis.analysis_cache
+    cache_meta = analysis.cache_stats.to_dict()
+    if cache_meta:
         lines.extend(["", "# Analysis cache", ""])
         lines.append(
             "analysis_cache "
@@ -173,8 +174,8 @@ def build_final_run_metadata(
     plan = context.plan
     meta = build_run_meta(
         groups_files={
-            label: [str(path) for path in files]
-            for label, files in analysis.files_by_group.items()
+            label: [str(path) for path in group.files]
+            for label, group in analysis.groups.items()
         },
     )
     meta["analysis_unit"] = plan.analysis_unit
@@ -197,12 +198,13 @@ def build_final_run_metadata(
     meta["trace"] = {
         "enabled": plan.config.trace.enabled,
         "files": {
-            label: str(path.resolve())
-            for label, path in analysis.trace_paths.items()
+            label: str(group.trace_path.resolve())
+            for label, group in analysis.groups.items()
+            if group.trace_path is not None
         },
     }
-    meta["token_artifacts"] = list(analysis.token_artifacts)
-    meta["analysis_cache"] = dict(analysis.analysis_cache or {})
+    meta["token_artifacts"] = list(analysis.token_artifact_metadata)
+    meta["analysis_cache"] = analysis.cache_stats.to_dict()
     meta["generated_outputs"] = [str(path.resolve()) for path in generated_outputs]
     return meta
 
@@ -256,8 +258,8 @@ def build_run_result(
 ) -> RunResult:
     plan = context.plan
     groups_files = {
-        label: deduplicate_resolved_paths(files)
-        for label, files in analysis.files_by_group.items()
+        label: deduplicate_resolved_paths(group.files)
+        for label, group in analysis.groups.items()
     }
     used_files = deduplicate_resolved_paths(
         path for files in groups_files.values() for path in files
@@ -275,7 +277,11 @@ def build_run_result(
         cleaned_files = tuple(
             path for path in used_files if path.is_relative_to(cleaned_root)
         )
-    trace_files = deduplicate_resolved_paths(analysis.trace_paths.values())
+    trace_files = deduplicate_resolved_paths(
+        group.trace_path
+        for group in analysis.groups.values()
+        if group.trace_path is not None
+    )
     trace_set = set(trace_files)
     output_files = deduplicate_resolved_paths(
         path for path in report.generated_outputs if Path(path).resolve() not in trace_set

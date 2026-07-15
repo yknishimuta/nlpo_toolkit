@@ -97,6 +97,12 @@ normalization and reference-tag removal. Planning dependencies contain only
 configuration loading and cleaner inspection; cleaner execution is supplied by
 separate preparation dependencies.
 
+Group analysis state has one canonical store: the immutable
+`AnalysisResults.groups` mapping. Each `GroupAnalysisResult` owns its files,
+counter, reference-tag counts, output files, trace path, and token artifact.
+Reporting derives aggregate outputs and metadata from that mapping, while typed
+analysis-cache statistics remain unserialized until the reporting boundary.
+
 To validate the config without running preprocessing or NLP, use `--dry-run`:
 
 ```bash

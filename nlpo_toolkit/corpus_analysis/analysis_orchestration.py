@@ -4,8 +4,9 @@ from typing import Mapping
 
 from . import analysis_execution, analysis_outputs
 from .analysis_cache import AnalysisCacheRunStats
+from .analysis_results import AnalysisResults, GroupAnalysisResult
 from .corpus import PreparedCorpus
-from .runner_types import AnalysisResults, GroupAnalysisResult, RunContext
+from .runner_types import RunContext
 
 __all__ = ["analyze_corpora"]
 
@@ -29,7 +30,7 @@ def _analyze_one_corpus(
     normalization_map: Mapping[str, str] | None,
     known_words: frozenset[str] | None,
     cache_stats: AnalysisCacheRunStats,
-) -> GroupAnalysisResult:
+) -> tuple[str, GroupAnalysisResult]:
     record_result = analysis_execution.execute_record_analysis(
         context=context,
         corpus=corpus,
@@ -46,38 +47,16 @@ def _analyze_one_corpus(
         known_words=known_words,
         token_generated_outputs=record_result.generated_outputs,
     )
-    return GroupAnalysisResult(
-        label=corpus.label,
-        files=tuple(corpus.files),
-        counter=output_result.counter.copy(),
-        ref_tag_counts=corpus.ref_tag_counts,
-        generated_outputs=output_result.generated_outputs,
-        token_artifact=record_result.token_artifact,
-    )
-
-
-def _build_analysis_results(
-    *,
-    groups: tuple[GroupAnalysisResult, ...],
-    output_plan: analysis_outputs.AnalysisOutputPlan,
-    cache_stats: AnalysisCacheRunStats,
-) -> AnalysisResults:
-    token_artifacts = tuple(
-        result.token_artifact
-        for result in groups
-        if result.token_artifact is not None
-    )
-    return AnalysisResults(
-        groups=groups,
-        counters_by_group={result.label: result.counter.copy() for result in groups},
-        files_by_group={result.label: result.files for result in groups},
-        ref_tags_by_group={result.label: result.ref_tag_counts for result in groups},
-        trace_paths=output_plan.trace_paths,
-        generated_outputs=tuple(
-            path for result in groups for path in result.generated_outputs
+    return (
+        corpus.label,
+        GroupAnalysisResult(
+            files=tuple(corpus.files),
+            counter=output_result.counter.copy(),
+            ref_tag_counts=corpus.ref_tag_counts.copy(),
+            output_files=output_result.generated_outputs,
+            trace_path=output_paths.trace,
+            token_artifact=record_result.token_artifact,
         ),
-        token_artifacts=token_artifacts,
-        analysis_cache=cache_stats.to_dict(),
     )
 
 
@@ -88,7 +67,7 @@ def analyze_corpora(context: RunContext) -> AnalysisResults:
     normalization_map = analysis_outputs.load_configured_lemma_normalization(context.plan)
     known_words = analysis_outputs.load_configured_known_words(context.plan)
     cache_stats = analysis_execution.create_analysis_cache_stats(context)
-    groups = tuple(
+    groups = (
         _analyze_one_corpus(
             context=context,
             corpus=corpus,
@@ -99,6 +78,7 @@ def analyze_corpora(context: RunContext) -> AnalysisResults:
         )
         for corpus in context.prepared_corpora
     )
-    return _build_analysis_results(
-        groups=groups, output_plan=output_plan, cache_stats=cache_stats
+    return AnalysisResults.from_groups(
+        groups,
+        cache_stats=cache_stats,
     )

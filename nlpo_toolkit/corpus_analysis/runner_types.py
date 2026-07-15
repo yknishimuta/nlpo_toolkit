@@ -54,28 +54,6 @@ class RunResult:
 
 
 @dataclass(frozen=True)
-class GroupAnalysisResult:
-    label: str
-    files: tuple[Path, ...]
-    counter: Counter[str]
-    ref_tag_counts: Counter[str]
-    generated_outputs: tuple[Path, ...]
-    token_artifact: Mapping[str, object] | None = None
-
-
-@dataclass(frozen=True)
-class AnalysisResults:
-    groups: tuple[GroupAnalysisResult, ...]
-    counters_by_group: Mapping[str, Counter[str]]
-    files_by_group: Mapping[str, tuple[Path, ...]]
-    ref_tags_by_group: Mapping[str, Counter[str]]
-    trace_paths: Mapping[str, Path]
-    generated_outputs: tuple[Path, ...]
-    token_artifacts: tuple[Mapping[str, object], ...] = ()
-    analysis_cache: Mapping[str, object] | None = None
-
-
-@dataclass(frozen=True)
 class DictCheckOutput:
     known: Counter[str]
     unknown: Counter[str]

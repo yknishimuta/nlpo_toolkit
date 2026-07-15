@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 from typing import Mapping
 
@@ -20,12 +21,16 @@ from .partition_validation import (
     write_partition_validation_csv,
     write_partition_validation_json,
 )
+from .analysis_results import AnalysisResults
 from .runner_types import (
-    AnalysisResults,
     ComparisonRunResult,
     PartitionRunResult,
     RunContext,
 )
+
+
+def _group_counters(analysis: AnalysisResults) -> dict[str, Counter[str]]:
+    return {label: group.counter for label, group in analysis.groups.items()}
 
 
 def execute_partition_validations(
@@ -34,7 +39,7 @@ def execute_partition_validations(
     analysis: AnalysisResults,
 ) -> PartitionRunResult:
     plan = context.plan
-    partition_results = validate_partitions(plan.partition_specs, analysis.counters_by_group)
+    partition_results = validate_partitions(plan.partition_specs, _group_counters(analysis))
     summaries: list[Mapping[str, object]] = []
     metadata: list[Mapping[str, object]] = []
     generated_outputs: list[Path] = []
@@ -80,7 +85,7 @@ def execute_group_comparisons(
     plan = context.plan
     comparison_results = run_comparisons(
         specs=plan.comparison_specs,
-        counters=analysis.counters_by_group,
+        counters=_group_counters(analysis),
         analysis_unit=plan.analysis_unit,
     )
     generated_outputs: list[Path] = []

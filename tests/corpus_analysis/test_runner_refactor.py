@@ -8,6 +8,8 @@ from pathlib import Path
 
 from nlpo_toolkit.nlp.contracts import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.analysis_orchestration import analyze_corpora
+from nlpo_toolkit.corpus_analysis.analysis_cache import AnalysisCacheRunStats
+from nlpo_toolkit.corpus_analysis.analysis_results import AnalysisResults, GroupAnalysisResult
 from nlpo_toolkit.corpus_analysis.analysis_outputs import (
     apply_lemma_normalization,
     split_known_unknown,
@@ -19,7 +21,6 @@ from nlpo_toolkit.corpus_analysis.run_reporting import (
     build_summary_lines,
 )
 from nlpo_toolkit.corpus_analysis.runner_types import (
-    AnalysisResults,
     ComparisonRunResult,
     PartitionRunResult,
 )
@@ -152,10 +153,12 @@ def test_analyze_corpora_writes_expected_outputs_from_record_pipeline(tmp_path: 
         ref_tag_counts=Counter({"tag_a": 1}),
     )
 
-    result = analyze_corpora(replace(context, prepared_corpora=(corpus,))).groups[0]
+    result = analyze_corpora(
+        replace(context, prepared_corpora=(corpus,))
+    ).groups["group_a"]
 
     assert result.counter == Counter({"item_a": 2, "item_b": 1})
-    generated_names = [path.name for path in result.generated_outputs]
+    generated_names = [path.name for path in result.output_files]
     assert generated_names == [
         "ref_tags_group_a.csv",
         "frequency_group_a.csv",
@@ -181,13 +184,14 @@ def test_summary_lines_and_metadata_include_existing_fields(tmp_path: Path) -> N
         corpus_request(tmp_path, config_path),
         dependencies=deps,
     )
-    analysis = AnalysisResults(
-        groups=(),
-        counters_by_group={},
-        files_by_group={"group_a": ((tmp_path / "input" / "a.txt").resolve(),)},
-        ref_tags_by_group={},
-        trace_paths={},
-        generated_outputs=(),
+    analysis = AnalysisResults.from_groups(
+        (("group_a", GroupAnalysisResult(
+            files=((tmp_path / "input" / "a.txt").resolve(),),
+            counter=Counter(),
+            ref_tag_counts=Counter(),
+            output_files=(),
+        )),),
+        cache_stats=AnalysisCacheRunStats(enabled=False, directory=""),
     )
     partitions = PartitionRunResult((), (), (), (), 0)
     comparisons = ComparisonRunResult((), (), ())
