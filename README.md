@@ -167,6 +167,10 @@ analysis_cache:
 
 The cache is an internal optimization and is not copied into run archives or
 listed in `generated_outputs`. Use token artifacts for stable research outputs.
+Internally, cache keys and paths, record codec, writer, repository, hit/miss
+service, and maintenance are separate modules. Cached record streams and their
+locks are owned by a context manager so interrupted consumers cannot publish an
+incomplete cache object.
 
 Use `nlpo cache clear` to remove the configured analysis cache for a project
 instead of running `rm -rf .analysis_cache` manually.

@@ -31,10 +31,10 @@ def test_token_artifact_does_not_reexport_analysis_record_api() -> None:
 
 
 def test_analysis_cache_imports_analysis_record_from_canonical_module() -> None:
-    from nlpo_toolkit.corpus_analysis import analysis_cache
     from nlpo_toolkit.corpus_analysis import analysis_records
+    import nlpo_toolkit.corpus_analysis.analysis_cache.codec as codec
 
-    assert analysis_cache.NLPAnalysisRecord is analysis_records.NLPAnalysisRecord
+    assert codec.NLPAnalysisRecord is analysis_records.NLPAnalysisRecord
 
 
 def _imported_modules(path: Path) -> set[str]:
@@ -50,7 +50,10 @@ def _imported_modules(path: Path) -> set[str]:
 
 
 def test_analysis_cache_does_not_import_token_artifact_or_trace() -> None:
-    modules = _imported_modules(Path("nlpo_toolkit/corpus_analysis/analysis_cache.py"))
+    modules = set().union(*(
+        _imported_modules(path)
+        for path in Path("nlpo_toolkit/corpus_analysis/analysis_cache").glob("*.py")
+    ))
 
     assert ".token_artifact" not in modules
     assert "nlpo_toolkit.corpus_analysis.token_artifact" not in modules

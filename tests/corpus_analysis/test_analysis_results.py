@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from nlpo_toolkit.corpus_analysis.analysis_cache import AnalysisCacheRunStats
+from nlpo_toolkit.corpus_analysis.analysis_cache.stats import AnalysisCacheRunStats
 from nlpo_toolkit.corpus_analysis.analysis_results import (
     AnalysisResults,
     GroupAnalysisResult,

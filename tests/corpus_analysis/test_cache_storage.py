@@ -44,26 +44,21 @@ def test_cache_lock_times_out_when_lock_exists(tmp_path: Path) -> None:
 
 
 def test_cache_modules_share_prune_type() -> None:
-    from nlpo_toolkit.corpus_analysis import analysis_cache
     from nlpo_toolkit.corpus_analysis import cache_storage
+    import nlpo_toolkit.corpus_analysis.analysis_cache.maintenance as maintenance
 
-    assert analysis_cache.PruneReport is cache_storage.PruneReport
+    assert maintenance.PruneReport is cache_storage.PruneReport
 
 
 def test_analysis_cache_imports_only_shared_cache_storage() -> None:
-    path = Path("nlpo_toolkit/corpus_analysis/analysis_cache.py")
-    tree = ast.parse(path.read_text(encoding="utf-8"))
     removed_module = "lemma" + "_cache"
-
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom):
-            assert not (node.level == 1 and node.module == removed_module)
-            assert node.module != f"nlpo_toolkit.corpus_analysis.{removed_module}"
-        if isinstance(node, ast.Import):
-            assert all(
-                alias.name != f"nlpo_toolkit.corpus_analysis.{removed_module}"
-                for alias in node.names
-            )
+    for path in Path("nlpo_toolkit/corpus_analysis/analysis_cache").glob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                assert node.module != f"nlpo_toolkit.corpus_analysis.{removed_module}"
+            if isinstance(node, ast.Import):
+                assert all(alias.name != f"nlpo_toolkit.corpus_analysis.{removed_module}" for alias in node.names)
 
 
 def test_cache_storage_has_no_payload_module_dependencies() -> None:

@@ -1,21 +1,18 @@
 from __future__ import annotations
 
 from collections import Counter
-from contextlib import ExitStack
+from contextlib import ExitStack, closing, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Iterator, Mapping
+from typing import Iterable, Iterator, Literal, Mapping
 
 from nlpo_toolkit.nlp.contracts import NLPBackendInfo
 
-from .analysis_cache import (
-    AnalysisCacheGroupResult,
-    AnalysisCacheRunStats,
-    AnalysisFingerprint,
-    build_analysis_cache_key,
-    get_or_compute_analysis_records,
-    prepared_text_sha256,
-)
+from .analysis_cache.keys import build_analysis_cache_key, prepared_text_sha256
+from .analysis_cache.models import AnalysisFingerprint
+from .analysis_cache.repository import AnalysisCacheRepository
+from .analysis_cache.service import open_or_compute_analysis_records
+from .analysis_cache.stats import AnalysisCacheRunStats
 from .analysis_policy import AnalysisExtractionPolicy
 from .analysis_records import (
     AnalysisOptions,
@@ -62,7 +59,7 @@ class RecordAnalysisResult:
 @dataclass(frozen=True)
 class AnalysisRecordSource:
     records: Iterator[NLPAnalysisRecord]
-    cache_status: str
+    cache_status: Literal["hit", "miss", "disabled"]
     cache_key: str
 
 
@@ -114,11 +111,12 @@ def build_analysis_options(
     )
 
 
+@contextmanager
 def obtain_analysis_records(
     *,
     context: RunContext,
     text: str,
-) -> AnalysisRecordSource:
+) -> Iterator[AnalysisRecordSource]:
     policy = context.extraction_policy
     fingerprint = build_analysis_fingerprint(
         backend_info=context.analysis_backend.info,
@@ -130,8 +128,9 @@ def obtain_analysis_records(
         fingerprint=fingerprint,
     )
     if context.plan.config.analysis_cache.enabled:
-        records, status, _payload_path, _metadata_path = get_or_compute_analysis_records(
-            cache_dir=_analysis_cache_dir(context),
+        repository = AnalysisCacheRepository(_analysis_cache_dir(context))
+        with open_or_compute_analysis_records(
+            repository=repository,
             cache_key=cache_key,
             prepared_text_sha256=text_hash,
             prepared_text_length=len(text),
@@ -142,17 +141,16 @@ def obtain_analysis_records(
                 policy=policy,
             ),
             lock_timeout_sec=context.plan.config.analysis_cache.lock_timeout_sec,
-        )
-        return AnalysisRecordSource(records, status, cache_key)
-    return AnalysisRecordSource(
-        iter_nlp_analysis_records_from_text(
+        ) as cached:
+            yield AnalysisRecordSource(cached.records, cached.status, cache_key)
+        return
+    records = iter_nlp_analysis_records_from_text(
             text=text,
             nlp=context.analysis_backend.backend,
             policy=policy,
-        ),
-        "disabled",
-        cache_key,
     )
+    with closing(records):
+        yield AnalysisRecordSource(records, "disabled", cache_key)
 
 
 def consume_analysis_records(
@@ -201,21 +199,11 @@ def _update_cache_stats(
     source: AnalysisRecordSource,
     record_count: int,
 ) -> None:
-    if source.cache_status == "hit":
-        stats.hits += 1
-        stats.records_read += record_count
-    elif source.cache_status == "miss":
-        stats.misses += 1
-        stats.objects_written += 1
-        stats.records_written += record_count
-    assert stats.groups is not None
-    stats.groups.append(
-        AnalysisCacheGroupResult(
-            group=corpus.label,
-            status=source.cache_status,
-            cache_key=source.cache_key,
-            record_count=record_count,
-        )
+    stats.record_group(
+        group=corpus.label,
+        status=source.cache_status,
+        cache_key=source.cache_key,
+        record_count=record_count,
     )
 
 
@@ -250,10 +238,7 @@ def execute_record_analysis(
                     write_truncation_marker=context.plan.config.trace.write_truncation_marker,
                 )
             )
-        source = obtain_analysis_records(context=context, text=text)
-        close = getattr(source.records, "close", None)
-        if close is not None:
-            stack.callback(close)
+        source = stack.enter_context(obtain_analysis_records(context=context, text=text))
         consumed = consume_analysis_records(
             records=source.records,
             options=build_analysis_options(context=context, corpus=corpus),

@@ -21,7 +21,10 @@ def test_default_chunk_size_has_one_source() -> None:
 
 
 def test_cache_has_no_independent_chunk_defaults() -> None:
-    source = Path("nlpo_toolkit/corpus_analysis/analysis_cache.py").read_text(encoding="utf-8")
+    source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in Path("nlpo_toolkit/corpus_analysis/analysis_cache").glob("*.py")
+    )
     assert "DEFAULT_CHUNK_SIZE" not in source
     assert "DEFAULT_CHUNK_STRATEGY" not in source
     assert "DEFAULT_PROCESSORS" not in source

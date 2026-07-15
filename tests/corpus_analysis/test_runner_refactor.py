@@ -8,7 +8,7 @@ from pathlib import Path
 
 from nlpo_toolkit.nlp.contracts import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.analysis_orchestration import analyze_corpora
-from nlpo_toolkit.corpus_analysis.analysis_cache import AnalysisCacheRunStats
+from nlpo_toolkit.corpus_analysis.analysis_cache.stats import AnalysisCacheRunStats
 from nlpo_toolkit.corpus_analysis.analysis_results import AnalysisResults, GroupAnalysisResult
 from nlpo_toolkit.corpus_analysis.analysis_outputs import (
     apply_lemma_normalization,

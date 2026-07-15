@@ -6,7 +6,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Iterable, Mapping
 
-from .analysis_cache import AnalysisCacheRunStats
+from .analysis_cache.stats import AnalysisCacheRunStats
 
 
 def _deduplicate_resolved_paths(paths: Iterable[Path]) -> tuple[Path, ...]:

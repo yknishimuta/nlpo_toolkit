@@ -1,0 +1,2 @@
+class AnalysisCacheError(ValueError):
+    pass

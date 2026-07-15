@@ -44,7 +44,7 @@ def test_orchestration_combines_execution_and_outputs_only_at_facade() -> None:
             "TokenArtifactWriter",
             "DiagnosticTraceWriter",
             "write_frequency_csv",
-            "get_or_compute_analysis_records",
+            "open_or_compute_analysis_records",
         }
     )
 
@@ -64,7 +64,7 @@ def test_output_boundary() -> None:
         {
             "iter_nlp_analysis_records_from_text",
             "evaluate_analysis_record",
-            "get_or_compute_analysis_records",
+            "open_or_compute_analysis_records",
             "AnalysisCacheRunStats",
         }
     )

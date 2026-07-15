@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Mapping
 
 from . import analysis_execution, analysis_outputs
-from .analysis_cache import AnalysisCacheRunStats
+from .analysis_cache.stats import AnalysisCacheRunStats
 from .analysis_results import AnalysisResults, GroupAnalysisResult
 from .corpus import PreparedCorpus
 from .runner_types import RunContext
