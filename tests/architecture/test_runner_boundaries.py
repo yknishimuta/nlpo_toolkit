@@ -131,9 +131,8 @@ def test_run_context_contains_plan_and_runtime_state_only() -> None:
     assert names == {
         "plan",
         "prepared_corpora",
-        "nlp",
-        "backend_info",
-        "splitter_nlp",
+        "analysis_backend",
+        "sentence_splitter",
         "roman_exceptions",
         "extraction_policy",
     }

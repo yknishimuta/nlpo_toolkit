@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..models import NLPDocument, NLPSentence, NLPToken
+from nlpo_toolkit.nlp.contracts import NLPDocument, NLPSentence, NLPToken
 
 
 class NLPBackendUnavailableError(RuntimeError):
@@ -44,7 +44,7 @@ class TransformersBackend:
             )
 
         return NLPDocument(
-            sentences=[NLPSentence(tokens=tokens, text=text)],
+            sentences=(NLPSentence(tokens=tuple(tokens), text=text),),
             text=text,
         )
 

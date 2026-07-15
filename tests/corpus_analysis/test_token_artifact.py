@@ -23,7 +23,7 @@ from nlpo_toolkit.corpus_analysis.token_artifact import (
     token_artifact_metadata_path,
     validate_token_artifact,
 )
-from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
+from nlpo_toolkit.nlp.contracts import NLPDocument, NLPSentence, NLPToken
 
 
 def _record(**overrides) -> TokenRecord:

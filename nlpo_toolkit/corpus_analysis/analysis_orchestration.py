@@ -11,10 +11,13 @@ __all__ = ["analyze_corpora"]
 
 
 def _prepare_counting_text(context: RunContext, corpus: PreparedCorpus) -> str:
-    if context.splitter_nlp is None:
+    if context.sentence_splitter is None:
         return corpus.prepared_text
-    doc = context.splitter_nlp(corpus.prepared_text)
-    joined = "\n".join(sentence.text for sentence in getattr(doc, "sentences", []))
+    doc = context.sentence_splitter(corpus.prepared_text)
+    joined = "\n".join(
+        sentence.text or " ".join(token.text for token in sentence.tokens)
+        for sentence in doc.sentences
+    )
     return joined if joined.strip() else corpus.prepared_text
 
 

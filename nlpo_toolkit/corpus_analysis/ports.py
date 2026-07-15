@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from nlpo_toolkit.backends import BuiltNLPBackend
+from nlpo_toolkit.nlp.contracts import BuiltNLPBackend, NLPBackend
 from nlpo_toolkit.cleaner_contracts import (
     CleanerConfigInspection,
     CleanerLoader,
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 ConfigLoader = Callable[[Path], AppConfig]
 CleanerConfigInspector = Callable[[Path], CleanerConfigInspection]
 BackendFactory = Callable[[NLPConfig], BuiltNLPBackend]
-SentenceSplitterFactory = Callable[[NLPConfig], Any]
+SentenceSplitterFactory = Callable[[NLPConfig], NLPBackend]
 
 
 class ArchiveCreator(Protocol):

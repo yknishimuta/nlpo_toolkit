@@ -208,8 +208,8 @@ def test_analysis_composition_binds_the_same_extraction_policy(monkeypatch) -> N
     received = {}
     sentinel = object()
 
-    def fake_create_backend(config, *, extraction_policy):
-        received.update(config=config, extraction_policy=extraction_policy)
+    def fake_create_backend(spec, *, processors):
+        received.update(spec=spec, processors=processors)
         return sentinel
 
     monkeypatch.setattr(composition, "create_nlp_backend", fake_create_backend)
@@ -218,7 +218,10 @@ def test_analysis_composition_binds_the_same_extraction_policy(monkeypatch) -> N
 
     assert dependencies.backend_factory(config) is sentinel
     assert dependencies.extraction_policy is policy
-    assert received == {"config": config, "extraction_policy": policy}
+    assert received == {
+        "spec": composition._to_backend_spec(config),
+        "processors": policy.processors,
+    }
 
 
 def test_sentence_splitter_adapter_passes_nlp_configuration(monkeypatch) -> None:

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
-
-from nlpo_toolkit.backends import BuiltNLPBackend, create_nlp_backend
+from nlpo_toolkit.backends import create_nlp_backend
 from nlpo_toolkit.backends.stanza_backend import StanzaBackend
 from nlpo_toolkit.cleaner_contracts import CleanerConfigInspection
+from nlpo_toolkit.nlp.contracts import (
+    BuiltNLPBackend,
+    NLPBackend,
+    NLPBackendSpec,
+)
 
 from .analysis_policy import (
     AnalysisExtractionPolicy,
@@ -35,7 +38,17 @@ def _inspect_cleaner_config(path: Path) -> CleanerConfigInspection:
     return inspect_cleaner_config(path)
 
 
-def _create_sentence_splitter(config: NLPConfig) -> Any:
+def _to_backend_spec(config: NLPConfig) -> NLPBackendSpec:
+    return NLPBackendSpec(
+        backend=config.backend,
+        language=config.language,
+        stanza_package=config.stanza_package,
+        model_name=config.model_name,
+        use_gpu=not config.cpu_only,
+    )
+
+
+def _create_sentence_splitter(config: NLPConfig) -> NLPBackend:
     return StanzaBackend(
         lang=config.language,
         package=config.stanza_package or "perseus",
@@ -49,8 +62,8 @@ def _backend_factory_for(
 ) -> BackendFactory:
     def create_backend(config: NLPConfig) -> BuiltNLPBackend:
         return create_nlp_backend(
-            config,
-            extraction_policy=extraction_policy,
+            _to_backend_spec(config),
+            processors=extraction_policy.processors,
         )
 
     return create_backend

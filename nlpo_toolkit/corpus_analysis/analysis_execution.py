@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Iterator, Mapping
 
-from nlpo_toolkit.backends import NLPBackendInfo
+from nlpo_toolkit.nlp.contracts import NLPBackendInfo
 
 from .analysis_cache import (
     AnalysisCacheGroupResult,
@@ -121,7 +121,7 @@ def obtain_analysis_records(
 ) -> AnalysisRecordSource:
     policy = context.extraction_policy
     fingerprint = build_analysis_fingerprint(
-        backend_info=context.backend_info,
+        backend_info=context.analysis_backend.info,
         policy=policy,
     )
     text_hash = prepared_text_sha256(text)
@@ -138,14 +138,18 @@ def obtain_analysis_records(
             fingerprint=fingerprint,
             compute_records=lambda: iter_nlp_analysis_records_from_text(
                 text=text,
-                nlp=context.nlp,
+                nlp=context.analysis_backend.backend,
                 policy=policy,
             ),
             lock_timeout_sec=context.plan.config.analysis_cache.lock_timeout_sec,
         )
         return AnalysisRecordSource(records, status, cache_key)
     return AnalysisRecordSource(
-        iter_nlp_analysis_records_from_text(text=text, nlp=context.nlp, policy=policy),
+        iter_nlp_analysis_records_from_text(
+            text=text,
+            nlp=context.analysis_backend.backend,
+            policy=policy,
+        ),
         "disabled",
         cache_key,
     )
@@ -181,7 +185,7 @@ def _token_artifact_metadata(
         source_files=tuple(str(file) for file in corpus.files),
         analysis_unit=plan.analysis_unit,
         upos_targets=tuple(sorted(plan.config.filters.upos_targets)),
-        nlp=context.backend_info.to_dict(),
+        nlp=context.analysis_backend.info.to_dict(),
         filters={
             "min_token_length": plan.config.filters.min_token_length,
             "drop_roman_numerals": plan.config.filters.drop_roman_numerals,

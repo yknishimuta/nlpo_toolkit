@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from nlpo_toolkit.backends import NLPBackendInfo
+from nlpo_toolkit.nlp.contracts import BuiltNLPBackend, NLPBackend
 
 from .corpus import PreparedCorpus
 from .analysis_policy import AnalysisExtractionPolicy, DEFAULT_ANALYSIS_EXTRACTION_POLICY
@@ -17,9 +17,8 @@ from .run_plan import AnalysisPlan
 class RunContext:
     plan: AnalysisPlan
     prepared_corpora: tuple[PreparedCorpus, ...]
-    nlp: Any
-    backend_info: NLPBackendInfo
-    splitter_nlp: Any | None
+    analysis_backend: BuiltNLPBackend
+    sentence_splitter: NLPBackend | None
     roman_exceptions: frozenset[str]
     extraction_policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY
 

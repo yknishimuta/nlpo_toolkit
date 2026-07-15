@@ -70,12 +70,12 @@ def build_summary_lines(
         "",
         f"language: {plan.config.nlp.language}",
         f"stanza_package: {plan.config.nlp.stanza_package}",
-        f"nlp_backend: {context.backend_info.name}",
+        f"nlp_backend: {context.analysis_backend.info.name}",
         f"analysis_unit: {plan.analysis_unit}",
         f"normalization: {_format_normalization_kv(plan.config.normalization)}",
         "",
     ]
-    lines.extend(render_backend_info(context.backend_info))
+    lines.extend(render_backend_info(context.analysis_backend.info))
     lines.append("")
 
     if plan.config.ref_tags.enabled:
@@ -178,7 +178,7 @@ def build_final_run_metadata(
         },
     )
     meta["analysis_unit"] = plan.analysis_unit
-    meta["nlp"] = context.backend_info.to_dict()
+    meta["nlp"] = context.analysis_backend.info.to_dict()
     if plan.auto_mode:
         meta["grouping"] = {
             "mode": "auto_single_cleaned",

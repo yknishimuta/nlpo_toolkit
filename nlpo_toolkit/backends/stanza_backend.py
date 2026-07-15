@@ -1,4 +1,4 @@
-from ..models import NLPDocument, NLPSentence, NLPToken
+from nlpo_toolkit.nlp.contracts import NLPDocument, NLPSentence, NLPToken
 
 
 class StanzaBackendUnavailableError(RuntimeError):
@@ -7,30 +7,27 @@ class StanzaBackendUnavailableError(RuntimeError):
 
 def convert_stanza_document_to_common_model(stanza_doc, original_text: str) -> NLPDocument:
     """Convert a Stanza document-like object into the common NLPDocument model."""
-    doc = NLPDocument(text=original_text)
-
-    sentences = getattr(stanza_doc, "sentences", [])
-
-    for stanza_sent in sentences:
-        sent_model = NLPSentence(text=getattr(stanza_sent, "text", None))
-
+    sentences: list[NLPSentence] = []
+    for stanza_sent in getattr(stanza_doc, "sentences", []):
         words = list(getattr(stanza_sent, "words", []) or [])
         if not words and hasattr(stanza_sent, "tokens"):
             for token in stanza_sent.tokens:
                 words.extend(getattr(token, "words", []))
 
-        for word in words:
-            sent_model.tokens.append(NLPToken(
+        tokens = tuple(
+            NLPToken(
                 text=getattr(word, "text", ""),
                 lemma=getattr(word, "lemma", None),
                 upos=getattr(word, "upos", None),
                 start_char=getattr(word, "start_char", None),
                 end_char=getattr(word, "end_char", None),
-            ))
-
-        doc.sentences.append(sent_model)
-
-    return doc
+            )
+            for word in words
+        )
+        sentences.append(
+            NLPSentence(tokens=tokens, text=getattr(stanza_sent, "text", None))
+        )
+    return NLPDocument(sentences=tuple(sentences), text=original_text)
 
 
 class StanzaBackend:

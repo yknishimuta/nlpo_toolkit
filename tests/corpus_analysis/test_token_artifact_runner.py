@@ -8,11 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
+from nlpo_toolkit.nlp.contracts import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis import runner as runner_mod
 from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis.token_artifact import read_token_records
-from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
+from nlpo_toolkit.nlp.contracts import NLPDocument, NLPSentence, NLPToken
 from tests.corpus_analysis.fake_nlp import runner_dependencies
 
 

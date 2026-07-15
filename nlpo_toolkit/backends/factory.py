@@ -1,89 +1,56 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-from nlpo_toolkit.corpus_analysis.config import NLPConfig
-from nlpo_toolkit.corpus_analysis.analysis_policy import (
-    AnalysisExtractionPolicy,
-    DEFAULT_ANALYSIS_EXTRACTION_POLICY,
+from nlpo_toolkit.nlp.contracts import (
+    BuiltNLPBackend,
+    NLPBackendInfo,
+    NLPBackendSpec,
 )
-from nlpo_toolkit.interfaces import NLPBackend
 
 
 class NLPBackendConfigError(ValueError):
     pass
 
 
-@dataclass(frozen=True)
-class NLPBackendInfo:
-    name: str
-    language: str
-    model: str | None = None
-    package: str | dict[str, str] | None = None
-    use_gpu: bool = False
-
-    @property
-    def device(self) -> str:
-        return "gpu" if self.use_gpu else "cpu"
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "backend": self.name,
-            "language": self.language,
-            "package": self.package,
-            "model": self.model,
-            "device": self.device,
-        }
-
-
-@dataclass(frozen=True)
-class BuiltNLPBackend:
-    backend: NLPBackend
-    info: NLPBackendInfo
-
-
 def create_nlp_backend(
-    config: NLPConfig,
+    spec: NLPBackendSpec,
     *,
-    extraction_policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY,
+    processors: tuple[str, ...],
 ) -> BuiltNLPBackend:
-    if config.backend == "stanza":
+    if spec.backend == "stanza":
         from .stanza_backend import StanzaBackend
 
-        package = config.stanza_package or "perseus"
-        use_gpu = not config.cpu_only
+        package = spec.stanza_package or "perseus"
         backend = StanzaBackend(
-            lang=config.language,
+            lang=spec.language,
             package=package,
-            use_gpu=use_gpu,
-            processors=",".join(extraction_policy.processors),
+            use_gpu=spec.use_gpu,
+            processors=",".join(processors),
         )
         return BuiltNLPBackend(
             backend=backend,
             info=NLPBackendInfo(
                 name="stanza",
-                language=config.language,
+                language=spec.language,
                 package=package,
-                use_gpu=use_gpu,
+                use_gpu=spec.use_gpu,
             ),
         )
 
-    if config.backend == "transformers":
-        if not config.model_name:
+    if spec.backend == "transformers":
+        if not spec.model_name:
             raise NLPBackendConfigError(
                 "nlp.model_name is required when nlp.backend=transformers"
             )
         from .transformers_backend import TransformersBackend
 
-        use_gpu = not config.cpu_only
-        backend = TransformersBackend(model_name=config.model_name)
+        backend = TransformersBackend(model_name=spec.model_name)
         return BuiltNLPBackend(
             backend=backend,
             info=NLPBackendInfo(
                 name="transformers",
-                language=config.language,
-                model=config.model_name,
-                use_gpu=use_gpu,
+                language=spec.language,
+                model=spec.model_name,
+                use_gpu=spec.use_gpu,
             ),
         )
 

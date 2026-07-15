@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
+from nlpo_toolkit.nlp.contracts import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.analysis_cache import (
     AnalysisFingerprint,
     build_analysis_cache_key,
@@ -25,7 +25,7 @@ from nlpo_toolkit.corpus_analysis import cache_storage
 from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis import runner as runner_mod
 from nlpo_toolkit.corpus_analysis.analysis_records import NLPAnalysisRecord
-from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
+from nlpo_toolkit.nlp.contracts import NLPDocument, NLPSentence, NLPToken
 from tests.corpus_analysis.fake_nlp import runner_dependencies
 
 

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
+from nlpo_toolkit.nlp.contracts import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.config import ensure_app_config
 from nlpo_toolkit.corpus_analysis.runtime import prepare_run_context
 from tests.corpus_analysis.fake_nlp import runner_dependencies

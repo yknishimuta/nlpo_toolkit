@@ -13,6 +13,7 @@ from nlpo_toolkit.nlp.roman_numerals import (
     load_roman_exceptions,
     should_drop_roman_numeral,
 )
+from nlpo_toolkit.nlp.contracts import NLPBackend
 
 from .analysis_records import (
     NLPAnalysisRecord,
@@ -255,7 +256,7 @@ class FeatureCommandResult:
 
 def build_feature_rows(
     groups_texts: list[tuple[str, list[Path], str]],
-    nlp,
+    nlp: NLPBackend,
     options: FeatureOptions,
 ) -> list[dict[str, Any]]:
     if options.mfw < 0:
@@ -366,9 +367,11 @@ def execute_feature_command(
     ):
         groups_texts.append((corpus.label, list(corpus.files), corpus.prepared_text))
 
-    nlp, _backend_info, _package = build_nlp_runtime(
+    built_backend = build_nlp_runtime(
         config=config,
         backend_factory=dependencies.analysis.backend_factory,
     )
 
-    return FeatureCommandResult(rows=tuple(build_feature_rows(groups_texts, nlp, options)))
+    return FeatureCommandResult(
+        rows=tuple(build_feature_rows(groups_texts, built_backend.backend, options))
+    )

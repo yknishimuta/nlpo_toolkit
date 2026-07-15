@@ -6,7 +6,7 @@ from collections import Counter
 from dataclasses import replace
 from pathlib import Path
 
-from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
+from nlpo_toolkit.nlp.contracts import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.analysis_orchestration import analyze_corpora
 from nlpo_toolkit.corpus_analysis.analysis_outputs import (
     apply_lemma_normalization,
@@ -24,7 +24,7 @@ from nlpo_toolkit.corpus_analysis.runner_types import (
     PartitionRunResult,
 )
 from nlpo_toolkit.corpus_analysis.runtime import prepare_run_context
-from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
+from nlpo_toolkit.nlp.contracts import NLPDocument, NLPSentence, NLPToken
 from tests.corpus_analysis.fake_nlp import runner_dependencies
 
 

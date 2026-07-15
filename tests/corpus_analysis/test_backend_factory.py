@@ -11,10 +11,16 @@ from pydantic import ValidationError
 
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
 from nlpo_toolkit.backends import (
-    BuiltNLPBackend,
-    NLPBackendInfo,
     TransformersBackend as PublicTransformersBackend,
     create_nlp_backend,
+)
+from nlpo_toolkit.nlp.contracts import (
+    BuiltNLPBackend,
+    NLPBackendInfo,
+    NLPBackendSpec,
+    NLPDocument,
+    NLPSentence,
+    NLPToken,
 )
 from nlpo_toolkit.backends.factory import render_backend_info
 from nlpo_toolkit.backends.stanza_backend import (
@@ -26,7 +32,6 @@ from nlpo_toolkit.backends.transformers_backend import (
 )
 from nlpo_toolkit.corpus_analysis.config import NLPConfig, load_config
 from nlpo_toolkit.corpus_analysis.features import FeatureOptions, build_feature_rows
-from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
 from tests.corpus_analysis.fake_nlp import runner_dependencies
 
 
@@ -100,12 +105,13 @@ def test_factory_selects_stanza_without_transformers(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(stanza_mod, "StanzaBackend", FakeStanzaBackend)
 
     built = create_nlp_backend(
-        NLPConfig(
+        NLPBackendSpec(
             backend="stanza",
             language="la",
             stanza_package="perseus",
-            cpu_only=True,
-        )
+            use_gpu=False,
+        ),
+        processors=("tokenize", "mwt", "pos", "lemma"),
     )
 
     assert isinstance(built.backend, FakeStanzaBackend)
@@ -140,12 +146,13 @@ def test_factory_selects_transformers_without_stanza(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(transformers_mod, "TransformersBackend", FakeTransformersBackend)
 
     built = create_nlp_backend(
-        NLPConfig(
+        NLPBackendSpec(
             backend="transformers",
             language="la",
             model_name="example/model",
-            cpu_only=True,
-        )
+            use_gpu=False,
+        ),
+        processors=("tokenize", "mwt", "pos", "lemma"),
     )
 
     assert isinstance(built.backend, FakeTransformersBackend)
@@ -218,7 +225,7 @@ def test_stanza_backend_conversion_preserves_common_model_fields() -> None:
         end_char=4,
     )
     assert doc.sentences[0].tokens[1].lemma == "amo"
-    assert doc.sentences[1].tokens == []
+    assert doc.sentences[1].tokens == ()
 
 
 def test_stanza_backend_conversion_flattens_mwt_without_duplication() -> None:

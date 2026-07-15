@@ -1,4 +1,4 @@
-from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
+from nlpo_toolkit.nlp.contracts import NLPDocument, NLPSentence, NLPToken
 
 class FakeNLP:
     """

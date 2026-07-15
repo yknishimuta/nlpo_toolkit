@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
-
-from nlpo_toolkit.backends import NLPBackendInfo
+from nlpo_toolkit.nlp.contracts import BuiltNLPBackend, NLPBackend
 from nlpo_toolkit.nlp.roman_numerals import load_roman_exceptions
 
 from .config import AppConfig
@@ -17,16 +15,15 @@ def build_nlp_runtime(
     *,
     config: AppConfig,
     backend_factory: BackendFactory,
-) -> tuple[Any, NLPBackendInfo, Any]:
-    built_backend = backend_factory(config.nlp)
-    return built_backend.backend, built_backend.info, built_backend.info.package
+) -> BuiltNLPBackend:
+    return backend_factory(config.nlp)
 
 
 def initialize_nlp_runtime(
     *,
     config: AppConfig,
     dependencies: RunnerDependencies,
-) -> tuple[Any, NLPBackendInfo, Any]:
+) -> BuiltNLPBackend:
     return build_nlp_runtime(
         config=config,
         backend_factory=dependencies.analysis.backend_factory,
@@ -37,7 +34,7 @@ def initialize_sentence_splitter(
     *,
     config: AppConfig,
     dependencies: RunnerDependencies,
-) -> Any | None:
+) -> NLPBackend | None:
     if dependencies.analysis.sentence_splitter_factory is None:
         return None
     return dependencies.analysis.sentence_splitter_factory(config.nlp)
@@ -70,20 +67,19 @@ def prepare_run_context(
     )
     ensure_out_dir(plan.out_dir)
     roman_exceptions = load_roman_exceptions_for_run(plan=plan)
-    nlp, backend_info, package = initialize_nlp_runtime(
+    analysis_backend = initialize_nlp_runtime(
         config=plan.config,
         dependencies=dependencies,
     )
-    splitter_nlp = initialize_sentence_splitter(
+    sentence_splitter = initialize_sentence_splitter(
         config=plan.config,
         dependencies=dependencies,
     )
     return RunContext(
         plan=plan,
         prepared_corpora=prepared_corpora,
-        nlp=nlp,
-        backend_info=backend_info,
-        splitter_nlp=splitter_nlp,
+        analysis_backend=analysis_backend,
+        sentence_splitter=sentence_splitter,
         roman_exceptions=roman_exceptions,
         extraction_policy=dependencies.analysis.extraction_policy,
     )

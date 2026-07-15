@@ -13,7 +13,7 @@ from nlpo_toolkit.corpus_analysis.ports import (
     RunnerDependencies,
 )
 from nlpo_toolkit.corpus_analysis.runtime import prepare_run_context
-from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
+from nlpo_toolkit.nlp.contracts import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.run_plan import (
     AnalysisPlan,
     build_analysis_plan,

@@ -44,6 +44,13 @@ interfaces and frozen containers required by application services, while
 only ports, CLI/bootstrap code creates production dependencies, and unit tests
 normally construct port containers directly.
 
+Backend-independent NLP models, protocols, backend metadata, and backend build
+specifications are owned by `nlpo_toolkit.nlp.contracts`. Backend modules
+implement those contracts without importing `corpus_analysis`; application code
+depends on the contracts and its ports. `corpus_analysis/composition.py` is the
+production boundary that converts the Pydantic `NLPConfig` into an
+`NLPBackendSpec` and assembles the selected backend.
+
 Stanza model download is required for real NLP runs unless you use Docker:
 
 ```bash

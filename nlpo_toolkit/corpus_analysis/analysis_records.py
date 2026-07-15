@@ -9,8 +9,9 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Collection, Iterable, Iterator, Sequence
+from typing import Callable, Collection, Iterable, Iterator, Sequence
 
+from nlpo_toolkit.nlp.contracts import NLPBackend, NLPDocument, NLPSentence
 from nlpo_toolkit.nlp.roman_numerals import (
     effective_roman_exceptions,
     normalize_roman_exceptions,
@@ -85,11 +86,10 @@ class AnalysisOptions:
     ref_tag_counter: Counter[str] | None = None
 
 
-def _sentence_text(sent: Any) -> str:
-    text = getattr(sent, "text", None)
-    if text:
-        return str(text)
-    return " ".join(str(getattr(token, "text", "")) for token in getattr(sent, "tokens", []) or [])
+def _sentence_text(sentence: NLPSentence) -> str:
+    if sentence.text:
+        return sentence.text
+    return " ".join(token.text for token in sentence.tokens)
 
 
 def _token_key_from_values(token: str, lemma: str | None, *, use_lemma: bool) -> str | None:
@@ -102,33 +102,36 @@ def _token_key_from_values(token: str, lemma: str | None, *, use_lemma: bool) ->
 
 def iter_nlp_analysis_records(
     *,
-    document: Any,
+    document: NLPDocument,
     chunk_index: int,
     chunk_start_in_text: int,
     global_token_start: int,
 ) -> Iterator[NLPAnalysisRecord]:
     global_index = global_token_start
-    for sentence_index, sent in enumerate(getattr(document, "sentences", []) or []):
-        sent_text = _sentence_text(sent)
-        for token_index, token in enumerate(getattr(sent, "tokens", []) or []):
-            token_text = str(getattr(token, "text", "") or "")
-            lemma = getattr(token, "lemma", None)
-            upos = getattr(token, "upos", None)
-            start = getattr(token, "start_char", None)
-            end = getattr(token, "end_char", None)
+    for sentence_index, sentence in enumerate(document.sentences):
+        sentence_text = _sentence_text(sentence)
+        for token_index, token in enumerate(sentence.tokens):
             yield NLPAnalysisRecord(
                 chunk_index=chunk_index,
                 sentence_index=sentence_index,
                 token_index=token_index,
                 global_token_index=global_index,
-                char_start_in_chunk=start,
-                char_end_in_chunk=end,
-                char_start_in_text=chunk_start_in_text + start if start is not None else None,
-                char_end_in_text=chunk_start_in_text + end if end is not None else None,
-                sentence=sent_text,
-                token=token_text,
-                lemma=str(lemma) if lemma is not None else None,
-                upos=str(upos) if upos is not None else None,
+                char_start_in_chunk=token.start_char,
+                char_end_in_chunk=token.end_char,
+                char_start_in_text=(
+                    chunk_start_in_text + token.start_char
+                    if token.start_char is not None
+                    else None
+                ),
+                char_end_in_text=(
+                    chunk_start_in_text + token.end_char
+                    if token.end_char is not None
+                    else None
+                ),
+                sentence=sentence_text,
+                token=token.text,
+                lemma=token.lemma,
+                upos=token.upos,
             )
             global_index += 1
 
@@ -136,7 +139,7 @@ def iter_nlp_analysis_records(
 def iter_nlp_analysis_records_from_text(
     *,
     text: str,
-    nlp: Callable[[str], Any],
+    nlp: NLPBackend,
     policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY,
 ) -> Iterator[NLPAnalysisRecord]:
     if not text:
@@ -218,7 +221,7 @@ def evaluate_analysis_record(
 def iter_token_records(
     *,
     text: str,
-    nlp: Callable[[str], Any],
+    nlp: NLPBackend,
     group: str,
     source_files: Sequence[Path],
     use_lemma: bool,

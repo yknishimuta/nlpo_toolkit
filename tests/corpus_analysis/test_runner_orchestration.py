@@ -5,7 +5,7 @@ from tests.corpus_analysis.fake_nlp import corpus_request
 from pathlib import Path
 from types import SimpleNamespace
 
-from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
+from nlpo_toolkit.nlp.contracts import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.config import ensure_app_config
 from tests.corpus_analysis.fake_nlp import runner_dependencies
 

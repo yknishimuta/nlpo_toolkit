@@ -5,7 +5,13 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from nlpo_toolkit.backends import BuiltNLPBackend, NLPBackendInfo
+from nlpo_toolkit.nlp.contracts import (
+    BuiltNLPBackend,
+    NLPBackendInfo,
+    NLPDocument,
+    NLPSentence,
+    NLPToken,
+)
 from nlpo_toolkit.corpus_analysis.config import AppConfig, ensure_app_config
 from nlpo_toolkit.corpus_analysis.analysis_policy import (
     AnalysisExtractionPolicy,
@@ -20,7 +26,6 @@ from nlpo_toolkit.corpus_analysis.ports import (
 )
 from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
 from nlpo_toolkit.corpus_analysis.archive import create_run_archive
-from nlpo_toolkit.models import NLPDocument, NLPSentence, NLPToken
 from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 
 
