@@ -21,7 +21,7 @@ def test_default_cleaner_import_is_lazy_and_centralized() -> None:
     runtime = Path(
         "nlpo_toolkit/corpus_analysis/cleaner_runtime.py"
     ).read_text(encoding="utf-8")
-    assert "from nlpo_toolkit.latin.cleaners import run_clean_corpus" in runtime
+    assert "import nlpo_toolkit.latin.cleaners.run_clean_corpus as run_clean_corpus" in runtime
 
     for path in Path("nlpo_toolkit/corpus_analysis/cli").glob("*.py"):
         source = path.read_text(encoding="utf-8")

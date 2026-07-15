@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
+from typing import cast
 
 import yaml
 
@@ -11,6 +12,8 @@ from nlpo_toolkit.cleaner_contracts import (
     CleanerConfigParseError,
     CleanerConfigReadError,
     CleanerConfigValidationError,
+    CLEANER_KINDS,
+    CleanerKind,
     CleanerReferencedFile,
 )
 
@@ -64,7 +67,7 @@ def load_cleaner_config(path: str | Path) -> CleanerConfig:
         )
 
     kind = _required_string(raw, "kind", source_path)
-    if kind not in {"corpus_corporum", "scholastic_text"}:
+    if kind not in CLEANER_KINDS:
         raise CleanerConfigValidationError(
             "'kind' must be one of: corpus_corporum, scholastic_text: "
             f"{source_path}"
@@ -78,7 +81,7 @@ def load_cleaner_config(path: str | Path) -> CleanerConfig:
 
     return CleanerConfig(
         source_path=source_path,
-        kind=kind,
+        kind=cast(CleanerKind, kind),
         input_path=_resolve_path(source_path, input_raw),
         output_path=_resolve_path(source_path, output_raw),
         rules_path=optional_path("rules_path"),

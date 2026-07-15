@@ -3,7 +3,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Literal, Protocol
+
+
+CleanerKind = Literal["corpus_corporum", "scholastic_text"]
+CLEANER_KINDS: frozenset[str] = frozenset({"corpus_corporum", "scholastic_text"})
 
 
 class CleanerRunner(Protocol):
@@ -32,7 +36,7 @@ class CleanerConfigValidationError(CleanerConfigError):
 @dataclass(frozen=True)
 class CleanerConfig:
     source_path: Path
-    kind: str
+    kind: CleanerKind
     input_path: Path
     output_path: Path
     rules_path: Path | None = None

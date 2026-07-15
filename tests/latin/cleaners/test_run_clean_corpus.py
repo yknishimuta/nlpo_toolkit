@@ -1,186 +1,65 @@
-# tests/test_run_clean_corpus.py
-
 from __future__ import annotations
 
 from pathlib import Path
+from types import MappingProxyType
 
-from nlpo_toolkit.latin.cleaners import run_clean_corpus as mod
+import nlpo_toolkit.latin.cleaners.run_clean_corpus as mod
+from nlpo_toolkit.latin.cleaners.models import (
+    CleanerProfile,
+    CleanerProgram,
+    CleaningResult,
+    RuleSet,
+)
 
 
-def test_main_uses_default_config(tmp_path, monkeypatch):
-    """
-    When no argv is passed, main() should:
-      - use DEFAULT_CONFIG
-      - resolve input/output paths relative to the config file directory
-      - read the input text
-      - pass it (and kind, ref_tsv, doc_id, rules_path) to clean_text
-      - write the cleaned text to the resolved output path
-    """
+def _program(kind="corpus_corporum") -> CleanerProgram:
+    profile = CleanerProfile(kind, Path("rules.yml"), lambda text: tuple(text.splitlines()), lambda line: line)
+    return CleanerProgram(profile, RuleSet(), MappingProxyType({}))
 
-    # Prepare a fake config file and input/output locations
+
+def test_main_uses_default_config_and_loads_program_once(tmp_path, monkeypatch):
     config_dir = tmp_path / "cfg"
-    config_dir.mkdir(parents=True, exist_ok=True)
-
+    config_dir.mkdir()
     config_path = config_dir / "sample.yml"
     config_path.write_text(
-        "kind: corpus_corporum\n"
-        "input: input.txt\n"
-        "output: out/cleaned.txt\n"
-        "rules_path: config/latin_cleaners/corpus_corporum.yml\n",
+        "kind: corpus_corporum\ninput: input.txt\noutput: out/cleaned.txt\nrules_path: rules.yml\n",
         encoding="utf-8",
     )
-
-    input_path = config_dir / "input.txt"
-    input_path.write_text("Salve mundi", encoding="utf-8")
-
-    expected_output = (config_dir / "out" / "cleaned.txt").resolve()
-
+    (config_dir / "input.txt").write_text("Salve mundi", encoding="utf-8")
+    (config_dir / "rules.yml").write_text("{}\n", encoding="utf-8")
     monkeypatch.setattr(mod, "DEFAULT_CONFIG", config_path)
+    loads = []
+    program = _program()
+    monkeypatch.setattr(mod, "load_cleaner_program", lambda **kwargs: loads.append(kwargs) or program)
+    monkeypatch.setattr(mod, "clean_document", lambda raw, **kwargs: CleaningResult(raw.upper(), ()))
 
-    # (NEW) prepare externalized rules YAML
-    rules_rel = Path("config/latin_cleaners/corpus_corporum.yml")
-    rules_abs = (config_dir / rules_rel).resolve()
-    rules_abs.parent.mkdir(parents=True, exist_ok=True)
-    rules_abs.write_text("# dummy rules\n", encoding="utf-8")
-
-    def fake_clean_text(
-        raw: str,
-        *,
-        kind: str,
-        ref_tsv=None,
-        doc_id: str = "",
-        rules_path=None,
-        lexicon_map_path=None,
-    ) -> str:
-        # Verify that raw and kind are passed correctly
-        assert raw == "Salve mundi"
-        assert kind == "corpus_corporum"
-
-        # assertions
-        assert ref_tsv is None
-        assert doc_id == "input"  # stem of input.txt
-
-        # (NEW) rules_path should be resolved relative to config_dir
-        assert Path(rules_path) == rules_abs
-        assert lexicon_map_path is None
-
-        return raw.upper()
-
-    monkeypatch.setattr(mod, "clean_text", fake_clean_text)
-
-    rc = mod.main(argv=[])
-    assert rc == 0
-
-    # Verify the output
-    assert expected_output.is_file(), f"Expected output file not found: {expected_output}"
-    out_text = expected_output.read_text(encoding="utf-8")
-    assert out_text == "SALVE MUNDI"
+    assert mod.main(argv=[]) == 0
+    assert len(loads) == 1
+    assert (config_dir / "out/cleaned.txt").read_text(encoding="utf-8") == "SALVE MUNDI"
 
 
-def test_main_with_explicit_config_path(tmp_path, monkeypatch):
-    """
-    When argv contains a path, main() should:
-      - use that path instead of DEFAULT_CONFIG
-      - still resolve input/output relative to the config file directory
-      - pass kind/ref_tsv/doc_id/rules_path to clean_text
-    """
-
-    # Prepare a separate fake config and input/output under tmp_path
-    config_dir = tmp_path / "cfg2"
-    config_dir.mkdir(parents=True, exist_ok=True)
-
-    config_path = config_dir / "custom.yml"
-    config_path.write_text(
-        "kind: scholastic_text\n"
-        "input: in.txt\n"
-        "output: out/cleaned2.txt\n"
-        "rules_path: config/latin_cleaners/custom_rules.yml\n"
-        "lexicon_map_path: config/latin_cleaners/lexicon_map.tsv\n",
+def test_directory_mode_reuses_program_and_passes_doc_ids(tmp_path, monkeypatch):
+    source = tmp_path / "input"
+    source.mkdir()
+    (source / "a.txt").write_text("a", encoding="utf-8")
+    (source / "b.txt").write_text("b", encoding="utf-8")
+    config = tmp_path / "config.yml"
+    config.write_text(
+        "kind: scholastic_text\ninput: input\noutput: output\ndoc_id_prefix: DOC\n",
         encoding="utf-8",
     )
+    program = _program("scholastic_text")
+    loads = []
+    docs = []
+    monkeypatch.setattr(mod, "load_cleaner_program", lambda **kwargs: loads.append(kwargs) or program)
 
-    input_path = config_dir / "in.txt"
-    input_path.write_text("Puella rosam amat.", encoding="utf-8")
+    def clean(raw, **kwargs):
+        docs.append(kwargs["doc_id"])
+        return CleaningResult(raw.upper(), ())
 
-    expected_output = (config_dir / "out" / "cleaned2.txt").resolve()
-
-    # (NEW) prepare externalized rules YAML
-    rules_rel = Path("config/latin_cleaners/custom_rules.yml")
-    rules_abs = (config_dir / rules_rel).resolve()
-    rules_abs.parent.mkdir(parents=True, exist_ok=True)
-    rules_abs.write_text("# dummy rules\n", encoding="utf-8")
-    lexicon_abs = (config_dir / "config/latin_cleaners/lexicon_map.tsv").resolve()
-    lexicon_abs.write_text("source\ttarget\n", encoding="utf-8")
-
-    def fake_clean_text(
-        raw: str,
-        *,
-        kind: str,
-        ref_tsv=None,
-        doc_id: str = "",
-        rules_path=None,
-        lexicon_map_path=None,
-    ) -> str:
-        assert raw == "Puella rosam amat."
-        assert kind == "scholastic_text"
-
-        # assertions
-        assert ref_tsv is None
-        assert doc_id == "in"  # stem of in.txt
-
-        # (NEW) rules_path should be resolved relative to config_dir
-        assert Path(rules_path) == rules_abs
-        assert Path(lexicon_map_path) == lexicon_abs
-
-        return raw.replace(" ", "_")
-
-    monkeypatch.setattr(mod, "clean_text", fake_clean_text)
-
-    rc = mod.main(argv=[str(config_path)])
-    assert rc == 0
-
-    # Verify output
-    assert expected_output.is_file()
-    out_text = expected_output.read_text(encoding="utf-8")
-    assert out_text == "Puella_rosam_amat."
-
-
-def test_clean_single_file_passes_optional_paths_explicitly_when_none(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    input_path = tmp_path / "input.txt"
-    output_path = tmp_path / "output.txt"
-    input_path.write_text("Salve", encoding="utf-8")
-    received = {}
-
-    def fake_clean_text(
-        raw: str,
-        *,
-        kind: str,
-        ref_tsv,
-        doc_id: str,
-        rules_path,
-        lexicon_map_path,
-    ) -> str:
-        received.update(
-            raw=raw,
-            kind=kind,
-            ref_tsv=ref_tsv,
-            doc_id=doc_id,
-            rules_path=rules_path,
-            lexicon_map_path=lexicon_map_path,
-        )
-        return raw
-
-    monkeypatch.setattr(mod, "clean_text", fake_clean_text)
-    mod._clean_single_file(input_path, output_path, kind="scholastic_text")
-
-    assert received == {
-        "raw": "Salve",
-        "kind": "scholastic_text",
-        "ref_tsv": None,
-        "doc_id": "",
-        "rules_path": None,
-        "lexicon_map_path": None,
-    }
+    monkeypatch.setattr(mod, "clean_document", clean)
+    assert mod.main([str(config)]) == 0
+    assert len(loads) == 1
+    assert docs == ["DOC:a", "DOC:b"]
+    assert (tmp_path / "output/a.txt").read_text(encoding="utf-8") == "A"
+    assert (tmp_path / "output/b.txt").read_text(encoding="utf-8") == "B"

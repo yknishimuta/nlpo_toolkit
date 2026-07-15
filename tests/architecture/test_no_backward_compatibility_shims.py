@@ -83,7 +83,7 @@ def test_compare_strips_only_the_canonical_frequency_prefix() -> None:
     assert "noun_frequency_" not in source
 
 
-def test_cleaner_calls_canonical_clean_text_signature_directly() -> None:
+def test_cleaner_calls_canonical_clean_document_signature_directly() -> None:
     tree = _tree("nlpo_toolkit/latin/cleaners/run_clean_corpus.py")
     function = _top_level_function(tree, "_clean_single_file")
     calls = [
@@ -91,15 +91,15 @@ def test_cleaner_calls_canonical_clean_text_signature_directly() -> None:
         for node in ast.walk(function)
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
-        and node.func.id == "clean_text"
+        and node.func.id == "clean_document"
     ]
     assert len(calls) == 1
     assert {keyword.arg for keyword in calls[0].keywords} == {
-        "kind",
-        "ref_tsv",
+        "profile",
+        "rules",
+        "lexicon_map",
         "doc_id",
-        "rules_path",
-        "lexicon_map_path",
+        "snippet_chars",
     }
     assert all(keyword.arg is not None for keyword in calls[0].keywords)
     assert not any(

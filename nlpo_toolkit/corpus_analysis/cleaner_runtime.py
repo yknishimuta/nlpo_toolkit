@@ -22,7 +22,7 @@ class CleanerExecutionError(CleanerError):
 def load_default_cleaner() -> CleanerRunner:
     """Import the bundled cleaner only when preprocessing requests it."""
     try:
-        from nlpo_toolkit.latin.cleaners import run_clean_corpus
+        import nlpo_toolkit.latin.cleaners.run_clean_corpus as run_clean_corpus
     except ImportError as exc:
         raise CleanerUnavailableError(
             "Cleaner preprocessing was requested, but "

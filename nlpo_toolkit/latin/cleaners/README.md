@@ -66,3 +66,14 @@ kind: corpus_corporum          # cleaner type ("corpus_corporum", "scholastic_te
 input: ../input/input_file.txt 
 output: ../output/cleaned.txt
 ```
+
+## Internal design
+
+- `rule_loader` validates YAML and constructs an immutable, typed `RuleSet`.
+- `rule_engine` applies corpus-independent line removal and substitution rules.
+- `corpora` profiles define body extraction, default rules, and corpus-specific
+  line finalization.
+- `pipeline` combines a profile, rules, common normalization, and the lexicon
+  map without performing filesystem writes.
+- `run_clean_corpus` owns config loading, input/output files, event TSV output,
+  progress reporting, and loads each cleaner program once per command.

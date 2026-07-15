@@ -4,7 +4,9 @@ from pathlib import Path
 import sys
 
 from .config_loader import load_cleaner_config, resolve_cleaner_input_files
-from . import clean_text
+from .events import append_ref_events
+from .models import CleanerProgram
+from .pipeline import clean_document, load_cleaner_program
 
 
 # Default config file. Modify this to switch the default config path.
@@ -16,26 +18,24 @@ def _clean_single_file(
     input_path: Path,
     output_path: Path,
     *,
-    kind: str,
-    ref_tsv: str | Path | None = None,
+    program: CleanerProgram,
+    ref_tsv_path: Path | None,
     doc_id: str = "",
-    rules_path: str | Path | None = None,
-    lexicon_map_path: str | Path | None = None,
 ) -> None:
     raw = input_path.read_text(encoding="utf-8")
-
-    cleaned = clean_text(
+    result = clean_document(
         raw,
-        kind=kind,
-        ref_tsv=ref_tsv,
+        profile=program.profile,
+        rules=program.rules,
+        lexicon_map=program.lexicon_map,
         doc_id=doc_id,
-        rules_path=rules_path,
-        lexicon_map_path=lexicon_map_path,
+        snippet_chars=program.snippet_chars,
     )
-
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(cleaned, encoding="utf-8")
-    print(f"[{kind}] cleaned: {input_path} -> {output_path}")
+    output_path.write_text(result.text, encoding="utf-8")
+    if ref_tsv_path is not None:
+        append_ref_events(ref_tsv_path, result.events)
+    print(f"[{program.profile.kind}] cleaned: {input_path} -> {output_path}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -83,6 +83,11 @@ def main(argv: list[str] | None = None) -> int:
     rules_path = config.rules_path
     lexicon_map_path = config.lexicon_map_path
     source_files = resolve_cleaner_input_files(input_path)
+    program = load_cleaner_program(
+        kind=kind,
+        rules_path=rules_path,
+        lexicon_map_path=lexicon_map_path,
+    )
 
     # Directory mode
     if input_path.is_dir():
@@ -137,11 +142,9 @@ def main(argv: list[str] | None = None) -> int:
             _clean_single_file(
                 src,
                 dst,
-                kind=kind,
-                ref_tsv=ref_tsv,
+                program=program,
+                ref_tsv_path=ref_tsv,
                 doc_id=doc_id,
-                rules_path=rules_path,
-                lexicon_map_path=lexicon_map_path,
             )
 
         print(f"[{kind}] cleaned {idx} files in directory: {input_path} -> {output_path}")
@@ -160,11 +163,9 @@ def main(argv: list[str] | None = None) -> int:
         _clean_single_file(
             input_path,
             dst,
-            kind=kind,
-            ref_tsv=ref_tsv,
+            program=program,
+            ref_tsv_path=ref_tsv,
             doc_id=doc_id,
-            rules_path=rules_path,
-            lexicon_map_path=lexicon_map_path,
         )
 
     return 0
