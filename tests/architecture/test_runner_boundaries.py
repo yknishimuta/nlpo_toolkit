@@ -128,14 +128,7 @@ def test_run_context_contains_plan_and_runtime_state_only() -> None:
 
     names = {field.name for field in fields(RunContext)}
 
-    assert names == {
-        "plan",
-        "prepared_corpora",
-        "analysis_backend",
-        "sentence_splitter",
-        "roman_exceptions",
-        "extraction_policy",
-    }
+    assert names == {"session", "sentence_splitter"}
     assert not names & {
         "project_root",
         "config_path",

@@ -11,9 +11,11 @@ from nlpo_toolkit.corpus_analysis.analysis_policy import (
     DEFAULT_ANALYSIS_EXTRACTION_POLICY,
 )
 from nlpo_toolkit.corpus_analysis.ports import (
-    AnalysisDependencies,
+    CorpusExecutionDependencies,
     CorpusPlanningDependencies,
     CorpusPreparationDependencies,
+    CountRuntimeDependencies,
+    NLPExecutionDependencies,
     RunnerDependencies,
 )
 from nlpo_toolkit.corpus_analysis.features import execute_feature_command
@@ -84,13 +86,13 @@ def test_dependency_objects_are_frozen() -> None:
     )
     preparation = CorpusPreparationDependencies(cleaner_loader=lambda: None)
     dependencies = RunnerDependencies(
-        planning=planning,
-        preparation=preparation,
-        analysis=AnalysisDependencies(
+        corpus=CorpusExecutionDependencies(planning=planning, preparation=preparation),
+        nlp=NLPExecutionDependencies(
             backend_factory=lambda _config: None,  # type: ignore[return-value]
             extraction_policy=DEFAULT_ANALYSIS_EXTRACTION_POLICY,
         ),
+        count=CountRuntimeDependencies(),
     )
 
     with pytest.raises(FrozenInstanceError):
-        dependencies.analysis = dependencies.analysis
+        dependencies.nlp = dependencies.nlp

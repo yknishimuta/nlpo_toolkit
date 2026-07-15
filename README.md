@@ -97,6 +97,13 @@ normalization and reference-tag removal. Planning dependencies contain only
 configuration loading and cleaner inspection; cleaner execution is supplied by
 separate preparation dependencies.
 
+Execution commands compose these stages through two typed sessions.
+`CorpusExecutionSession` owns the resolved plan and prepared corpora shared by
+Count, Features, and config-input N-gram. `NLPExecutionSession` adds the built
+backend, extraction policy, and Roman-numeral exceptions shared by Count and
+Features. Count then adds its sentence splitter and output/analysis pipeline;
+config-input N-gram uses only the corpus session and starts no NLP backend.
+
 Group analysis state has one canonical store: the immutable
 `AnalysisResults.groups` mapping. Each `GroupAnalysisResult` owns its files,
 counter, reference-tag counts, output files, trace path, and token artifact.

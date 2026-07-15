@@ -12,6 +12,7 @@ from nlpo_toolkit.corpus_analysis.config_references import ResolvedConfigFiles
 from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
 from nlpo_toolkit.corpus_analysis.ports import (
     ConfigNgramDependencies,
+    CorpusExecutionDependencies,
     CorpusPlanningDependencies,
     CorpusPreparationDependencies,
 )
@@ -287,32 +288,19 @@ def test_config_ngram_uses_canonical_analysis_plan_with_overrides(tmp_path, monk
     config = ensure_app_config({"groups": {"text": {"files": ["input.txt"]}}})
     calls = []
 
-    def fake_build_analysis_plan(request, **kwargs):
+    def fake_prepare_session(request, **kwargs):
         calls.append((request, kwargs))
         return type(
-            "Plan",
+            "Session",
             (),
             {
-                "project_root": tmp_path,
-                    "config": config,
-                    "work_items": (),
-                    "config_files": ResolvedConfigFiles(),
+                "corpora": (
+                    PreparedCorpus("text", (), "raw", "alpha beta", Counter()),
+                ),
             },
         )()
 
-    monkeypatch.setattr(ngram_mod, "build_analysis_plan", fake_build_analysis_plan)
-    monkeypatch.setattr(
-        ngram_mod,
-        "prepare_analysis_plan",
-        lambda definition, **_kwargs: type(
-            "ResolvedPlan", (), {"definition": definition, "work_items": ()}
-        )(),
-    )
-    monkeypatch.setattr(
-        ngram_mod,
-        "prepare_corpora",
-        lambda **_kwargs: (PreparedCorpus("text", (), "raw", "alpha beta", Counter()),),
-    )
+    monkeypatch.setattr(ngram_mod, "prepare_analysis_corpus_session", fake_prepare_session)
 
     result = execute_config_ngram_command(
         request=ConfigNgramRequest(
@@ -328,12 +316,14 @@ def test_config_ngram_uses_canonical_analysis_plan_with_overrides(tmp_path, monk
             top=None,
         ),
         dependencies=ConfigNgramDependencies(
-            planning=CorpusPlanningDependencies(
-                load_config=load_config,
-                cleaner_inspector=inspect_cleaner_config,
-            ),
-            preparation=CorpusPreparationDependencies(
-                cleaner_loader=lambda: pytest.fail("cleaner loader must not be called")
+            corpus=CorpusExecutionDependencies(
+                planning=CorpusPlanningDependencies(
+                    load_config=load_config,
+                    cleaner_inspector=inspect_cleaner_config,
+                ),
+                preparation=CorpusPreparationDependencies(
+                    cleaner_loader=lambda: pytest.fail("cleaner loader must not be called")
+                ),
             ),
         ),
     )
@@ -374,12 +364,14 @@ def test_config_ngram_does_not_apply_count_partition_validation(tmp_path) -> Non
             top=None,
         ),
         dependencies=ConfigNgramDependencies(
-            planning=CorpusPlanningDependencies(
-                load_config=load_config,
-                cleaner_inspector=inspect_cleaner_config,
-            ),
-            preparation=CorpusPreparationDependencies(
-                cleaner_loader=lambda: pytest.fail("cleaner must not run")
+            corpus=CorpusExecutionDependencies(
+                planning=CorpusPlanningDependencies(
+                    load_config=load_config,
+                    cleaner_inspector=inspect_cleaner_config,
+                ),
+                preparation=CorpusPreparationDependencies(
+                    cleaner_loader=lambda: pytest.fail("cleaner must not run")
+                ),
             ),
         ),
     )

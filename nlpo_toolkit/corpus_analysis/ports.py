@@ -58,17 +58,27 @@ class CorpusPreparationDependencies:
 
 
 @dataclass(frozen=True)
-class AnalysisDependencies:
+class CorpusExecutionDependencies:
+    planning: CorpusPlanningDependencies
+    preparation: CorpusPreparationDependencies
+
+
+@dataclass(frozen=True)
+class NLPExecutionDependencies:
     backend_factory: BackendFactory
     extraction_policy: AnalysisExtractionPolicy
+
+
+@dataclass(frozen=True)
+class CountRuntimeDependencies:
     sentence_splitter_factory: SentenceSplitterFactory | None = None
 
 
 @dataclass(frozen=True)
 class RunnerDependencies:
-    planning: CorpusPlanningDependencies
-    preparation: CorpusPreparationDependencies
-    analysis: AnalysisDependencies
+    corpus: CorpusExecutionDependencies
+    nlp: NLPExecutionDependencies
+    count: CountRuntimeDependencies
 
 
 @dataclass(frozen=True)
@@ -80,12 +90,10 @@ class CountCommandDependencies:
 
 @dataclass(frozen=True)
 class FeatureCommandDependencies:
-    planning: CorpusPlanningDependencies
-    preparation: CorpusPreparationDependencies
-    analysis: AnalysisDependencies
+    corpus: CorpusExecutionDependencies
+    nlp: NLPExecutionDependencies
 
 
 @dataclass(frozen=True)
 class ConfigNgramDependencies:
-    planning: CorpusPlanningDependencies
-    preparation: CorpusPreparationDependencies
+    corpus: CorpusExecutionDependencies

@@ -7,12 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
-from nlpo_toolkit.nlp.roman_numerals import (
-    RomanExceptionsError,
-    effective_roman_exceptions,
-    load_roman_exceptions,
-    should_drop_roman_numeral,
-)
+from nlpo_toolkit.nlp.roman_numerals import RomanExceptionsError, effective_roman_exceptions, should_drop_roman_numeral
 from nlpo_toolkit.nlp.contracts import NLPBackend
 
 from .analysis_records import (
@@ -21,12 +16,13 @@ from .analysis_records import (
 )
 from .analysis_policy import AnalysisExtractionPolicy, DEFAULT_ANALYSIS_EXTRACTION_POLICY
 from .ports import FeatureCommandDependencies
-from .corpus import prepare_corpora
+from .corpus import PreparedCorpus
 from .config_references import ConfigReferenceError
-from .preprocessing import prepare_analysis_plan
-from .run_plan import build_analysis_plan
+from .execution_session import (
+    prepare_analysis_corpus_session,
+    start_nlp_execution_session,
+)
 from .requests import CorpusPreparationRequest
-from .runtime import build_nlp_runtime
 
 
 class FeatureError(RuntimeError):
@@ -256,7 +252,7 @@ class FeatureCommandResult:
 
 
 def build_feature_rows(
-    groups_texts: list[tuple[str, list[Path], str]],
+    corpora: tuple[PreparedCorpus, ...],
     nlp: NLPBackend,
     options: FeatureOptions,
 ) -> list[dict[str, Any]]:
@@ -266,7 +262,10 @@ def build_feature_rows(
         raise FeatureError("--field must be 'lemma' or 'token'")
 
     prepared: list[PreparedFeatureCorpus] = []
-    for group, files, text in groups_texts:
+    for corpus in corpora:
+        group = corpus.label
+        files = corpus.files
+        text = corpus.prepared_text
         raw_records = tuple(
             iter_nlp_analysis_records_from_text(
                 text=text,
@@ -327,27 +326,17 @@ def execute_feature_command(
     dependencies: FeatureCommandDependencies,
 ) -> FeatureCommandResult:
     try:
-        definition = build_analysis_plan(
+        corpus_session = prepare_analysis_corpus_session(
             request.corpus,
-            dependencies=dependencies.planning,
+            dependencies=dependencies.corpus,
         )
-    except (ConfigReferenceError, FileNotFoundError) as exc:
-        raise FeatureError(str(exc)) from exc
-    plan = prepare_analysis_plan(
-        definition,
-        dependencies=dependencies.preparation,
-    )
-    config = definition.config
-
-    roman_exceptions_path = definition.config_files.path("filters.roman_exceptions_file")
-    try:
-        configured_roman_exceptions = (
-            load_roman_exceptions(roman_exceptions_path)
-            if roman_exceptions_path is not None
-            else frozenset()
+        nlp_session = start_nlp_execution_session(
+            corpus_session,
+            dependencies=dependencies.nlp,
         )
-    except RomanExceptionsError as exc:
+    except (ConfigReferenceError, FileNotFoundError, RomanExceptionsError) as exc:
         raise FeatureError(str(exc)) from exc
+    config = corpus_session.plan.definition.config
 
     options = FeatureOptions(
         field=request.field,
@@ -358,24 +347,17 @@ def execute_feature_command(
         filter_policy=FeatureFilterPolicy(
             min_token_length=config.filters.min_token_length,
             drop_roman_numerals=config.filters.drop_roman_numerals,
-            roman_exceptions=configured_roman_exceptions,
+            roman_exceptions=nlp_session.roman_exceptions,
         ),
-        extraction_policy=dependencies.analysis.extraction_policy,
-    )
-
-    groups_texts: list[tuple[str, list[Path], str]] = []
-    for corpus in prepare_corpora(
-        work_items=plan.work_items,
-        config=config,
-        config_files=definition.config_files,
-    ):
-        groups_texts.append((corpus.label, list(corpus.files), corpus.prepared_text))
-
-    built_backend = build_nlp_runtime(
-        config=config,
-        backend_factory=dependencies.analysis.backend_factory,
+        extraction_policy=nlp_session.extraction_policy,
     )
 
     return FeatureCommandResult(
-        rows=tuple(build_feature_rows(groups_texts, built_backend.backend, options))
+        rows=tuple(
+            build_feature_rows(
+                corpus_session.corpora,
+                nlp_session.backend.backend,
+                options,
+            )
+        )
     )

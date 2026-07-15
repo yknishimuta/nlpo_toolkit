@@ -20,13 +20,15 @@ from .archive.service import create_run_archive
 from .cleaner_runtime import load_default_cleaner
 from .config import NLPConfig, load_config
 from .ports import (
-    AnalysisDependencies,
     BackendFactory,
     ConfigNgramDependencies,
+    CorpusExecutionDependencies,
     CorpusPlanningDependencies,
     CorpusPreparationDependencies,
+    CountRuntimeDependencies,
     CountCommandDependencies,
     FeatureCommandDependencies,
+    NLPExecutionDependencies,
     RunnerDependencies,
 )
 from .runner import run
@@ -81,22 +83,32 @@ def default_corpus_preparation_dependencies() -> CorpusPreparationDependencies:
     return CorpusPreparationDependencies(cleaner_loader=load_default_cleaner)
 
 
-def default_analysis_dependencies(
+def default_corpus_execution_dependencies() -> CorpusExecutionDependencies:
+    return CorpusExecutionDependencies(
+        planning=default_corpus_planning_dependencies(),
+        preparation=default_corpus_preparation_dependencies(),
+    )
+
+
+def default_nlp_execution_dependencies(
     *,
     extraction_policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY,
-) -> AnalysisDependencies:
-    return AnalysisDependencies(
+) -> NLPExecutionDependencies:
+    return NLPExecutionDependencies(
         backend_factory=_backend_factory_for(extraction_policy),
         extraction_policy=extraction_policy,
-        sentence_splitter_factory=_create_sentence_splitter,
     )
+
+
+def default_count_runtime_dependencies() -> CountRuntimeDependencies:
+    return CountRuntimeDependencies(sentence_splitter_factory=_create_sentence_splitter)
 
 
 def default_runner_dependencies() -> RunnerDependencies:
     return RunnerDependencies(
-        planning=default_corpus_planning_dependencies(),
-        preparation=default_corpus_preparation_dependencies(),
-        analysis=default_analysis_dependencies(),
+        corpus=default_corpus_execution_dependencies(),
+        nlp=default_nlp_execution_dependencies(),
+        count=default_count_runtime_dependencies(),
     )
 
 
@@ -110,14 +122,12 @@ def default_count_command_dependencies() -> CountCommandDependencies:
 
 def default_feature_command_dependencies() -> FeatureCommandDependencies:
     return FeatureCommandDependencies(
-        planning=default_corpus_planning_dependencies(),
-        preparation=default_corpus_preparation_dependencies(),
-        analysis=default_analysis_dependencies(),
+        corpus=default_corpus_execution_dependencies(),
+        nlp=default_nlp_execution_dependencies(),
     )
 
 
 def default_config_ngram_dependencies() -> ConfigNgramDependencies:
     return ConfigNgramDependencies(
-        planning=default_corpus_planning_dependencies(),
-        preparation=default_corpus_preparation_dependencies(),
+        corpus=default_corpus_execution_dependencies(),
     )

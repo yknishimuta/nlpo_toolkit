@@ -64,18 +64,18 @@ def build_summary_lines(
     partitions: PartitionRunResult,
     comparisons: ComparisonRunResult,
 ) -> list[str]:
-    plan = context.plan
+    plan = context.session.corpus.plan
     lines: list[str] = [
         "# Summary",
         "",
         f"language: {plan.config.nlp.language}",
         f"stanza_package: {plan.config.nlp.stanza_package}",
-        f"nlp_backend: {context.analysis_backend.info.name}",
+        f"nlp_backend: {context.session.backend.info.name}",
         f"analysis_unit: {plan.analysis_unit}",
         f"normalization: {_format_normalization_kv(plan.config.normalization)}",
         "",
     ]
-    lines.extend(render_backend_info(context.analysis_backend.info))
+    lines.extend(render_backend_info(context.session.backend.info))
     lines.append("")
 
     if plan.config.ref_tags.enabled:
@@ -171,7 +171,7 @@ def build_final_run_metadata(
     comparisons: ComparisonRunResult,
     generated_outputs: Sequence[Path],
 ) -> dict[str, object]:
-    plan = context.plan
+    plan = context.session.corpus.plan
     meta = build_run_meta(
         groups_files={
             label: [str(path) for path in group.files]
@@ -179,7 +179,7 @@ def build_final_run_metadata(
         },
     )
     meta["analysis_unit"] = plan.analysis_unit
-    meta["nlp"] = context.analysis_backend.info.to_dict()
+    meta["nlp"] = context.session.backend.info.to_dict()
     if plan.auto_mode:
         meta["grouping"] = {
             "mode": "auto_single_cleaned",
@@ -217,7 +217,7 @@ def write_run_report(
     comparisons: ComparisonRunResult,
 ) -> RunReport:
     summary_path = write_summary(
-        context.plan.out_dir / "summary.txt",
+        context.session.corpus.plan.out_dir / "summary.txt",
         build_summary_lines(
             context=context,
             analysis=analysis,
@@ -225,7 +225,7 @@ def write_run_report(
             comparisons=comparisons,
         ),
     )
-    run_meta_path = context.plan.out_dir / "run_meta.json"
+    run_meta_path = context.session.corpus.plan.out_dir / "run_meta.json"
     generated_outputs = merge_generated_outputs(
         analysis.generated_outputs,
         partitions.generated_outputs,
@@ -240,7 +240,7 @@ def write_run_report(
             comparisons=comparisons,
             generated_outputs=generated_outputs,
         ),
-        context.plan.out_dir,
+        context.session.corpus.plan.out_dir,
     )
     return RunReport(
         summary_path=summary_path,
@@ -256,7 +256,7 @@ def build_run_result(
     partitions: PartitionRunResult,
     report: RunReport,
 ) -> RunResult:
-    plan = context.plan
+    plan = context.session.corpus.plan
     groups_files = {
         label: deduplicate_resolved_paths(group.files)
         for label, group in analysis.groups.items()

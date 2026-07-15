@@ -31,11 +31,12 @@ from nlpo_toolkit.corpus_analysis.corpus_errors import (
 )
 from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis.ports import (
-    AnalysisDependencies,
     ConfigNgramDependencies,
+    CorpusExecutionDependencies,
     CorpusPlanningDependencies,
     CorpusPreparationDependencies,
     FeatureCommandDependencies,
+    NLPExecutionDependencies,
 )
 from nlpo_toolkit.corpus_analysis.ngram import ConfigNgramRequest
 from nlpo_toolkit.corpus_analysis.features import FeatureRequest
@@ -324,9 +325,11 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
                 corpus_request(tmp_path, config_path),
             ),
         dependencies=FeatureCommandDependencies(
-            planning=planning,
-            preparation=preparation,
-            analysis=AnalysisDependencies(
+            corpus=CorpusExecutionDependencies(
+                planning=planning,
+                preparation=preparation,
+            ),
+            nlp=NLPExecutionDependencies(
                 backend_factory=lambda _config: BuiltNLPBackend(
                     backend=CaptureNLP(),
                     info=NLPBackendInfo(name="fake", language="la", package="package_a"),
@@ -353,8 +356,10 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
             top=None,
         ),
         dependencies=ConfigNgramDependencies(
-            planning=planning,
-            preparation=preparation,
+            corpus=CorpusExecutionDependencies(
+                planning=planning,
+                preparation=preparation,
+            ),
         ),
     )
 

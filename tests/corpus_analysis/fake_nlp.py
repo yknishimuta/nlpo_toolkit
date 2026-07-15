@@ -18,11 +18,13 @@ from nlpo_toolkit.corpus_analysis.analysis_policy import (
     DEFAULT_ANALYSIS_EXTRACTION_POLICY,
 )
 from nlpo_toolkit.corpus_analysis.ports import (
-    AnalysisDependencies,
     BackendFactory,
+    CorpusExecutionDependencies,
     CorpusPlanningDependencies,
     CorpusPreparationDependencies,
+    CountRuntimeDependencies,
     CountCommandDependencies,
+    NLPExecutionDependencies,
     RunnerDependencies,
 )
 from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
@@ -130,15 +132,18 @@ def runner_dependencies(
         return cleaner
 
     return RunnerDependencies(
-        planning=CorpusPlanningDependencies(
-            load_config=canonical_loader,
-            cleaner_inspector=inspect_cleaner_config,
+        corpus=CorpusExecutionDependencies(
+            planning=CorpusPlanningDependencies(
+                load_config=canonical_loader,
+                cleaner_inspector=inspect_cleaner_config,
+            ),
+            preparation=CorpusPreparationDependencies(cleaner_loader=cleaner_loader),
         ),
-        preparation=CorpusPreparationDependencies(cleaner_loader=cleaner_loader),
-        analysis=AnalysisDependencies(
+        nlp=NLPExecutionDependencies(
             backend_factory=backend_factory,
             extraction_policy=extraction_policy,
         ),
+        count=CountRuntimeDependencies(),
     )
 
 

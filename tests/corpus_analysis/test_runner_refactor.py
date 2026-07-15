@@ -103,9 +103,9 @@ def test_prepare_run_context_resolves_per_file_work_items(tmp_path: Path) -> Non
         dependencies=deps,
     )
 
-    assert context.plan.per_file is True
-    assert [item.label for item in context.plan.work_items] == ["sample_text_a"]
-    assert context.plan.out_dir == (tmp_path / "output").resolve()
+    assert context.session.corpus.plan.per_file is True
+    assert [item.label for item in context.session.corpus.plan.work_items] == ["sample_text_a"]
+    assert context.session.corpus.plan.out_dir == (tmp_path / "output").resolve()
 
 
 def test_analyze_corpora_writes_expected_outputs_from_record_pipeline(tmp_path: Path) -> None:
@@ -154,7 +154,13 @@ def test_analyze_corpora_writes_expected_outputs_from_record_pipeline(tmp_path: 
     )
 
     result = analyze_corpora(
-        replace(context, prepared_corpora=(corpus,))
+        replace(
+            context,
+            session=replace(
+                context.session,
+                corpus=replace(context.session.corpus, corpora=(corpus,)),
+            ),
+        )
     ).groups["group_a"]
 
     assert result.counter == Counter({"item_a": 2, "item_b": 1})
@@ -207,7 +213,7 @@ def test_summary_lines_and_metadata_include_existing_fields(tmp_path: Path) -> N
         analysis=analysis,
         partitions=partitions,
         comparisons=comparisons,
-        generated_outputs=(context.plan.out_dir / "summary.txt", context.plan.out_dir / "run_meta.json"),
+        generated_outputs=(context.session.corpus.plan.out_dir / "summary.txt", context.session.corpus.plan.out_dir / "run_meta.json"),
     )
 
     assert lines[:6] == [

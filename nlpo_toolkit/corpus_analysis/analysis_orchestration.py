@@ -40,7 +40,7 @@ def _analyze_one_corpus(
         cache_stats=cache_stats,
     )
     output_result = analysis_outputs.write_group_analysis_outputs(
-        plan=context.plan,
+        plan=context.session.corpus.plan,
         corpus=corpus,
         counter=record_result.counter,
         normalization_map=normalization_map,
@@ -62,10 +62,11 @@ def _analyze_one_corpus(
 
 def analyze_corpora(context: RunContext) -> AnalysisResults:
     output_plan = analysis_outputs.build_analysis_output_plan(
-        plan=context.plan, corpora=context.prepared_corpora
+        plan=context.session.corpus.plan, corpora=context.session.corpus.corpora
     )
-    normalization_map = analysis_outputs.load_configured_lemma_normalization(context.plan)
-    known_words = analysis_outputs.load_configured_known_words(context.plan)
+    plan = context.session.corpus.plan
+    normalization_map = analysis_outputs.load_configured_lemma_normalization(plan)
+    known_words = analysis_outputs.load_configured_known_words(plan)
     cache_stats = analysis_execution.create_analysis_cache_stats(context)
     groups = (
         _analyze_one_corpus(
@@ -76,7 +77,7 @@ def analyze_corpora(context: RunContext) -> AnalysisResults:
             known_words=known_words,
             cache_stats=cache_stats,
         )
-        for corpus in context.prepared_corpora
+        for corpus in context.session.corpus.corpora
     )
     return AnalysisResults.from_groups(
         groups,

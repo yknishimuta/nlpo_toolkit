@@ -5,22 +5,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from nlpo_toolkit.nlp.contracts import BuiltNLPBackend, NLPBackend
+from nlpo_toolkit.nlp.contracts import NLPBackend
 
-from .corpus import PreparedCorpus
-from .analysis_policy import AnalysisExtractionPolicy, DEFAULT_ANALYSIS_EXTRACTION_POLICY
+from .execution_session import NLPExecutionSession
 from .config_references import ConfigFileReference
 from .run_plan import ResolvedAnalysisPlan
 
 
 @dataclass(frozen=True)
 class RunContext:
-    plan: ResolvedAnalysisPlan
-    prepared_corpora: tuple[PreparedCorpus, ...]
-    analysis_backend: BuiltNLPBackend
+    session: NLPExecutionSession
     sentence_splitter: NLPBackend | None
-    roman_exceptions: frozenset[str]
-    extraction_policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY
 
 
 def deduplicate_resolved_paths(paths: Iterable[Path]) -> tuple[Path, ...]:

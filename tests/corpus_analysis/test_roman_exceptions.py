@@ -103,7 +103,9 @@ def test_runner_loads_roman_exceptions_once_for_multiple_groups(tmp_path: Path, 
         calls.append(path)
         return frozenset({"xiv"})
 
-    monkeypatch.setattr(runtime_mod, "load_roman_exceptions", fake_loader)
+    import nlpo_toolkit.corpus_analysis.execution_session as session_mod
+
+    monkeypatch.setattr(session_mod, "load_roman_exceptions", fake_loader)
 
     rc = runner_mod.run(
         corpus_request(tmp_path, config_path),

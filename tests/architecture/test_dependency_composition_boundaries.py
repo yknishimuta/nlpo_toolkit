@@ -22,7 +22,9 @@ COMPOSITION_PATH = PROJECT_ROOT / "nlpo_toolkit/corpus_analysis/composition.py"
 CONTAINERS = (
     ports.CorpusPlanningDependencies,
     ports.CorpusPreparationDependencies,
-    ports.AnalysisDependencies,
+    ports.CorpusExecutionDependencies,
+    ports.NLPExecutionDependencies,
+    ports.CountRuntimeDependencies,
     ports.RunnerDependencies,
     ports.CountCommandDependencies,
     ports.FeatureCommandDependencies,
@@ -100,7 +102,9 @@ def test_composition_owns_production_factories_but_no_ports() -> None:
     assert default_functions == {
         "default_corpus_planning_dependencies",
         "default_corpus_preparation_dependencies",
-        "default_analysis_dependencies",
+        "default_corpus_execution_dependencies",
+        "default_nlp_execution_dependencies",
+        "default_count_runtime_dependencies",
         "default_runner_dependencies",
         "default_count_command_dependencies",
         "default_feature_command_dependencies",
@@ -197,13 +201,12 @@ def test_production_composition_selects_expected_implementations() -> None:
     assert planning.cleaner_inspector is composition._inspect_cleaner_config
     assert count.run_analysis is run
     assert count.archive_creator is create_run_archive
-    assert set(field.name for field in fields(type(count.runner))) == {"planning", "preparation", "analysis"}
+    assert set(field.name for field in fields(type(count.runner))) == {"corpus", "nlp", "count"}
     assert set(field.name for field in fields(ports.FeatureCommandDependencies)) == {
-        "planning",
-        "preparation",
-        "analysis",
+        "corpus",
+        "nlp",
     }
-    assert set(field.name for field in fields(ports.ConfigNgramDependencies)) == {"planning", "preparation"}
+    assert set(field.name for field in fields(ports.ConfigNgramDependencies)) == {"corpus"}
 
 
 def test_analysis_composition_binds_the_same_extraction_policy(monkeypatch) -> None:
@@ -216,7 +219,7 @@ def test_analysis_composition_binds_the_same_extraction_policy(monkeypatch) -> N
         return sentinel
 
     monkeypatch.setattr(composition, "create_nlp_backend", fake_create_backend)
-    dependencies = composition.default_analysis_dependencies(extraction_policy=policy)
+    dependencies = composition.default_nlp_execution_dependencies(extraction_policy=policy)
     config = NLPConfig()
 
     assert dependencies.backend_factory(config) is sentinel
@@ -252,8 +255,8 @@ def test_default_factories_do_not_return_global_container_singletons() -> None:
     first = composition.default_runner_dependencies()
     second = composition.default_runner_dependencies()
     assert first is not second
-    assert first.planning is not second.planning
-    assert first.analysis is not second.analysis
+    assert first.corpus is not second.corpus
+    assert first.nlp is not second.nlp
 
 
 def test_fresh_interpreter_imports_all_dependency_consumers() -> None:

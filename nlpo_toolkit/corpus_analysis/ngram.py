@@ -8,11 +8,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Iterator
 
-from .corpus import PreparedCorpus, prepare_corpora
+from .corpus import PreparedCorpus
 from .config_references import ConfigReferenceError
 from .ports import ConfigNgramDependencies
-from .preprocessing import prepare_analysis_plan
-from .run_plan import build_analysis_plan
+from .execution_session import prepare_analysis_corpus_session
 from .requests import CorpusPreparationRequest
 from .analysis_records import TokenRecord
 from .token_artifact import TokenArtifactError, read_token_records
@@ -263,23 +262,14 @@ def execute_config_ngram_command(
     dependencies: ConfigNgramDependencies,
 ) -> NgramCommandResult:
     try:
-        definition = build_analysis_plan(
+        session = prepare_analysis_corpus_session(
             request.corpus,
-            dependencies=dependencies.planning,
+            dependencies=dependencies.corpus,
         )
     except ConfigReferenceError as exc:
         raise NgramError(str(exc)) from exc
-    plan = prepare_analysis_plan(
-        definition,
-        dependencies=dependencies.preparation,
-    )
-    corpora = prepare_corpora(
-        work_items=plan.work_items,
-        config=definition.config,
-        config_files=definition.config_files,
-    )
     rows = build_ngrams_from_rows(
-        iter_config_token_rows(corpora),
+        iter_config_token_rows(session.corpora),
         n=request.n,
         field="token",
         by_group=request.by_group,

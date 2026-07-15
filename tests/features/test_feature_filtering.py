@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from nlpo_toolkit.corpus_analysis.features import (
     filter_feature_records,
     select_mfw,
 )
+from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
 from nlpo_toolkit.nlp.contracts import NLPDocument, NLPSentence, NLPToken
 
 
@@ -204,7 +206,9 @@ def test_mfw_field_changes_values_but_not_basic_or_upos_population() -> None:
         min_token_length=2,
         drop_roman_numerals=True,
     )
-    source = [("g", [Path("a.txt")], "xiv a Rosa .")]
+    source = (
+        PreparedCorpus("g", (Path("a.txt"),), "xiv a Rosa .", "xiv a Rosa .", Counter()),
+    )
     lemma_row = build_feature_rows(
         source,
         NLP(),

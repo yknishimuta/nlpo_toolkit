@@ -38,7 +38,7 @@ def execute_partition_validations(
     context: RunContext,
     analysis: AnalysisResults,
 ) -> PartitionRunResult:
-    plan = context.plan
+    plan = context.session.corpus.plan
     partition_results = validate_partitions(plan.partition_specs, _group_counters(analysis))
     summaries: list[Mapping[str, object]] = []
     metadata: list[Mapping[str, object]] = []
@@ -82,7 +82,7 @@ def execute_group_comparisons(
     context: RunContext,
     analysis: AnalysisResults,
 ) -> ComparisonRunResult:
-    plan = context.plan
+    plan = context.session.corpus.plan
     comparison_results = run_comparisons(
         specs=plan.comparison_specs,
         counters=_group_counters(analysis),

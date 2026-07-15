@@ -92,10 +92,10 @@ def test_consumers_use_the_correct_planning_stage() -> None:
         Path("nlpo_toolkit/corpus_analysis/ngram.py")
     )
 
-    assert "build_count_plan" in runtime_imports
+    assert "prepare_count_corpus_session" in runtime_imports
     assert "build_count_plan" in dry_run_imports
-    assert "build_analysis_plan" in features_imports
-    assert "build_analysis_plan" in ngram_imports
+    assert "prepare_analysis_corpus_session" in features_imports
+    assert "prepare_analysis_corpus_session" in ngram_imports
     assert "build_count_plan" not in features_imports
     assert "build_count_plan" not in ngram_imports
 
@@ -127,7 +127,7 @@ def test_build_count_plan_validates_without_reconstructing_plan() -> None:
 
 
 def test_runtime_result_types_use_resolved_analysis_plan() -> None:
-    assert get_type_hints(RunContext)["plan"] is ResolvedAnalysisPlan
+    assert set(get_type_hints(RunContext)) == {"session", "sentence_splitter"}
     assert get_type_hints(RunResult)["plan"] is ResolvedAnalysisPlan
 
 
@@ -174,7 +174,7 @@ def test_command_routes_use_explicit_planning_stages() -> None:
     features = _imported_names(Path("nlpo_toolkit/corpus_analysis/features.py"))
     ngram = _imported_names(Path("nlpo_toolkit/corpus_analysis/ngram.py"))
     dry_run = _imported_names(Path("nlpo_toolkit/corpus_analysis/dry_run.py"))
-    assert {"build_count_plan", "prepare_count_plan"} <= runtime
-    assert {"build_analysis_plan", "prepare_analysis_plan"} <= features
-    assert {"build_analysis_plan", "prepare_analysis_plan"} <= ngram
+    assert {"prepare_count_corpus_session", "start_nlp_execution_session"} <= runtime
+    assert {"prepare_analysis_corpus_session", "start_nlp_execution_session"} <= features
+    assert {"prepare_analysis_corpus_session"} <= ngram
     assert {"build_count_plan", "inspect_analysis_plan"} <= dry_run

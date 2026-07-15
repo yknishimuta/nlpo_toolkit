@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+from collections import Counter
 import io
 from pathlib import Path
 
@@ -37,11 +38,13 @@ from nlpo_toolkit.nlp.contracts import (
     NLPToken,
 )
 from nlpo_toolkit.corpus_analysis.config import NLPConfig
+from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
 from nlpo_toolkit.corpus_analysis.ports import (
-    AnalysisDependencies,
+    CorpusExecutionDependencies,
     CorpusPlanningDependencies,
     CorpusPreparationDependencies,
     FeatureCommandDependencies,
+    NLPExecutionDependencies,
 )
 from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 
@@ -74,6 +77,10 @@ def _backend_factory(config: NLPConfig) -> BuiltNLPBackend:
     )
 
 
+def _prepared(group: str, path: Path, text: str) -> PreparedCorpus:
+    return PreparedCorpus(group, (path,), text, text, Counter())
+
+
 def _dependencies(cleaner=None) -> FeatureCommandDependencies:
     from nlpo_toolkit.corpus_analysis.config import load_config
 
@@ -83,12 +90,14 @@ def _dependencies(cleaner=None) -> FeatureCommandDependencies:
         return cleaner
 
     return FeatureCommandDependencies(
-        planning=CorpusPlanningDependencies(
-            load_config=load_config,
-            cleaner_inspector=inspect_cleaner_config,
+        corpus=CorpusExecutionDependencies(
+            planning=CorpusPlanningDependencies(
+                load_config=load_config,
+                cleaner_inspector=inspect_cleaner_config,
+            ),
+            preparation=CorpusPreparationDependencies(cleaner_loader=cleaner_loader),
         ),
-        preparation=CorpusPreparationDependencies(cleaner_loader=cleaner_loader),
-        analysis=AnalysisDependencies(
+        nlp=NLPExecutionDependencies(
             backend_factory=_backend_factory,
             extraction_policy=AnalysisExtractionPolicy(),
         ),
@@ -312,7 +321,7 @@ def test_build_feature_rows_chunks_through_shared_extractor() -> None:
             )
 
     rows = build_feature_rows(
-        [("g", [Path("a.txt")], "Rosa amat")],
+        (_prepared("g", Path("a.txt"), "Rosa amat"),),
         ChunkNLP(),
         FeatureOptions(extraction_policy=AnalysisExtractionPolicy(chunk_chars=5)),
     )
@@ -352,7 +361,7 @@ def test_count_and_features_share_chunk_boundaries() -> None:
         )
     )
     build_feature_rows(
-        [("g", [Path("a.txt")], "Rosa amat")],
+        (_prepared("g", Path("a.txt"), "Rosa amat"),),
         feature_backend,
         FeatureOptions(extraction_policy=policy),
     )
@@ -360,10 +369,10 @@ def test_count_and_features_share_chunk_boundaries() -> None:
 
 
 def test_build_feature_rows_mfw_lemma_and_token() -> None:
-    groups_texts = [
-        ("g1", [Path("a.txt")], "Rosa amat et puella."),
-        ("g2", [Path("b.txt")], "Rosa in villa currit."),
-    ]
+    groups_texts = (
+        _prepared("g1", Path("a.txt"), "Rosa amat et puella."),
+        _prepared("g2", Path("b.txt"), "Rosa in villa currit."),
+    )
 
     lemma_rows = build_feature_rows(groups_texts, DummyNLP(), FeatureOptions(mfw=2, field="lemma"))
     token_rows = build_feature_rows(groups_texts, DummyNLP(), FeatureOptions(mfw=2, field="token"))
@@ -427,11 +436,10 @@ def test_run_features_accepts_backend_factory(tmp_path: Path) -> None:
             corpus=CorpusPreparationRequest(tmp_path, config_path),
         ),
             dependencies=FeatureCommandDependencies(
-                planning=base.planning,
-                preparation=base.preparation,
-                analysis=AnalysisDependencies(
-                backend_factory=recording_factory,
-                extraction_policy=base.analysis.extraction_policy,
+                corpus=base.corpus,
+                nlp=NLPExecutionDependencies(
+                    backend_factory=recording_factory,
+                    extraction_policy=base.nlp.extraction_policy,
             ),
         ),
     )
@@ -485,6 +493,7 @@ def test_feature_command_applies_one_shared_filter_and_loads_roman_exceptions_on
     monkeypatch,
 ) -> None:
     import nlpo_toolkit.corpus_analysis.features as features_mod
+    import nlpo_toolkit.corpus_analysis.execution_session as session_mod
 
     (tmp_path / "input").mkdir()
     (tmp_path / "input" / "a.txt").write_text("xiv a rosa", encoding="utf-8")
@@ -528,7 +537,7 @@ def test_feature_command_applies_one_shared_filter_and_loads_roman_exceptions_on
     nlp = RecordingNLP()
     load_calls: list[Path] = []
     filter_calls: list[tuple[NLPAnalysisRecord, ...]] = []
-    real_loader = features_mod.load_roman_exceptions
+    real_loader = session_mod.load_roman_exceptions
     real_filter = features_mod.filter_feature_records
 
     def recording_loader(path: Path) -> frozenset[str]:
@@ -540,19 +549,18 @@ def test_feature_command_applies_one_shared_filter_and_loads_roman_exceptions_on
         filter_calls.append(records)
         return real_filter(records, policy=policy)
 
-    monkeypatch.setattr(features_mod, "load_roman_exceptions", recording_loader)
+    monkeypatch.setattr(session_mod, "load_roman_exceptions", recording_loader)
     monkeypatch.setattr(features_mod, "filter_feature_records", recording_filter)
 
     dependencies = _dependencies()
     dependencies = FeatureCommandDependencies(
-        planning=dependencies.planning,
-        preparation=dependencies.preparation,
-        analysis=AnalysisDependencies(
+        corpus=dependencies.corpus,
+        nlp=NLPExecutionDependencies(
             backend_factory=lambda config: BuiltNLPBackend(
                 backend=nlp,
                 info=NLPBackendInfo(name="fake", language=config.language),
             ),
-            extraction_policy=dependencies.analysis.extraction_policy,
+            extraction_policy=dependencies.nlp.extraction_policy,
         ),
     )
     result = execute_feature_command(

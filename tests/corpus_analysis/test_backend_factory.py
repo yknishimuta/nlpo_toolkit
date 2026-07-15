@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from tests.corpus_analysis.fake_nlp import corpus_request
+from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
+from collections import Counter
 
 import sys
 from pathlib import Path
@@ -83,7 +85,7 @@ def test_fake_backend_works_for_features() -> None:
     backend = FakeBackend()
 
     rows = build_feature_rows(
-        [("group_a", [Path("a.txt")], "ignored")],
+        (PreparedCorpus("group_a", (Path("a.txt"),), "ignored", "ignored", Counter()),),
         backend,
         FeatureOptions(),
     )
