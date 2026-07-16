@@ -10,7 +10,7 @@ import pytest
 
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
 from nlpo_toolkit.corpus_analysis.config import load_config
-from nlpo_toolkit.corpus_analysis.token_artifact import read_token_records
+from nlpo_toolkit.corpus_analysis.token_artifact.reader import read_token_records
 from tests.corpus_analysis.fake_nlp import FakeNLPBackend, fake_backend_factory, runner_dependencies
 
 

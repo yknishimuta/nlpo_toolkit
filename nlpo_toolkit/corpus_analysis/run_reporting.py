@@ -83,11 +83,11 @@ def build_summary_lines(
         lines.extend(["", "# Token artifacts", ""])
         for artifact in analysis.token_artifact_metadata:
             lines.append(
-                f"- token_artifact={artifact.get('group', '')} "
-                f"path={artifact.get('path', '')} "
-                f"rows={artifact.get('row_count', 0)} "
-                f"included={artifact.get('included_row_count', 0)} "
-                f"schema={artifact.get('schema_version', '')}"
+                f"- token_artifact={artifact.group} "
+                f"path={artifact.artifact_path} "
+                f"rows={artifact.row_count} "
+                f"included={artifact.included_row_count} "
+                f"schema={artifact.schema_version}"
             )
 
     cache_meta = analysis.cache_stats.to_dict()
@@ -189,7 +189,23 @@ def build_final_run_metadata(
             )
         },
     }
-    meta["token_artifacts"] = list(analysis.token_artifact_metadata)
+    meta["token_artifacts"] = [
+        {
+            "group": artifact.group,
+            "path": artifact.artifact_path,
+            "metadata_path": str(
+                context.artifact_plan.require(
+                    ArtifactKind.TOKEN_ARTIFACT_METADATA, group=artifact.group
+                ).path
+            ),
+            "schema_version": artifact.schema_version,
+            "row_count": artifact.row_count,
+            "included_row_count": artifact.included_row_count,
+            "complete": artifact.complete,
+            "sha256": artifact.sha256,
+        }
+        for artifact in analysis.token_artifact_metadata
+    ]
     meta["analysis_cache"] = analysis.cache_stats.to_dict()
     meta["generated_outputs"] = [str(path) for path in context.artifact_plan.paths]
     return meta

@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .analysis_records import TokenRecord
-from .token_artifact import TokenArtifactError, read_token_records
+from .token_artifact.errors import TokenArtifactError
+from .token_artifact.reader import read_token_records
 
 
 class ConcordanceError(ValueError):

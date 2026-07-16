@@ -14,8 +14,12 @@ def _imports(path: Path) -> set[str]:
 
 
 def test_downstream_modules_do_not_import_diagnostic_trace() -> None:
-    for name in ("token_artifact.py", "concordance.py", "ngram.py"):
-        path = Path("nlpo_toolkit/corpus_analysis") / name
+    paths = [
+        *Path("nlpo_toolkit/corpus_analysis/token_artifact").glob("*.py"),
+        Path("nlpo_toolkit/corpus_analysis/concordance.py"),
+        Path("nlpo_toolkit/corpus_analysis/ngram.py"),
+    ]
+    for path in paths:
         assert "diagnostic_trace" not in _imports(path), path
         assert "read_legacy_trace_records" not in path.read_text(encoding="utf-8")
 
@@ -28,9 +32,11 @@ def test_diagnostic_trace_is_writer_only() -> None:
 
 
 def test_token_artifact_has_no_trace_fallback() -> None:
-    import nlpo_toolkit.corpus_analysis.token_artifact as artifact
-
-    assert not hasattr(artifact, "read_token_rows")
+    source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in Path("nlpo_toolkit/corpus_analysis/token_artifact").glob("*.py")
+    )
+    assert "read_token_rows" not in source
 
 
 def test_downstream_cli_uses_tokens_and_rejects_trace() -> None:

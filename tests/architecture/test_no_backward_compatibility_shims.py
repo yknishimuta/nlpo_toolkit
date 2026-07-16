@@ -4,7 +4,7 @@ import ast
 import inspect
 from pathlib import Path
 
-from nlpo_toolkit.corpus_analysis import diagnostic_trace, token_artifact
+from nlpo_toolkit.corpus_analysis import diagnostic_trace
 from nlpo_toolkit.corpus_analysis.normalizer import normalize_text
 from nlpo_toolkit.corpus_analysis.ports import CountRunner
 from nlpo_toolkit.corpus_analysis.planning.build import (
@@ -108,10 +108,9 @@ def test_cleaner_calls_canonical_clean_document_signature_directly() -> None:
     )
 
 
-def test_token_artifact_exports_only_artifact_api() -> None:
-    assert ANALYSIS_RECORD_NAMES.isdisjoint(token_artifact.__all__)
-    for name in ANALYSIS_RECORD_NAMES:
-        assert not hasattr(token_artifact, name)
+def test_token_artifact_package_init_is_not_a_compatibility_facade() -> None:
+    tree = _tree("nlpo_toolkit/corpus_analysis/token_artifact/__init__.py")
+    assert not any(isinstance(node, (ast.Import, ast.ImportFrom)) for node in tree.body)
 
 
 def test_consumers_do_not_import_analysis_records_from_token_artifact() -> None:
@@ -210,7 +209,7 @@ def test_public_packages_do_not_export_removed_symbols() -> None:
     import nlpo_toolkit.latin.cleaners as cleaners
 
     removed = ANALYSIS_RECORD_NAMES | {"LEGACY_TRACE_COLUMNS"}
-    for module in (corpus_analysis, config, comparison, cleaners, token_artifact):
+    for module in (corpus_analysis, config, comparison, cleaners):
         exported = set(getattr(module, "__all__", ()))
         assert exported.isdisjoint(removed)
         assert not any(hasattr(module, name) for name in removed)

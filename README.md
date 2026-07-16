@@ -501,6 +501,16 @@ to create the artifact. It records all NLP tokens with schema metadata in
 remain available in the surrounding context. File, group, and sentence metadata
 are included in the concordance output when present.
 
+Internally, the version 1 token-artifact protocol is split into schema, row
+codec, writer, reader, integrity, and full-validation modules. Metadata JSON is
+strictly validated: strings are never coerced to booleans or integers, unknown
+keys are rejected, and row, included/excluded, byte-size, and SHA-256 values
+must agree with the TSV. The writer uses unique temporary files and publishes
+the TSV before publishing metadata as the final commit marker. Concordance and
+N-gram share the same reader. An artifact copied into a run archive remains
+readable because validation does not require its current path to equal the
+informational `artifact_path` stored when it was created.
+
 ## Compare CLI
 
 Both configured group comparisons and `nlpo compare` use the shared

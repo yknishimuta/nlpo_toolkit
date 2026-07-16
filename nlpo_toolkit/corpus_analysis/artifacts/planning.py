@@ -8,6 +8,7 @@ from nlpo_toolkit.comparison.configured import sanitize_comparison_name
 from ..corpus import PreparedCorpus, sanitize_label
 from ..partition_validation import sanitize_partition_name
 from ..planning.models import ResolvedAnalysisPlan
+from ..token_artifact.paths import token_artifact_metadata_path
 from .models import ArtifactKind, ArtifactPlan, PlannedArtifact
 
 
@@ -75,7 +76,7 @@ def build_count_artifact_plan(*, plan: ResolvedAnalysisPlan,
             artifacts.extend((
                 PlannedArtifact(ArtifactKind.TOKEN_ARTIFACT, token, group=label),
                 PlannedArtifact(ArtifactKind.TOKEN_ARTIFACT_METADATA,
-                                token.with_name(f"{token.stem}.meta.json"), group=label),
+                                token_artifact_metadata_path(token), group=label),
             ))
 
     for spec in config.validations.partitions:

@@ -5,11 +5,9 @@ import csv
 from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.analysis_records import TokenRecord
 from nlpo_toolkit.corpus_analysis.concordance import build_concordance_rows
-from nlpo_toolkit.corpus_analysis.token_artifact import (
-    TokenArtifactMetadata,
-    TokenArtifactWriter,
-    token_artifact_metadata_path,
-)
+from nlpo_toolkit.corpus_analysis.token_artifact.paths import token_artifact_metadata_path
+from nlpo_toolkit.corpus_analysis.token_artifact.schema import TokenArtifactDescriptor
+from nlpo_toolkit.corpus_analysis.token_artifact.writer import TokenArtifactWriter
 
 
 def _write_artifact(path):
@@ -17,7 +15,7 @@ def _write_artifact(path):
         TokenRecord("g1", "input/a.txt", 0, 0, 1, 0, None, None, None, None, "arma virumque cano Troiae qui primus ab oris", "virumque", "vir", "NOUN", "vir", True, None, None),
         TokenRecord("g2", "input/b.txt", 0, 0, 2, 1, None, None, None, None, "litora multum ille et terris iactatus et alto", "ille", "ille", "PRON", "ille", True, None, None),
     ]
-    with TokenArtifactWriter(path, token_artifact_metadata_path(path), metadata=TokenArtifactMetadata(group="mixed")) as writer:
+    with TokenArtifactWriter(path, metadata_path=token_artifact_metadata_path(path), descriptor=TokenArtifactDescriptor(group="mixed")) as writer:
         for record in records:
             writer.write(record)
 
@@ -117,7 +115,7 @@ def test_concordance_reads_token_artifact_sequence_for_kwic(tmp_path):
         TokenRecord("g", "input/a.txt", 0, 0, 1, 1, 5, 6, 5, 6, "arma , virumque", ",", ",", "PUNCT", ",", False, "upos_not_targeted", None),
         TokenRecord("g", "input/a.txt", 0, 0, 2, 2, 7, 15, 7, 15, "arma , virumque", "virumque", "vir", "NOUN", "vir", True, None, None),
     ]
-    with TokenArtifactWriter(artifact, token_artifact_metadata_path(artifact), metadata=TokenArtifactMetadata(group="g")) as writer:
+    with TokenArtifactWriter(artifact, metadata_path=token_artifact_metadata_path(artifact), descriptor=TokenArtifactDescriptor(group="g")) as writer:
         for record in records:
             writer.write(record)
 

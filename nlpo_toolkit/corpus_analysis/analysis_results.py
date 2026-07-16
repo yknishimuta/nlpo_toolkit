@@ -7,6 +7,7 @@ from types import MappingProxyType
 from typing import Iterable, Mapping
 
 from .analysis_cache.stats import AnalysisCacheRunStats
+from .token_artifact.schema import TokenArtifactMetadata
 
 
 @dataclass(frozen=True)
@@ -14,7 +15,7 @@ class GroupAnalysisResult:
     files: tuple[Path, ...]
     counter: Counter[str]
     ref_tag_counts: Counter[str]
-    token_artifact: Mapping[str, object] | None = None
+    token_artifact: TokenArtifactMetadata | None = None
 
 
 @dataclass(frozen=True)
@@ -40,7 +41,7 @@ class AnalysisResults:
         return cls(groups=indexed, cache_stats=cache_stats)
 
     @property
-    def token_artifact_metadata(self) -> tuple[Mapping[str, object], ...]:
+    def token_artifact_metadata(self) -> tuple[TokenArtifactMetadata, ...]:
         return tuple(
             group.token_artifact
             for group in self.groups.values()

@@ -4,7 +4,7 @@ from collections import Counter
 from contextlib import ExitStack, closing, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Iterator, Literal, Mapping
+from typing import Iterable, Iterator, Literal
 
 from nlpo_toolkit.nlp.contracts import NLPBackendInfo
 
@@ -23,10 +23,8 @@ from .analysis_records import (
 from .corpus import PreparedCorpus
 from .diagnostic_trace import DiagnosticTraceWriter
 from .runner_types import RunContext
-from .token_artifact import (
-    TokenArtifactMetadata,
-    TokenArtifactWriter,
-)
+from .token_artifact.schema import TokenArtifactDescriptor, TokenArtifactMetadata
+from .token_artifact.writer import TokenArtifactWriter
 
 __all__ = [
     "RecordAnalysisResult",
@@ -51,7 +49,7 @@ class RecordConsumptionResult:
 class RecordAnalysisResult:
     counter: Counter[str]
     record_count: int
-    token_artifact: Mapping[str, object] | None
+    token_artifact: TokenArtifactMetadata | None
 
 
 @dataclass(frozen=True)
@@ -176,11 +174,11 @@ def consume_analysis_records(
     return RecordConsumptionResult(counter=counter, record_count=record_count)
 
 
-def _token_artifact_metadata(
-    *, context: RunContext, corpus: PreparedCorpus, path: Path
-) -> TokenArtifactMetadata:
+def _token_artifact_descriptor(
+    *, context: RunContext, corpus: PreparedCorpus
+) -> TokenArtifactDescriptor:
     definition = context.session.corpus.plan.definition
-    return TokenArtifactMetadata(
+    return TokenArtifactDescriptor(
         group=corpus.label,
         source_files=tuple(str(file) for file in corpus.files),
         analysis_unit=definition.analysis_mode.unit,
@@ -190,7 +188,6 @@ def _token_artifact_metadata(
             "min_token_length": definition.config.filters.min_token_length,
             "drop_roman_numerals": definition.config.filters.drop_roman_numerals,
         },
-        artifact_path=str(path.resolve()),
     )
 
 
@@ -220,15 +217,15 @@ def execute_record_analysis(
     cache_stats: AnalysisCacheRunStats,
 ) -> RecordAnalysisResult:
     artifact_writer: TokenArtifactWriter | None = None
-    artifact_metadata: Mapping[str, object] | None = None
+    artifact_metadata: TokenArtifactMetadata | None = None
     with ExitStack() as stack:
         if token_artifact_path is not None:
             artifact_writer = stack.enter_context(
                 TokenArtifactWriter(
                     token_artifact_path,
-                    token_artifact_metadata_path,
-                    metadata=_token_artifact_metadata(
-                        context=context, corpus=corpus, path=token_artifact_path
+                    metadata_path=token_artifact_metadata_path,
+                    descriptor=_token_artifact_descriptor(
+                        context=context, corpus=corpus
                     ),
                 )
             )
@@ -260,16 +257,7 @@ def execute_record_analysis(
         assert token_artifact_metadata_path is not None
         final = artifact_writer.final_metadata if artifact_writer is not None else None
         if final is not None:
-            artifact_metadata = {
-                "group": corpus.label,
-                "path": str(token_artifact_path.resolve()),
-                "metadata_path": str(token_artifact_metadata_path.resolve()),
-                "schema_version": final.schema_version,
-                "row_count": final.row_count,
-                "included_row_count": final.included_row_count,
-                "complete": final.complete,
-                "sha256": final.sha256,
-            }
+            artifact_metadata = final
     return RecordAnalysisResult(
         counter=consumed.counter,
         record_count=consumed.record_count,
