@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Mapping
+from nlpo_toolkit.serialization.types import ConfigObject
 
 from pydantic import ValidationError
 from nlpo_toolkit.configuration.yaml_loader import YamlLoadError, load_yaml_mapping
@@ -24,7 +24,7 @@ def format_validation_error(error: ValidationError) -> str:
     )
 
 
-def parse_config(raw: Mapping[str, object]) -> AppConfig:
+def parse_config(raw: ConfigObject) -> AppConfig:
     try:
         return AppConfig.model_validate(raw, by_alias=True, by_name=False)
     except ValidationError as exc:
@@ -39,7 +39,7 @@ def load_config(path: Path) -> AppConfig:
     return parse_config(raw)
 
 
-def ensure_app_config(config: AppConfig | Mapping[str, object]) -> AppConfig:
+def ensure_app_config(config: AppConfig | ConfigObject) -> AppConfig:
     if isinstance(config, AppConfig):
         return config
     return parse_config(config)

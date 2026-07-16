@@ -1,20 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
-
 from nlpo_toolkit.comparison.results import (
     CsvMultiComparisonResult, CsvPairComparisonResult,
 )
 
 
-CsvScalar = str | int | float
+from nlpo_toolkit.serialization.types import CsvRow, CsvScalar
 
 
 @dataclass(frozen=True)
 class RenderedComparisonTable:
     columns: tuple[str, ...]
-    rows: tuple[Mapping[str, CsvScalar], ...]
+    rows: tuple[CsvRow, ...]
 
 
 def render_csv_comparison_rows(

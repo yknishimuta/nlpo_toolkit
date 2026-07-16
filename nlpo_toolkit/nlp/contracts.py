@@ -57,16 +57,6 @@ class NLPBackendInfo:
     def device(self) -> str:
         return "gpu" if self.use_gpu else "cpu"
 
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "backend": self.name,
-            "language": self.language,
-            "package": self.package,
-            "model": self.model,
-            "device": self.device,
-        }
-
-
 @dataclass(frozen=True)
 class BuiltNLPBackend:
     backend: NLPBackend

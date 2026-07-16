@@ -21,7 +21,8 @@ import string
 from pathlib import Path
 from collections import Counter
 from dataclasses import dataclass
-from typing import Iterable, Mapping
+from typing import Iterable
+from nlpo_toolkit.serialization.types import ConfigObject
 
 from nlpo_toolkit.configuration.yaml_loader import load_yaml_mapping
 
@@ -63,13 +64,13 @@ def load_config(cfg_path: Path) -> AppCfg:
     raw = load_yaml_mapping(cfg_path)
     base = cfg_path.parent
 
-    def section(name: str) -> Mapping[str, object]:
+    def section(name: str) -> ConfigObject:
         value = raw.get(name, {})
-        if not isinstance(value, Mapping):
+        if not isinstance(value, dict):
             raise ValueError(f"{cfg_path}: {name} must be a mapping")
         return value
 
-    def string_value(values: Mapping[str, object], key: str, default: str, *,
+    def string_value(values: ConfigObject, key: str, default: str, *,
                      allow_empty: bool = False) -> str:
         value = values.get(key, default)
         if not isinstance(value, str) or (not allow_empty and not value.strip()):
@@ -77,7 +78,7 @@ def load_config(cfg_path: Path) -> AppCfg:
             raise ValueError(f"{cfg_path}: {key} must be {expected}")
         return value
 
-    def integer_value(values: Mapping[str, object], key: str, default: int) -> int:
+    def integer_value(values: ConfigObject, key: str, default: int) -> int:
         value = values.get(key, default)
         if not isinstance(value, int) or isinstance(value, bool):
             raise ValueError(f"{cfg_path}: {key} must be an integer")

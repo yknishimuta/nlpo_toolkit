@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Mapping
 
 from nlpo_toolkit.nlp.contracts import NLPBackendInfo
 
 from ..artifacts.models import ArtifactKind
+from ..config.models import AnalysisUnit, GroupingMode, NormalizationConfig
 
 
 @dataclass(frozen=True)
 class GroupingReport:
-    mode: str
+    mode: GroupingMode
     auto_group_name: str | None = None
 
 
@@ -104,13 +106,13 @@ class AnalysisCacheReport:
 
 @dataclass(frozen=True)
 class RunMetadata:
-    generated_at: str
+    generated_at: datetime
     groups_files: Mapping[str, tuple[Path, ...]]
-    analysis_unit: str
+    analysis_unit: AnalysisUnit
     nlp: NLPBackendInfo
     grouping: GroupingReport
     environment: RuntimeEnvironmentReport
-    normalization: Mapping[str, object]
+    normalization: NormalizationConfig
     normalization_hash_sha256: str
     partition_validations: tuple[PartitionReport, ...]
     group_comparisons: tuple[ComparisonReport, ...]

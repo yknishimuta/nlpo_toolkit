@@ -1,17 +1,9 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
 from pathlib import Path
 
-from .models import ExternalReferenceMetadata
-
-
-@dataclass(frozen=True)
-class SourceFileMetadata:
-    path: Path
-    sha256: str
-    size_bytes: int
+from .models import ExternalReferenceMetadata, SourceFileMetadata
 
 
 def file_sha256(path: Path) -> str:

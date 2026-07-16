@@ -44,6 +44,13 @@ class ArchivedFile:
 
 
 @dataclass(frozen=True)
+class SourceFileMetadata:
+    path: Path
+    sha256: str
+    size_bytes: int
+
+
+@dataclass(frozen=True)
 class ExternalReferenceMetadata:
     kind: str
     path: Path
@@ -83,3 +90,40 @@ class ArchiveCopyResult:
     config_snapshots: tuple[ArchivedFile, ...] = ()
     inputs: tuple[ArchivedFile, ...] = ()
     cleaned: tuple[ArchivedFile, ...] = ()
+
+
+@dataclass(frozen=True)
+class ExternalReferenceManifestEntry:
+    kind: str
+    path: Path
+    exists: bool
+    sha256: str
+    size_bytes: int
+
+
+@dataclass(frozen=True)
+class ArchiveGitReport:
+    branch: str | None
+    commit: str | None
+    dirty: bool | None
+
+
+@dataclass(frozen=True)
+class ArchiveManifest:
+    run_name: str
+    created_at: datetime
+    command_line: tuple[str, ...]
+    project_root: Path
+    config_path: Path
+    output_dir: Path
+    git: ArchiveGitReport
+    groups_files: Mapping[str, tuple[Path, ...]]
+    input_files: tuple[SourceFileMetadata, ...]
+    cleaned_files: tuple[SourceFileMetadata, ...]
+    generated_outputs: tuple[SourceFileMetadata, ...]
+    copied_outputs: tuple[ArchivedFile, ...]
+    trace_files: tuple[ArchivedFile, ...]
+    config_snapshot_files: tuple[ArchivedFile, ...]
+    external_references: tuple[ExternalReferenceManifestEntry, ...]
+    copied_input_files: tuple[ArchivedFile, ...]
+    copied_cleaned_files: tuple[ArchivedFile, ...]

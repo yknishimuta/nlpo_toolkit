@@ -23,7 +23,10 @@ from .analysis_records import (
 from .corpus import PreparedCorpus
 from .diagnostic_trace import DiagnosticTraceWriter
 from .runner_types import RunContext
-from .token_artifact.schema import TokenArtifactDescriptor, TokenArtifactMetadata
+from .token_artifact.schema import (
+    TokenArtifactDescriptor, TokenArtifactFilterDescriptor,
+    TokenArtifactMetadata, TokenArtifactNLPDescriptor,
+)
 from .token_artifact.writer import TokenArtifactWriter
 
 __all__ = [
@@ -183,11 +186,19 @@ def _token_artifact_descriptor(
         source_files=tuple(str(file) for file in corpus.files),
         analysis_unit=definition.analysis_mode.unit,
         upos_targets=tuple(sorted(definition.config.filters.upos_targets)),
-        nlp=context.session.backend.info.to_dict(),
-        filters={
-            "min_token_length": definition.config.filters.min_token_length,
-            "drop_roman_numerals": definition.config.filters.drop_roman_numerals,
-        },
+        nlp=TokenArtifactNLPDescriptor(
+            backend=context.session.backend.info.name,
+            language=context.session.backend.info.language,
+            model=context.session.backend.info.model,
+            package=context.session.backend.info.package,
+            device=context.session.backend.info.device,
+        ),
+        filters=TokenArtifactFilterDescriptor(
+            upos_targets=tuple(sorted(definition.config.filters.upos_targets)),
+            min_token_length=definition.config.filters.min_token_length,
+            drop_roman_numerals=definition.config.filters.drop_roman_numerals,
+            roman_exceptions=(),
+        ),
     )
 
 

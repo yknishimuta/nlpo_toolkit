@@ -3,13 +3,11 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from types import MappingProxyType
-from typing import Literal, Mapping
+from typing import Literal
 
 from pydantic import (
     BaseModel,
     ConfigDict,
-    JsonValue,
     Field,
     StrictBool,
     StrictInt,
@@ -36,14 +34,21 @@ TOKEN_ARTIFACT_COLUMNS = (
 )
 
 
-def _json_object(value: Mapping[str, JsonValue], *, field: str) -> MappingProxyType:
-    try:
-        copied = json.loads(json.dumps(dict(value), ensure_ascii=False))
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{field} must contain only JSON values") from exc
-    if not isinstance(copied, dict):
-        raise ValueError(f"{field} must be a JSON object")
-    return MappingProxyType(copied)
+class TokenArtifactNLPDescriptor(BaseModel):
+    model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
+    backend: StrictStr = ""
+    language: StrictStr = ""
+    model: StrictStr | None = None
+    package: StrictStr | dict[StrictStr, StrictStr] | None = None
+    device: StrictStr = "cpu"
+
+
+class TokenArtifactFilterDescriptor(BaseModel):
+    model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
+    upos_targets: tuple[StrictStr, ...] = ()
+    min_token_length: StrictInt = 0
+    drop_roman_numerals: StrictBool = False
+    roman_exceptions: tuple[StrictStr, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -52,8 +57,8 @@ class TokenArtifactDescriptor:
     source_files: tuple[str, ...] = ()
     analysis_unit: str = ""
     upos_targets: tuple[str, ...] = ()
-    nlp: Mapping[str, JsonValue] = MappingProxyType({})
-    filters: Mapping[str, JsonValue] = MappingProxyType({})
+    nlp: TokenArtifactNLPDescriptor = TokenArtifactNLPDescriptor()
+    filters: TokenArtifactFilterDescriptor = TokenArtifactFilterDescriptor()
 
     def __post_init__(self) -> None:
         if not isinstance(self.group, str) or not isinstance(self.analysis_unit, str):
@@ -66,8 +71,16 @@ class TokenArtifactDescriptor:
             raise TypeError("descriptor upos_targets must contain strings")
         object.__setattr__(self, "source_files", source_files)
         object.__setattr__(self, "upos_targets", upos_targets)
-        object.__setattr__(self, "nlp", _json_object(self.nlp, field="nlp"))
-        object.__setattr__(self, "filters", _json_object(self.filters, field="filters"))
+        object.__setattr__(
+            self, "nlp",
+            self.nlp if isinstance(self.nlp, TokenArtifactNLPDescriptor)
+            else TokenArtifactNLPDescriptor.model_validate(self.nlp, strict=True),
+        )
+        object.__setattr__(
+            self, "filters",
+            self.filters if isinstance(self.filters, TokenArtifactFilterDescriptor)
+            else TokenArtifactFilterDescriptor.model_validate(self.filters, strict=True),
+        )
 
 
 class TokenArtifactMetadata(BaseModel):
@@ -88,8 +101,8 @@ class TokenArtifactMetadata(BaseModel):
     source_files: tuple[StrictStr, ...]
     analysis_unit: StrictStr
     upos_targets: tuple[StrictStr, ...]
-    nlp: dict[StrictStr, JsonValue]
-    filters: dict[StrictStr, JsonValue]
+    nlp: TokenArtifactNLPDescriptor
+    filters: TokenArtifactFilterDescriptor
     artifact_path: StrictStr
     sha256: StrictStr
     size_bytes: StrictInt
@@ -162,6 +175,15 @@ def metadata_from_json(text: str, *, source_path: Path) -> TokenArtifactMetadata
                 f"Token artifact metadata {field} must be an object: "
                 f"{source_path.resolve()}"
             )
+    filters = normalized["filters"]
+    for field in ("upos_targets", "roman_exceptions"):
+        value = filters.get(field)
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise TokenArtifactMetadataError(
+                f"Token artifact metadata filters.{field} must be an array of strings: "
+                f"{source_path.resolve()}"
+            )
+        filters[field] = tuple(value)
     try:
         return TokenArtifactMetadata.model_validate(normalized, strict=True)
     except ValidationError as exc:

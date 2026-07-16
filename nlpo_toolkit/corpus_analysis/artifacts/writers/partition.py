@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from typing import Sequence
+from nlpo_toolkit.serialization.types import JsonObject, JsonValue
 
 from ...partition_models import PartitionSpec
-from ...partition_validation import PartitionResult, partition_result_summary
+from ...partition_validation import PartitionResult
 from ..models import ArtifactKind, PlannedArtifact
 from ..publication import ArtifactPublicationError, open_csv_artifact, publish_json
 
@@ -27,8 +28,19 @@ def write_partition_csv_artifact(artifact: PlannedArtifact, *, result: Partition
             writer.writerow(data)
 
 
-def render_partition_json(specs: Sequence[PartitionSpec], results: Sequence[PartitionResult], *, csv_names: dict[str, str]) -> dict[str, object]:
-    return {"partitions": [partition_result_summary(spec, result, csv_name=csv_names[spec.name]) for spec, result in zip(specs, results)]}
+def render_partition_json(specs: Sequence[PartitionSpec], results: Sequence[PartitionResult], *, csv_names: dict[str, str]) -> JsonObject:
+    values: list[JsonValue] = []
+    for spec, result in zip(specs, results):
+        values.append({"name": result.name, "whole": result.whole,
+                       "parts": list(result.parts), "exact_match": result.exact_match,
+                       "whole_target_tokens": result.whole_target_tokens,
+                       "parts_target_tokens": result.parts_target_tokens,
+                       "token_delta": result.token_delta, "whole_types": result.whole_types,
+                       "parts_union_types": result.parts_union_types,
+                       "matched_items": result.matched_items,
+                       "mismatched_items": result.mismatched_items,
+                       "on_mismatch": spec.on_mismatch, "csv": csv_names[spec.name]})
+    return {"partitions": values}
 
 
 def write_partition_json_artifact(artifact: PlannedArtifact, *, data: object) -> None:

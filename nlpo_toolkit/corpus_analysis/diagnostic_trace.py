@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import Any, Collection
+from types import TracebackType
+from typing import Collection, Protocol, Sequence, TextIO
+
+from nlpo_toolkit.serialization.types import CsvScalar
 
 from .analysis_records import TokenRecord
 
@@ -46,8 +49,8 @@ class DiagnosticTraceWriter:
         self.max_rows = max_rows
         self.only_keys = {str(key).strip().lower() for key in (only_keys or ()) if str(key).strip()}
         self.write_truncation_marker = write_truncation_marker
-        self._file: Any = None
-        self._writer: csv.writer[Any] | None = None
+        self._file: TextIO | None = None
+        self._writer: RowWriter | None = None
         self._written = 0
         self._truncated = False
 
@@ -102,6 +105,13 @@ class DiagnosticTraceWriter:
         )
         self._written += 1
 
-    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+    def __exit__(
+        self, exc_type: type[BaseException] | None,
+        exc: BaseException | None, tb: TracebackType | None,
+    ) -> None:
         if self._file is not None:
             self._file.close()
+
+
+class RowWriter(Protocol):
+    def writerow(self, row: Sequence[CsvScalar]) -> object: ...

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import datetime, timezone
+from nlpo_toolkit.serialization.types import JsonObject, JsonValue
 
 from ..analysis_results import AnalysisResults
 from ..artifacts.models import ArtifactKind
@@ -23,8 +24,8 @@ from .models import (
 
 def build_run_metadata(*, context: RunContext, analysis: AnalysisResults, partitions: PartitionRunResult, comparisons: ComparisonRunResult, environment: RuntimeEnvironmentReport) -> RunMetadata:
     definition = context.session.corpus.plan.definition
-    normalization = definition.config.normalization.model_dump(mode="json")
-    canonical = json.dumps(normalization, ensure_ascii=False, sort_keys=True)
+    normalization = definition.config.normalization
+    canonical = json.dumps(normalization.model_dump(mode="json"), ensure_ascii=False, sort_keys=True)
     grouping = GroupingReport(
         mode="auto_single_cleaned" if definition.auto_mode else ("per_file" if definition.per_file else "groups"),
         auto_group_name=definition.config.grouping.auto_group_name if definition.auto_mode else None,
@@ -62,7 +63,7 @@ def build_run_metadata(*, context: RunContext, analysis: AnalysisResults, partit
         ),
     )
     return RunMetadata(
-        generated_at=datetime.now(timezone.utc).isoformat(),
+        generated_at=datetime.now(timezone.utc),
         groups_files={label: tuple(group.files) for label, group in analysis.groups.items()},
         analysis_unit=definition.analysis_mode.unit,
         nlp=context.session.backend.info,
@@ -79,24 +80,26 @@ def build_run_metadata(*, context: RunContext, analysis: AnalysisResults, partit
     )
 
 
-def run_metadata_to_json_value(metadata: RunMetadata) -> dict[str, object]:
+def run_metadata_to_json_value(metadata: RunMetadata) -> JsonObject:
     environment = metadata.environment
-    partitions = [
+    partitions: list[JsonValue] = [
         {"name": value.name, "whole": value.whole, "parts": list(value.parts), "exact_match": value.exact_match, "whole_target_tokens": value.whole_target_tokens, "parts_target_tokens": value.parts_target_tokens, "token_delta": value.token_delta, "whole_types": value.whole_types, "parts_union_types": value.parts_union_types, "mismatched_items": value.mismatched_items, "on_mismatch": value.on_mismatch}
         for value in metadata.partition_validations
     ]
-    comparisons = [
+    comparisons: list[JsonValue] = [
         {"name": value.name, "group_a": value.group_a, "group_b": value.group_b, "scale": value.scale, "zero_correction": value.zero_correction, "min_total_count": value.min_total_count, "group_a_tokens": value.group_a_tokens, "group_b_tokens": value.group_b_tokens, "vocabulary_union_size": value.vocabulary_union_size, "rows_after_filter": value.rows_after_filter, "csv": value.csv_name, "analysis_unit": value.analysis_unit}
         for value in metadata.group_comparisons
     ]
     return {
-        "generated_at": metadata.generated_at,
+        "generated_at": metadata.generated_at.isoformat(),
         "groups_files": {group: [str(path) for path in paths] for group, paths in metadata.groups_files.items()},
         "analysis_unit": metadata.analysis_unit,
-        "nlp": metadata.nlp.to_dict(),
+        "nlp": {"backend": metadata.nlp.name, "language": metadata.nlp.language,
+                "package": metadata.nlp.package, "model": metadata.nlp.model,
+                "device": metadata.nlp.device},
         "grouping": ({"mode": metadata.grouping.mode, "auto_group_name": metadata.grouping.auto_group_name} if metadata.grouping.auto_group_name is not None else {"mode": metadata.grouping.mode}),
         "environment": {"python_version": environment.python_version, "platform": environment.platform, "executable": str(environment.executable), "project_root": str(environment.project_root), "git_commit": environment.git_commit, "git_status": environment.git_status},
-        "normalization": dict(metadata.normalization),
+        "normalization": metadata.normalization.model_dump(mode="json"),
         "normalization_hash_sha256": metadata.normalization_hash_sha256,
         "partition_validations": partitions,
         "group_comparisons": comparisons,

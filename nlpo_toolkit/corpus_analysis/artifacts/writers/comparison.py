@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Mapping, Sequence
+from nlpo_toolkit.serialization.types import JsonObject, JsonValue
 
 from nlpo_toolkit.comparison.config import ComparisonSpec
 from nlpo_toolkit.comparison.engine import FrequencyTable
@@ -27,13 +28,14 @@ def write_comparison_csv_artifact(artifact: PlannedArtifact, *, result: Configur
             writer.writerow({"comparison": result.spec.name, "analysis_unit": result.analysis_unit, "item": row.item, "group_a": result.spec.group_a, "group_b": result.spec.group_b, "group_a_count": int(row.count_a), "group_b_count": int(row.count_b), "group_a_tokens": int(result.group_a_tokens), "group_b_tokens": int(result.group_b_tokens), "scale": result.spec.scale, "group_a_rate": f"{row.rate_a:.6f}", "group_b_rate": f"{row.rate_b:.6f}", "rate_difference": f"{row.rate_difference:.6f}", "log_ratio": f"{row.log_ratio:.6f}", "log_likelihood": f"{row.log_likelihood:.6f}", "direction": row.direction, "total_count": int(row.total_count)})
 
 
-def _summary(result: ConfiguredResult, *, csv_name: str) -> dict[str, object]:
+def _summary(result: ConfiguredResult, *, csv_name: str) -> JsonObject:
     spec = result.spec
     return {"name": spec.name, "group_a": spec.group_a, "group_b": spec.group_b, "scale": spec.scale, "zero_correction": spec.zero_correction, "min_total_count": spec.min_total_count, "group_a_tokens": int(result.group_a_tokens), "group_b_tokens": int(result.group_b_tokens), "vocabulary_union_size": result.vocabulary_union_size, "rows_before_filter": result.rows_before_filter, "rows_after_filter": result.rows_after_filter, "csv": csv_name}
 
 
-def render_comparisons_json(results: Sequence[ConfiguredResult], *, csv_names: Mapping[str, str]) -> dict[str, object]:
-    return {"analysis_unit": results[0].analysis_unit if results else "", "comparisons": [_summary(result, csv_name=csv_names[result.spec.name]) for result in results]}
+def render_comparisons_json(results: Sequence[ConfiguredResult], *, csv_names: Mapping[str, str]) -> JsonObject:
+    values: list[JsonValue] = [_summary(result, csv_name=csv_names[result.spec.name]) for result in results]
+    return {"analysis_unit": results[0].analysis_unit if results else "", "comparisons": values}
 
 
 def write_comparisons_json_artifact(artifact: PlannedArtifact, *, data: object) -> None:

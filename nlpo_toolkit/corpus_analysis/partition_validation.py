@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections import Counter
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence
+from typing import Mapping, Sequence
 
 
 from .partition_models import PartitionSpec
@@ -106,34 +106,4 @@ def validate_partitions(
     counters: Mapping[str, Counter],
 ) -> list[PartitionResult]:
     return [validate_partition(spec, counters) for spec in specs]
-
-
-def partition_result_summary(
-    spec: PartitionSpec,
-    result: PartitionResult,
-    *,
-    csv_name: str,
-) -> dict[str, Any]:
-    return {
-        "name": result.name,
-        "whole": result.whole,
-        "parts": result.parts,
-        "exact_match": result.exact_match,
-        "whole_target_tokens": result.whole_target_tokens,
-        "parts_target_tokens": result.parts_target_tokens,
-        "token_delta": result.token_delta,
-        "whole_types": result.whole_types,
-        "parts_union_types": result.parts_union_types,
-        "matched_items": result.matched_items,
-        "mismatched_items": result.mismatched_items,
-        "on_mismatch": spec.on_mismatch,
-        "csv": csv_name,
-    }
-
-
-def partition_result_meta(spec: PartitionSpec, result: PartitionResult) -> dict[str, Any]:
-    data = partition_result_summary(spec, result, csv_name="")
-    data.pop("csv", None)
-    data.pop("matched_items", None)
-    return data
 

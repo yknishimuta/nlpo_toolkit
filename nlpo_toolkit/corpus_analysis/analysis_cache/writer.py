@@ -92,7 +92,7 @@ class AnalysisCacheWriter:
                 payload_path=self.paths.payload.name,
                 payload_sha256=sha256_file(self.paths.payload),
                 payload_size_bytes=self.paths.payload.stat().st_size,
-                fingerprint=asdict(self.fingerprint),
+                fingerprint=self.fingerprint,
             )
             _atomic_write_text(
                 self.paths.metadata,

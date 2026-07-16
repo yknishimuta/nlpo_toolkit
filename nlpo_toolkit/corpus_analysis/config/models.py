@@ -12,6 +12,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from nlpo_toolkit.serialization.types import JsonObject
 
 from nlpo_toolkit.comparison.config import ComparisonSpec
 from nlpo_toolkit.config_model import (
@@ -198,7 +199,7 @@ class AppConfig(ConfigModel):
             )
         return self
 
-    def to_external_dict(self) -> dict[str, object]:
+    def to_external_dict(self) -> JsonObject:
         data = self.model_dump(mode="json", by_alias=True)
         if self.preprocess.kind is None:
             data.pop("preprocess", None)

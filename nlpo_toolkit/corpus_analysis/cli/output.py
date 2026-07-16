@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import csv
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, TextIO
+from typing import TextIO
+
+from nlpo_toolkit.serialization.types import CsvRow, CsvScalar
 
 from ..features.models import FeatureCommandResult, FeatureScalar
 from .compare_rendering import render_csv_comparison_rows
@@ -25,7 +27,7 @@ def present_error(error: Exception, *, stderr: TextIO) -> None:
 
 
 def write_mapping_rows(
-    rows: Sequence[Mapping[str, Any]],
+    rows: Sequence[CsvRow],
     *,
     columns: Sequence[str],
     stream: TextIO,
@@ -91,7 +93,7 @@ def write_concordance_result(result, *, stream: TextIO, output_format: str) -> N
 
 def write_compare_result(result, *, stream: TextIO, output_format: str) -> None:
     rendered = render_csv_comparison_rows(result)
-    def format_value(value: Any) -> Any:
+    def format_value(value: CsvScalar) -> CsvScalar:
         if isinstance(value, float):
             if value.is_integer():
                 return str(int(value))

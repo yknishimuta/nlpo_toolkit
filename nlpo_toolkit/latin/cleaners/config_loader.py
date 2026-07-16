@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
 from pathlib import Path
 from typing import cast
+from nlpo_toolkit.serialization.types import ConfigObject
 
 from nlpo_toolkit.configuration.yaml_loader import (
     YamlErrorKind,
@@ -22,14 +22,14 @@ from nlpo_toolkit.cleaner_contracts import (
 )
 
 
-def _resolve_path(config_path: Path, value: object) -> Path:
-    path = Path(str(value)).expanduser()
+def _resolve_path(config_path: Path, value: str) -> Path:
+    path = Path(value).expanduser()
     if not path.is_absolute():
         path = config_path.parent / path
     return path.resolve()
 
 
-def _required_string(raw: Mapping[str, object], key: str, path: Path) -> str:
+def _required_string(raw: ConfigObject, key: str, path: Path) -> str:
     value = raw.get(key)
     if not isinstance(value, str) or not value.strip():
         raise CleanerConfigValidationError(
@@ -38,7 +38,7 @@ def _required_string(raw: Mapping[str, object], key: str, path: Path) -> str:
     return value
 
 
-def _optional_string(raw: Mapping[str, object], key: str, path: Path) -> str | None:
+def _optional_string(raw: ConfigObject, key: str, path: Path) -> str | None:
     value = raw.get(key)
     if value is None:
         return None

@@ -39,7 +39,7 @@ class AnalysisCacheMetadata:
     payload_path: str
     payload_sha256: str
     payload_size_bytes: int
-    fingerprint: Mapping[str, object]
+    fingerprint: AnalysisFingerprint
 
 
 @dataclass(frozen=True)

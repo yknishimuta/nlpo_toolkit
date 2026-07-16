@@ -162,13 +162,11 @@ def test_factory_selects_transformers_without_stanza(monkeypatch: pytest.MonkeyP
 
     assert isinstance(built.backend, FakeTransformersBackend)
     assert calls == ["example/model"]
-    assert built.info.to_dict() == {
-        "backend": "transformers",
-        "language": "la",
-        "package": None,
-        "model": "example/model",
-        "device": "cpu",
-    }
+    assert built.info.name == "transformers"
+    assert built.info.language == "la"
+    assert built.info.package is None
+    assert built.info.model == "example/model"
+    assert built.info.device == "cpu"
 
 
 def test_factory_rejects_transformers_without_model_name() -> None:

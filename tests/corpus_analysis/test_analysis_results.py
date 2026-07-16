@@ -57,12 +57,12 @@ def test_results_construction_does_not_serialize_cache_stats(monkeypatch) -> Non
     stats = _stats()
     calls = 0
 
-    def record_to_dict():
+    def record_snapshot():
         nonlocal calls
         calls += 1
         return {"enabled": False}
 
-    monkeypatch.setattr(stats, "to_dict", record_to_dict)
+    monkeypatch.setattr(stats, "snapshot", record_snapshot)
     results = AnalysisResults.from_groups((), cache_stats=stats)
 
     assert results.cache_stats is stats

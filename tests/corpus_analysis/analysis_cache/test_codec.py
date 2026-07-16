@@ -4,7 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from nlpo_toolkit.corpus_analysis.analysis_cache.codec import decode_record, encode_record
+from nlpo_toolkit.corpus_analysis.analysis_cache.codec import (
+    decode_record, encode_record, parse_analysis_record_payload,
+)
 from nlpo_toolkit.corpus_analysis.analysis_cache.errors import AnalysisCacheError
 from .conftest import record
 
@@ -32,4 +34,7 @@ def test_decode_rejects_invalid_fields(
     data = encode_record(record())
     data.update(change)
     with pytest.raises(AnalysisCacheError, match=message):
-        decode_record(data, path=tmp_path / "payload", line_number=1)
+        payload = parse_analysis_record_payload(
+            data, path=tmp_path / "payload", line_number=1,
+        )
+        decode_record(payload, path=tmp_path / "payload", line_number=1)

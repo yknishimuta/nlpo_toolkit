@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Literal
 
 AnalysisRecordCacheStatus = Literal["hit", "miss", "disabled"]
@@ -12,6 +12,18 @@ class AnalysisCacheGroupResult:
     status: AnalysisRecordCacheStatus
     cache_key: str
     record_count: int
+
+
+@dataclass(frozen=True)
+class AnalysisCacheStatsSnapshot:
+    enabled: bool
+    directory: str
+    hits: int
+    misses: int
+    objects_written: int
+    records_read: int
+    records_written: int
+    groups: tuple[AnalysisCacheGroupResult, ...]
 
 
 @dataclass
@@ -42,14 +54,9 @@ class AnalysisCacheRunStats:
             self.records_written += record_count
         self.groups.append(AnalysisCacheGroupResult(group, status, cache_key, record_count))
 
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "enabled": self.enabled,
-            "directory": self.directory,
-            "hits": self.hits,
-            "misses": self.misses,
-            "objects_written": self.objects_written,
-            "records_read": self.records_read,
-            "records_written": self.records_written,
-            "groups": [asdict(group) for group in self.groups],
-        }
+    def snapshot(self) -> AnalysisCacheStatsSnapshot:
+        return AnalysisCacheStatsSnapshot(
+            self.enabled, self.directory, self.hits, self.misses,
+            self.objects_written, self.records_read, self.records_written,
+            tuple(self.groups),
+        )

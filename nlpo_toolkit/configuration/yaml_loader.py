@@ -3,8 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+import math
 
 import yaml
+from nlpo_toolkit.serialization.types import ConfigObject, ConfigValue
 
 
 class YamlErrorKind(str, Enum):
@@ -49,8 +51,8 @@ def _error(loader: _StrictSafeLoader, kind: YamlErrorKind, message: str) -> Yaml
 
 def _construct_mapping(
     loader: _StrictSafeLoader, node: yaml.nodes.MappingNode, deep: bool = False
-) -> dict[str, object]:
-    result: dict[str, object] = {}
+) -> object:
+    result = {}
     for key_node, value_node in node.value:
         line = key_node.start_mark.line + 1
         column = key_node.start_mark.column + 1
@@ -86,7 +88,40 @@ _StrictSafeLoader.add_constructor(
 )
 
 
-def _parse_yaml_mapping(text: str, *, source_path: Path) -> dict[str, object]:
+def _config_value(raw: object, *, source_path: Path, location: str) -> ConfigValue:
+    if raw is None or isinstance(raw, (str, bool, int)):
+        return raw
+    if isinstance(raw, float):
+        if not math.isfinite(raw):
+            raise YamlLoadError(YamlErrorDetails(
+                source_path, YamlErrorKind.PARSE,
+                f"Non-finite YAML number in {source_path} at {location}",
+            ))
+        return raw
+    if isinstance(raw, list):
+        return [
+            _config_value(value, source_path=source_path, location=f"{location}[{index}]")
+            for index, value in enumerate(raw)
+        ]
+    if isinstance(raw, dict):
+        result: ConfigObject = {}
+        for key, value in raw.items():
+            if not isinstance(key, str):
+                raise YamlLoadError(YamlErrorDetails(
+                    source_path, YamlErrorKind.KEY_TYPE,
+                    f"YAML mapping key must be a string in {source_path} at {location}",
+                ))
+            result[key] = _config_value(
+                value, source_path=source_path, location=f"{location}.{key}",
+            )
+        return result
+    raise YamlLoadError(YamlErrorDetails(
+        source_path, YamlErrorKind.PARSE,
+        f"Unsupported YAML value in {source_path} at {location}: {type(raw).__name__}",
+    ))
+
+
+def _parse_yaml_mapping(text: str, *, source_path: Path) -> ConfigObject:
     loader = _StrictSafeLoader(text, source_path=source_path)
     try:
         try:
@@ -114,10 +149,13 @@ def _parse_yaml_mapping(text: str, *, source_path: Path) -> dict[str, object]:
             f"Top-level YAML must be a mapping in {source_path}; "
             f"got {type(raw).__name__}",
         ))
-    return raw
+    validated = _config_value(raw, source_path=source_path, location="$" )
+    if not isinstance(validated, dict):
+        raise AssertionError("validated YAML root must remain a mapping")
+    return validated
 
 
-def load_yaml_mapping(path: str | Path) -> dict[str, object]:
+def load_yaml_mapping(path: str | Path) -> ConfigObject:
     source_path = Path(path).expanduser().resolve()
     try:
         text = source_path.read_text(encoding="utf-8")

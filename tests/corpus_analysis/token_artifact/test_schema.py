@@ -9,7 +9,9 @@ from nlpo_toolkit.corpus_analysis.token_artifact.schema import (
     TOKEN_ARTIFACT_SCHEMA_NAME,
     TOKEN_ARTIFACT_SCHEMA_VERSION,
     TokenArtifactDescriptor,
+    TokenArtifactFilterDescriptor,
     TokenArtifactMetadata,
+    TokenArtifactNLPDescriptor,
     metadata_from_json,
     metadata_to_json,
 )
@@ -19,7 +21,8 @@ def _metadata(**changes) -> TokenArtifactMetadata:
     values = dict(
         complete=True, row_count=1, included_row_count=1, excluded_row_count=0,
         group="g", source_files=("a.txt",), analysis_unit="lemma",
-        upos_targets=("NOUN",), nlp={"backend": "fake"}, filters={},
+        upos_targets=("NOUN",), nlp=TokenArtifactNLPDescriptor(backend="fake"),
+        filters=TokenArtifactFilterDescriptor(),
         artifact_path="/old/tokens.tsv", sha256="a" * 64, size_bytes=10,
     )
     values.update(changes)
@@ -27,12 +30,14 @@ def _metadata(**changes) -> TokenArtifactMetadata:
 
 
 def test_descriptor_freezes_copies_and_schema_stays_version_one() -> None:
-    nlp = {"backend": "fake"}
-    descriptor = TokenArtifactDescriptor("g", ["a.txt"], "lemma", ["NOUN"], nlp, {})  # type: ignore[arg-type]
-    nlp["backend"] = "changed"
+    nlp = TokenArtifactNLPDescriptor(backend="fake")
+    descriptor = TokenArtifactDescriptor(
+        "g", ["a.txt"], "lemma", ["NOUN"], nlp,
+        TokenArtifactFilterDescriptor(),
+    )  # type: ignore[arg-type]
     assert descriptor.source_files == ("a.txt",)
     assert descriptor.upos_targets == ("NOUN",)
-    assert descriptor.nlp["backend"] == "fake"
+    assert descriptor.nlp.backend == "fake"
     assert TOKEN_ARTIFACT_SCHEMA_NAME == "nlpo-token-artifact"
     assert TOKEN_ARTIFACT_SCHEMA_VERSION == 1
     assert TOKEN_ARTIFACT_COLUMNS[0] == "group"

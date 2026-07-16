@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict
 from pathlib import Path
-from typing import Iterator, Mapping
+from typing import Iterator, TypedDict
 
 from ..analysis_records import NLPAnalysisRecord
 from .constants import (
@@ -13,39 +12,95 @@ from .constants import (
     ANALYSIS_CACHE_SCHEMA_VERSION,
 )
 from .errors import AnalysisCacheError
-from .models import AnalysisCacheMetadata, CacheObjectPaths
+from .models import AnalysisCacheMetadata, AnalysisFingerprint, CacheObjectPaths
 
 
-def encode_record(record: NLPAnalysisRecord) -> dict[str, object]:
-    return asdict(record)
+class AnalysisRecordPayload(TypedDict):
+    chunk_index: int
+    sentence_index: int
+    token_index: int
+    global_token_index: int
+    char_start_in_chunk: int | None
+    char_end_in_chunk: int | None
+    char_start_in_text: int | None
+    char_end_in_text: int | None
+    sentence: str
+    token: str
+    lemma: str | None
+    upos: str | None
 
 
-def _required_int(data: Mapping[str, object], key: str, path: Path, line: int) -> int:
+def encode_record(record: NLPAnalysisRecord) -> AnalysisRecordPayload:
+    return {
+        "chunk_index": record.chunk_index, "sentence_index": record.sentence_index,
+        "token_index": record.token_index, "global_token_index": record.global_token_index,
+        "char_start_in_chunk": record.char_start_in_chunk,
+        "char_end_in_chunk": record.char_end_in_chunk,
+        "char_start_in_text": record.char_start_in_text,
+        "char_end_in_text": record.char_end_in_text, "sentence": record.sentence,
+        "token": record.token, "lemma": record.lemma, "upos": record.upos,
+    }
+
+
+def _required_int(data: dict[object, object], key: str, path: Path, line: int) -> int:
     value = data.get(key)
     if isinstance(value, bool):
         raise AnalysisCacheError(f"Invalid integer in {key} at {path}:{line}")
-    try:
-        return int(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError) as exc:
-        raise AnalysisCacheError(f"Invalid integer in {key} at {path}:{line}") from exc
+    if not isinstance(value, int):
+        raise AnalysisCacheError(f"Invalid integer in {key} at {path}:{line}")
+    return value
 
 
 def _optional_int(
-    data: Mapping[str, object], key: str, path: Path, line: int
+    data: dict[object, object], key: str, path: Path, line: int
 ) -> int | None:
     value = data.get(key)
     if value is None:
         return None
     if isinstance(value, bool):
         raise AnalysisCacheError(f"Invalid integer in {key} at {path}:{line}")
-    try:
-        return int(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError) as exc:
-        raise AnalysisCacheError(f"Invalid integer in {key} at {path}:{line}") from exc
+    if not isinstance(value, int):
+        raise AnalysisCacheError(f"Invalid integer in {key} at {path}:{line}")
+    return value
+
+
+def parse_analysis_record_payload(
+    raw: object, *, path: Path, line_number: int,
+) -> AnalysisRecordPayload:
+    if not isinstance(raw, dict):
+        raise AnalysisCacheError(f"Invalid analysis cache record at {path}:{line_number}")
+    expected = set(AnalysisRecordPayload.__required_keys__)
+    if set(raw) != expected or not all(isinstance(key, str) for key in raw):
+        raise AnalysisCacheError(f"Invalid analysis cache record fields at {path}:{line_number}")
+    integers = {
+        key: _required_int(raw, key, path, line_number)
+        for key in ("chunk_index", "sentence_index", "token_index", "global_token_index")
+    }
+    optional = {
+        key: _optional_int(raw, key, path, line_number)
+        for key in ("char_start_in_chunk", "char_end_in_chunk", "char_start_in_text", "char_end_in_text")
+    }
+    sentence, token = raw["sentence"], raw["token"]
+    lemma, upos = raw["lemma"], raw["upos"]
+    if not isinstance(sentence, str) or not isinstance(token, str):
+        raise AnalysisCacheError(f"Invalid token analysis strings at {path}:{line_number}")
+    if lemma is not None and not isinstance(lemma, str):
+        raise AnalysisCacheError(f"Invalid lemma in token analysis record at {path}:{line_number}")
+    if upos is not None and not isinstance(upos, str):
+        raise AnalysisCacheError(f"Invalid upos in token analysis record at {path}:{line_number}")
+    return {
+        "chunk_index": integers["chunk_index"], "sentence_index": integers["sentence_index"],
+        "token_index": integers["token_index"], "global_token_index": integers["global_token_index"],
+        "char_start_in_chunk": optional["char_start_in_chunk"],
+        "char_end_in_chunk": optional["char_end_in_chunk"],
+        "char_start_in_text": optional["char_start_in_text"],
+        "char_end_in_text": optional["char_end_in_text"],
+        "sentence": sentence, "token": token, "lemma": lemma, "upos": upos,
+    }
 
 
 def decode_record(
-    data: Mapping[str, object], *, path: Path, line_number: int
+    data: AnalysisRecordPayload, *, path: Path, line_number: int
 ) -> NLPAnalysisRecord:
     token = data.get("token")
     sentence = data.get("sentence")
@@ -58,14 +113,10 @@ def decode_record(
     if upos is not None and not isinstance(upos, str):
         raise AnalysisCacheError(f"Invalid upos in token analysis record at {path}:{line_number}")
     return NLPAnalysisRecord(
-        chunk_index=_required_int(data, "chunk_index", path, line_number),
-        sentence_index=_required_int(data, "sentence_index", path, line_number),
-        token_index=_required_int(data, "token_index", path, line_number),
-        global_token_index=_required_int(data, "global_token_index", path, line_number),
-        char_start_in_chunk=_optional_int(data, "char_start_in_chunk", path, line_number),
-        char_end_in_chunk=_optional_int(data, "char_end_in_chunk", path, line_number),
-        char_start_in_text=_optional_int(data, "char_start_in_text", path, line_number),
-        char_end_in_text=_optional_int(data, "char_end_in_text", path, line_number),
+        chunk_index=data["chunk_index"], sentence_index=data["sentence_index"],
+        token_index=data["token_index"], global_token_index=data["global_token_index"],
+        char_start_in_chunk=data["char_start_in_chunk"], char_end_in_chunk=data["char_end_in_chunk"],
+        char_start_in_text=data["char_start_in_text"], char_end_in_text=data["char_end_in_text"],
         sentence=sentence,
         token=token,
         lemma=lemma,
@@ -88,7 +139,7 @@ def read_cache_metadata(path: Path) -> AnalysisCacheMetadata:
         raise AnalysisCacheError(f"Invalid analysis cache metadata: {path}") from exc
     if not isinstance(raw, dict):
         raise AnalysisCacheError(f"Invalid analysis cache metadata: {path}")
-    data: Mapping[str, object] = raw
+    data = raw
     if data.get("format") != ANALYSIS_CACHE_FORMAT:
         raise AnalysisCacheError(f"Invalid analysis cache format: {path}")
     if data.get("schema_version") != ANALYSIS_CACHE_SCHEMA_VERSION:
@@ -97,23 +148,73 @@ def read_cache_metadata(path: Path) -> AnalysisCacheMetadata:
         raise AnalysisCacheError(f"Unsupported analysis cache behavior version: {path}")
     if data.get("complete") is not True:
         raise AnalysisCacheError(f"Incomplete analysis cache object: {path}")
-    fingerprint = data.get("fingerprint")
-    if not isinstance(fingerprint, dict):
+    fingerprint_raw = data.get("fingerprint")
+    if not isinstance(fingerprint_raw, dict):
         raise AnalysisCacheError(f"Invalid analysis cache fingerprint: {path}")
+    def required_string(key: str) -> str:
+        value = data.get(key)
+        if not isinstance(value, str):
+            raise AnalysisCacheError(f"Invalid {key} in analysis cache metadata: {path}")
+        return value
+
+    def required_integer(key: str) -> int:
+        value = data.get(key)
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise AnalysisCacheError(f"Invalid {key} in analysis cache metadata: {path}")
+        return value
+
+    def fingerprint_string(key: str, *, optional: bool = False) -> str | None:
+        value = fingerprint_raw.get(key)
+        if optional and value is None:
+            return None
+        if not isinstance(value, str):
+            raise AnalysisCacheError(f"Invalid fingerprint {key}: {path}")
+        return value
+
+    processors_raw = fingerprint_raw.get("processors")
+    package_raw = fingerprint_raw.get("package")
+    if not isinstance(processors_raw, list) or not all(isinstance(value, str) for value in processors_raw):
+        raise AnalysisCacheError(f"Invalid fingerprint processors: {path}")
+    package: str | dict[str, str] | None
+    if package_raw is None or isinstance(package_raw, str):
+        package = package_raw
+    elif isinstance(package_raw, dict) and all(
+        isinstance(key, str) and isinstance(value, str)
+        for key, value in package_raw.items()
+    ):
+        package = dict(package_raw)
+    else:
+        raise AnalysisCacheError(f"Invalid fingerprint package: {path}")
+    chunk_size = fingerprint_raw.get("chunk_size")
+    adapter_version = fingerprint_raw.get("adapter_version")
+    if isinstance(chunk_size, bool) or not isinstance(chunk_size, int):
+        raise AnalysisCacheError(f"Invalid fingerprint chunk_size: {path}")
+    if isinstance(adapter_version, bool) or not isinstance(adapter_version, int):
+        raise AnalysisCacheError(f"Invalid fingerprint adapter_version: {path}")
+    fingerprint = AnalysisFingerprint(
+        backend=fingerprint_string("backend") or "",
+        language=fingerprint_string("language") or "",
+        processors=tuple(processors_raw), chunk_size=chunk_size,
+        chunk_strategy=fingerprint_string("chunk_strategy") or "",
+        model=fingerprint_string("model", optional=True), package=package,
+        model_revision=fingerprint_string("model_revision", optional=True),
+        backend_version=fingerprint_string("backend_version", optional=True),
+        adapter_version=adapter_version,
+        device=fingerprint_string("device", optional=True),
+    )
     try:
         return AnalysisCacheMetadata(
-            format=str(data["format"]),
-            schema_version=int(data["schema_version"]),  # type: ignore[arg-type]
-            behavior_version=int(data["behavior_version"]),  # type: ignore[arg-type]
+            format=required_string("format"),
+            schema_version=required_integer("schema_version"),
+            behavior_version=required_integer("behavior_version"),
             complete=True,
-            cache_key=str(data["cache_key"]),
-            created_at=str(data["created_at"]),
-            prepared_text_sha256=str(data["prepared_text_sha256"]),
-            prepared_text_length=int(data["prepared_text_length"]),  # type: ignore[arg-type]
-            record_count=int(data["record_count"]),  # type: ignore[arg-type]
-            payload_path=str(data["payload_path"]),
-            payload_sha256=str(data["payload_sha256"]),
-            payload_size_bytes=int(data["payload_size_bytes"]),  # type: ignore[arg-type]
+            cache_key=required_string("cache_key"), created_at=required_string("created_at"),
+            prepared_text_sha256=required_string("prepared_text_sha256"),
+            prepared_text_length=required_integer("prepared_text_length"),
+            record_count=required_integer("record_count"),
+            payload_path=required_string("payload_path"),
+            payload_sha256=required_string("payload_sha256"),
+            payload_size_bytes=required_integer("payload_size_bytes"),
             fingerprint=fingerprint,
         )
     except (KeyError, TypeError, ValueError) as exc:
@@ -140,7 +241,10 @@ def read_analysis_records(paths: CacheObjectPaths) -> Iterator[NLPAnalysisRecord
                     f"Invalid analysis cache record at {paths.payload}:{line_number}"
                 )
             count += 1
-            yield decode_record(raw, path=paths.payload, line_number=line_number)
+            payload = parse_analysis_record_payload(
+                raw, path=paths.payload, line_number=line_number,
+            )
+            yield decode_record(payload, path=paths.payload, line_number=line_number)
     if count != metadata.record_count:
         raise AnalysisCacheError(
             f"Analysis cache record count mismatch: {paths.payload} "
