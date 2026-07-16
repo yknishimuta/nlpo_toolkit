@@ -150,8 +150,6 @@ class AnalysisCacheConfig(ConfigModel):
         validation_alias="dir",
         serialization_alias="dir",
     )
-    use_manifest: StrictBool = True
-    manifest_key_mode: NonBlankStr = "relative"
     lock_timeout_sec: PositiveFiniteFloat = 300.0
 
 

@@ -6,9 +6,8 @@ from collections import Counter
 import pytest
 
 from nlpo_toolkit.corpus_analysis import cli
-from nlpo_toolkit.corpus_analysis.config import ensure_app_config, load_config
+from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis.analysis_records import TokenRecord
-from nlpo_toolkit.corpus_analysis.config_references import ResolvedConfigFiles
 from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
 from nlpo_toolkit.corpus_analysis.ports import (
     ConfigNgramDependencies,
@@ -286,7 +285,6 @@ def test_config_ngram_uses_canonical_analysis_plan_with_overrides(tmp_path, monk
 
     config_path = tmp_path / "groups.yml"
     config_path.write_text("groups:\n  text:\n    files: [input.txt]\n", encoding="utf-8")
-    config = ensure_app_config({"groups": {"text": {"files": ["input.txt"]}}})
     calls = []
 
     def fake_prepare_session(request, **kwargs):
@@ -312,7 +310,7 @@ def test_config_ngram_uses_canonical_analysis_plan_with_overrides(tmp_path, monk
                 error_on_empty_group=True,
             ),
             n=2,
-            by_group=False,
+            by_group=True,
             min_count=1,
             top=None,
         ),
@@ -329,7 +327,9 @@ def test_config_ngram_uses_canonical_analysis_plan_with_overrides(tmp_path, monk
         ),
     )
 
-    assert result.rows
+    assert result.rows == (
+        {"ngram": "alpha beta", "count": 1, "n": 2, "field": "token", "group": "text"},
+    )
     assert len(calls) == 1
     assert calls[0][0] is not None
     assert calls[0][0].project_root == tmp_path

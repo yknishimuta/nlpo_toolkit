@@ -26,16 +26,6 @@
           ],
           "default": 300.0,
           "title": "Lock Timeout Sec"
-        },
-        "manifest_key_mode": {
-          "default": "relative",
-          "title": "Manifest Key Mode",
-          "type": "string"
-        },
-        "use_manifest": {
-          "default": true,
-          "title": "Use Manifest",
-          "type": "boolean"
         }
       },
       "title": "AnalysisCacheConfig",
@@ -120,15 +110,6 @@
         },
         "name": {
           "title": "Name",
-          "type": "string"
-        },
-        "report": {
-          "default": "all",
-          "enum": [
-            "all",
-            "filtered"
-          ],
-          "title": "Report",
           "type": "string"
         },
         "scale": {

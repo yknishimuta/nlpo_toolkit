@@ -43,13 +43,6 @@ def test_cache_lock_times_out_when_lock_exists(tmp_path: Path) -> None:
         )
 
 
-def test_cache_modules_share_prune_type() -> None:
-    from nlpo_toolkit.corpus_analysis import cache_storage
-    import nlpo_toolkit.corpus_analysis.analysis_cache.maintenance as maintenance
-
-    assert maintenance.PruneReport is cache_storage.PruneReport
-
-
 def test_analysis_cache_imports_only_shared_cache_storage() -> None:
     removed_module = "lemma" + "_cache"
     for path in Path("nlpo_toolkit/corpus_analysis/analysis_cache").glob("*.py"):

@@ -183,15 +183,13 @@ version changes.
 analysis_cache:
   enabled: true
   dir: .analysis_cache
-  use_manifest: true
-  manifest_key_mode: relative
   lock_timeout_sec: 300.0
 ```
 
 The cache is an internal optimization and is not copied into run archives or
 listed in `generated_outputs`. Use token artifacts for stable research outputs.
-Internally, cache keys and paths, record codec, writer, repository, hit/miss
-service, and maintenance are separate modules. Cached record streams and their
+Internally, cache keys and paths, record codec, writer, repository, and hit/miss
+service are separate modules. Cached record streams and their
 locks are owned by a context manager so interrupted consumers cannot publish an
 incomplete cache object.
 
@@ -508,7 +506,6 @@ nlpo compare \
     output/frequency_virgil_aeneis.csv \
     output/frequency_virgil_georgica.csv \
   --labels aeneis georgica \
-  --metric log-ratio \
   --min-total-count 3 \
   --top 100 \
   --out output/compare_aeneis_georgica.csv
@@ -522,7 +519,6 @@ nlpo compare \
     runs/aeneis/outputs/frequency_text.csv \
     runs/cena/outputs/frequency_text.csv \
   --labels aeneis cena \
-  --metric log-ratio \
   --min-total-count 3 \
   --out output/compare_aeneis_cena.csv
 ```

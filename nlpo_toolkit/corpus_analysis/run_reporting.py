@@ -196,7 +196,7 @@ def write_run_report(
     partitions: PartitionRunResult,
     comparisons: ComparisonRunResult,
 ) -> None:
-    summary_path = write_summary(
+    write_summary(
         context.artifact_plan.require(ArtifactKind.SUMMARY).path,
         build_summary_lines(
             context=context,

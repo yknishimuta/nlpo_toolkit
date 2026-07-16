@@ -26,12 +26,6 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     parser.add_argument("--out", type=Path, default=None, help="Output path. Defaults to standard output.")
     parser.add_argument("--format", choices=("csv", "tsv"), default="csv", help="Output format.")
     parser.add_argument(
-        "--metric",
-        choices=("relative", "difference", "ratio", "log-ratio"),
-        default="log-ratio",
-        help="Primary comparison metric. Rows include all available comparison columns.",
-    )
-    parser.add_argument(
         "--smoothing",
         type=float,
         default=0.5,
@@ -71,7 +65,6 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
             CompareRequest(
             inputs=tuple(args.inputs),
             labels=tuple(args.labels) if args.labels is not None else None,
-            metric=args.metric,
             smoothing=args.smoothing,
             min_total_count=args.min_total_count,
             top=args.top,

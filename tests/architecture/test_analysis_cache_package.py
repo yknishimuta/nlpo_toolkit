@@ -31,12 +31,11 @@ def test_old_module_is_replaced_by_non_facade_package() -> None:
 
 def test_cache_package_dependency_direction() -> None:
     forbidden = {
-        "models.py": {"repository", "service", "writer", "maintenance"},
+        "models.py": {"repository", "service", "writer"},
         "keys.py": {"repository", "service", "writer"},
         "codec.py": {"repository", "service"},
         "writer.py": {"repository", "service"},
         "repository.py": {"service", "locking"},
-        "maintenance.py": {"service", "repository", "writer"},
         "stats.py": {"repository", "service", "writer"},
     }
     for filename, names in forbidden.items():
@@ -57,7 +56,6 @@ def test_raw_lock_primitives_are_owned_only_by_locking() -> None:
 def test_cache_symbols_have_single_owners() -> None:
     owners = {
         "open_or_compute_analysis_records": "service.py",
-        "prune_analysis_cache": "maintenance.py",
         "read_cache_metadata": "codec.py",
         "read_analysis_records": "codec.py",
         "validate_cache_object": "codec.py",

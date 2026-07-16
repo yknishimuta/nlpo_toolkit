@@ -20,8 +20,6 @@ from nlpo_toolkit.comparison import (
     PairwiseComparisonOptions,
     ZeroHandling,
     ZeroHandlingMode,
-    calculate_log_likelihood as engine_log_likelihood,
-    calculate_log_ratio as engine_log_ratio,
     compare_pair,
 )
 
@@ -30,7 +28,6 @@ EPSILON = 1e-12
 _SAFE_NAME_RE = re.compile(r"[^0-9A-Za-z]+")
 
 
-ComparisonReport = Literal["all", "filtered"]
 ComparisonSortBy = Literal[
     "log_likelihood",
     "abs_log_ratio",
@@ -52,7 +49,6 @@ class ComparisonSpec(ConfigModel):
     scale: PositiveStrictInt = 10_000
     zero_correction: PositiveFiniteFloat = 0.5
     min_total_count: PositiveStrictInt = 1
-    report: ComparisonReport = "all"
     sort: ComparisonSortConfig = Field(default_factory=ComparisonSortConfig)
 
     @model_validator(mode="after")
@@ -94,44 +90,6 @@ class ComparisonResult:
 def sanitize_comparison_name(name: str) -> str:
     safe = _SAFE_NAME_RE.sub("_", name).strip("_").lower()
     return safe or "comparison"
-
-
-def calculate_log_ratio(
-    *,
-    count_a: int,
-    count_b: int,
-    tokens_a: int,
-    tokens_b: int,
-    zero_correction: float,
-) -> float:
-    try:
-        return engine_log_ratio(
-            count_a=float(count_a),
-            count_b=float(count_b),
-            total_a=float(tokens_a),
-            total_b=float(tokens_b),
-            zero_handling=ZeroHandling(ZeroHandlingMode.ZERO_ONLY, zero_correction),
-        )
-    except ComparisonEngineError as exc:
-        raise ValueError(str(exc)) from exc
-
-
-def calculate_log_likelihood(
-    *,
-    count_a: int,
-    count_b: int,
-    tokens_a: int,
-    tokens_b: int,
-) -> float:
-    try:
-        return engine_log_likelihood(
-            count_a=float(count_a),
-            count_b=float(count_b),
-            total_a=float(tokens_a),
-            total_b=float(tokens_b),
-        )
-    except ComparisonEngineError as exc:
-        raise ValueError(str(exc)) from exc
 
 
 def _primary_value(row: ComparisonRow, sort_by: str) -> float | int | str:

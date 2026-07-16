@@ -25,10 +25,6 @@ def feature_lemma_value(record: NLPAnalysisRecord) -> str:
     return (record.lemma or record.token).strip().lower()
 
 
-def feature_upos_value(record: NLPAnalysisRecord) -> str:
-    return record.upos or "X"
-
-
 def feature_field_value(record: NLPAnalysisRecord, field: FeatureField) -> str:
     return feature_lemma_value(record) if field == "lemma" else feature_token_value(record)
 

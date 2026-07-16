@@ -86,6 +86,20 @@ def test_unknown_keys_are_rejected_at_top_and_nested_levels() -> None:
         parse_config({"groups": {"a": {"files": ["a.txt"], "unknown": True}}})
 
 
+def test_removed_cache_and_comparison_fields_are_rejected() -> None:
+    assert "use_manifest" not in AnalysisCacheConfig.model_fields
+    assert "manifest_key_mode" not in AnalysisCacheConfig.model_fields
+    assert "report" not in ComparisonSpec.model_fields
+    assert "report" in PartitionSpec.model_fields
+    for field, value in (("use_manifest", False), ("manifest_key_mode", "relative")):
+        with pytest.raises(ValidationError):
+            AnalysisCacheConfig.model_validate({field: value})
+    with pytest.raises(ValidationError):
+        ComparisonSpec.model_validate({
+            "name": "a_vs_b", "group_a": "a", "group_b": "b", "report": "all"
+        })
+
+
 def test_yaml_collections_are_normalized_without_scalar_coercion() -> None:
     raw = minimal_raw()
     raw["filters"] = {"upos_targets": ["NOUN", "propn"]}

@@ -183,8 +183,6 @@ def build_ngrams_from_rows(
 def read_token_artifact_rows(
     tokens_path: Path,
     field: str,
-    *,
-    by_group: bool = False,
 ) -> list[dict[str, str]]:
     if field not in {"token", "lemma"}:
         raise NgramError("field must be 'token' or 'lemma'.")
@@ -244,9 +242,7 @@ class NgramCommandResult:
 
 def execute_token_ngram_command(request: TokenNgramRequest) -> NgramCommandResult:
     rows = build_ngrams_from_rows(
-        read_token_artifact_rows(
-            request.tokens_path, request.field, by_group=request.by_group
-        ),
+        read_token_artifact_rows(request.tokens_path, request.field),
         n=request.n,
         field=request.field,
         by_group=request.by_group,

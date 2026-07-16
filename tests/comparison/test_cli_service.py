@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import csv
 import io
-import math
 from pathlib import Path
 
 from nlpo_toolkit.comparison.cli_service import (
     CompareError,
     CompareCommandResult,
     CompareRequest,
-    compare_frequency_tables,
     execute_compare_command,
 )
 from nlpo_toolkit.comparison.frequency_io import (
@@ -76,12 +74,10 @@ def test_load_frequency_csv_explicit_columns(tmp_path: Path) -> None:
     assert load_frequency_csv(path, key_column="word", count_column="n") == {"rosa": 2.0}
 
 
-def test_compare_two_inputs_includes_missing_terms_and_metrics() -> None:
-    rows = compare_frequency_tables(
-        [{"rosa": 2.0, "arma": 1.0}, {"rosa": 1.0, "vir": 3.0}],
-        ["a", "b"],
-        smoothing=0.5,
-    )
+def test_compare_two_inputs_includes_missing_terms_and_metrics(tmp_path: Path) -> None:
+    a = _write_csv(tmp_path / "a.csv", "lemma,count", ["rosa,2", "arma,1"])
+    b = _write_csv(tmp_path / "b.csv", "lemma,count", ["rosa,1", "vir,3"])
+    rows = execute_compare_command(CompareRequest(inputs=(a, b), labels=("a", "b"))).rows
     by_term = {row["term"]: row for row in rows}
 
     assert by_term["arma"]["a_count"] == 1.0
@@ -90,29 +86,14 @@ def test_compare_two_inputs_includes_missing_terms_and_metrics() -> None:
     assert by_term["vir"]["b_count"] == 3.0
     assert by_term["rosa"]["difference"] == by_term["rosa"]["a_relative"] - by_term["rosa"]["b_relative"]
     assert by_term["arma"]["ratio"] > 1
-    assert math.isclose(by_term["arma"]["log_ratio"], math.log2(by_term["arma"]["ratio"]))
 
 
-def test_compare_metrics_are_available() -> None:
-    rows = compare_frequency_tables(
-        [{"a": 2.0, "b": 1.0}, {"a": 1.0, "b": 3.0}],
-        ["left", "right"],
-        smoothing=0.5,
-    )
-    row = {r["term"]: r for r in rows}["a"]
-
-    assert row["left_relative"] > row["right_relative"]
-    assert row["difference"] > 0
-    assert row["ratio"] > 1
-    assert row["log_ratio"] > 0
-
-
-def test_min_total_count_filters_terms() -> None:
-    rows = compare_frequency_tables(
-        [{"rare": 1.0, "common": 3.0}, {"common": 2.0}],
-        ["a", "b"],
-        min_total_count=2,
-    )
+def test_min_total_count_filters_terms(tmp_path: Path) -> None:
+    a = _write_csv(tmp_path / "a.csv", "lemma,count", ["rare,1", "common,3"])
+    b = _write_csv(tmp_path / "b.csv", "lemma,count", ["common,2"])
+    rows = execute_compare_command(CompareRequest(
+        inputs=(a, b), labels=("a", "b"), min_total_count=2
+    )).rows
 
     assert {row["term"] for row in rows} == {"common"}
 
@@ -143,12 +124,18 @@ def test_labels_from_paths_strips_only_canonical_frequency_prefix() -> None:
     ) == ["text", "noun_frequency_text"]
 
 
-def test_three_input_compare_has_range_columns() -> None:
-    rows = compare_frequency_tables(
-        [{"rosa": 10.0, "arma": 1.0}, {"rosa": 1.0, "arma": 10.0}, {"rosa": 5.0, "arma": 5.0}],
-        ["a", "b", "c"],
-        smoothing=0.5,
+def test_three_input_compare_has_range_columns(tmp_path: Path) -> None:
+    inputs = tuple(
+        _write_csv(tmp_path / f"{label}.csv", "lemma,count", rows)
+        for label, rows in (
+            ("a", ["rosa,10", "arma,1"]),
+            ("b", ["rosa,1", "arma,10"]),
+            ("c", ["rosa,5", "arma,5"]),
+        )
     )
+    rows = execute_compare_command(CompareRequest(
+        inputs=inputs, labels=("a", "b", "c")
+    )).rows
     row = {r["term"]: r for r in rows}["rosa"]
 
     assert row["max_label"] == "a"

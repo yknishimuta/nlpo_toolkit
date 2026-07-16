@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 import nlpo_toolkit.corpus_analysis.runner as runner_mod
-import nlpo_toolkit.corpus_analysis.runtime as runtime_mod
 from nlpo_toolkit.nlp.roman_numerals import (
     RomanExceptionsError,
     load_roman_exceptions,

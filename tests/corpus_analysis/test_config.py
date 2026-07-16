@@ -276,8 +276,6 @@ def test_config_to_dict_round_trips_cleaner_and_full_sections():
             "analysis_cache": {
                 "enabled": True,
                 "dir": ".analysis_cache",
-                "use_manifest": False,
-                "manifest_key_mode": "relative",
                 "lock_timeout_sec": 45.5,
             },
             "analysis_unit": "surface",
@@ -343,7 +341,6 @@ def test_config_to_dict_round_trips_comparisons():
                     "scale": 1000,
                     "zero_correction": 0.25,
                     "min_total_count": 3,
-                    "report": "filtered",
                     "sort": {
                         "by": "abs_log_ratio",
                         "descending": False,
@@ -362,7 +359,6 @@ def test_config_to_dict_round_trips_comparisons():
             "scale": 1000,
             "zero_correction": 0.25,
             "min_total_count": 3,
-            "report": "filtered",
             "sort": {
                 "by": "abs_log_ratio",
                 "descending": False,
@@ -380,8 +376,6 @@ def test_config_to_dict_round_trips_analysis_cache():
             "analysis_cache": {
                 "enabled": True,
                 "dir": "cache/analysis",
-                "use_manifest": False,
-                "manifest_key_mode": "relative",
                 "lock_timeout_sec": 12.5,
             },
         }
@@ -392,8 +386,6 @@ def test_config_to_dict_round_trips_analysis_cache():
     assert serialized["analysis_cache"] == {
         "enabled": True,
         "dir": "cache/analysis",
-        "use_manifest": False,
-        "manifest_key_mode": "relative",
         "lock_timeout_sec": 12.5,
     }
 

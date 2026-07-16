@@ -40,7 +40,6 @@ from nlpo_toolkit.corpus_analysis.ports import (
 )
 from nlpo_toolkit.corpus_analysis.ngram import ConfigNgramRequest
 from nlpo_toolkit.corpus_analysis.features.models import FeatureRequest
-from nlpo_toolkit.corpus_analysis.features.service import execute_feature_command
 from tests.corpus_analysis.fake_nlp import (
     FakeNLPBackend,
     fake_backend_factory,

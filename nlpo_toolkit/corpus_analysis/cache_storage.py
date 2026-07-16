@@ -7,12 +7,10 @@ from __future__ import annotations
 
 import os
 import time
-from dataclasses import dataclass
 from pathlib import Path
 
 __all__ = [
     "CacheLockTimeout",
-    "PruneReport",
     "acquire_cache_lock",
     "release_cache_lock",
 ]
@@ -20,16 +18,6 @@ __all__ = [
 
 class CacheLockTimeout(RuntimeError):
     """Raised when a cache lock cannot be acquired before the timeout."""
-
-
-@dataclass(frozen=True)
-class PruneReport:
-    """Summary of cache object, lock, and empty directory cleanup."""
-
-    removed_objects: int
-    removed_locks: int
-    removed_empty_dirs: int
-    bytes_freed: int
 
 
 def acquire_cache_lock(

@@ -46,6 +46,20 @@ def test_count_vocabula_command_is_not_registered() -> None:
     assert exc_info.value.code == 2
 
 
+def test_compare_metric_option_is_not_registered() -> None:
+    parser = build_parser()
+    with pytest.raises(SystemExit) as exc_info:
+        parser.parse_args([
+            "compare", "--inputs", "a.csv", "b.csv", "--metric", "log-ratio"
+        ])
+    assert exc_info.value.code == 2
+    subparsers = next(
+        action for action in parser._actions
+        if isinstance(action, argparse._SubParsersAction)
+    )
+    assert "--metric" not in subparsers.choices["compare"].format_help()
+
+
 def test_main_dispatches_through_registered_handler(monkeypatch, tmp_path) -> None:
     calls = []
 

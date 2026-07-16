@@ -6,7 +6,6 @@ from typing import Any
 
 from nlpo_toolkit.comparison import (
     ComparisonEngineError,
-    FrequencyTable,
     PairwiseComparisonOptions,
     ZeroHandling,
     ZeroHandlingMode,
@@ -15,17 +14,9 @@ from nlpo_toolkit.comparison import (
 )
 
 from .frequency_io import CompareError, labels_from_paths, load_frequency_table
-METRICS = {"relative", "difference", "ratio", "log-ratio"}
 SORT_KEYS = {"abs-log-ratio", "log-ratio", "difference", "range-relative", "total", "term"}
 
 
-
-
-def _frequency_table_from_mapping(label: str, table: dict[str, float]) -> FrequencyTable:
-    try:
-        return FrequencyTable.from_counts(label, table)
-    except ComparisonEngineError as exc:
-        raise CompareError(str(exc)) from exc
 
 
 def _render_pair_rows(result: Any) -> list[dict[str, Any]]:
@@ -68,46 +59,6 @@ def _render_many_rows(result: Any) -> list[dict[str, Any]]:
     return rows
 
 
-def compare_frequency_tables(
-    tables: list[dict[str, float]],
-    labels: list[str],
-    smoothing: float = 0.5,
-    min_total_count: float = 1,
-) -> list[dict[str, Any]]:
-    if len(tables) < 2:
-        raise CompareError("At least two input tables are required")
-    if len(labels) != len(tables):
-        raise CompareError("--labels must have the same length as --inputs")
-    if smoothing < 0:
-        raise CompareError("--smoothing must be non-negative")
-
-    frequency_tables = [
-        _frequency_table_from_mapping(label, table)
-        for label, table in zip(labels, tables)
-    ]
-    try:
-        if len(frequency_tables) == 2:
-            result = compare_pair(
-                frequency_tables[0],
-                frequency_tables[1],
-                options=PairwiseComparisonOptions(
-                    scale=1.0,
-                    min_total_count=min_total_count,
-                    zero_handling=ZeroHandling(ZeroHandlingMode.ADDITIVE, smoothing),
-                ),
-            )
-            return _render_pair_rows(result)
-
-        result = compare_many(
-            frequency_tables,
-            scale=1.0,
-            min_total_count=min_total_count,
-        )
-        return _render_many_rows(result)
-    except ComparisonEngineError as exc:
-        raise CompareError(str(exc)) from exc
-
-
 def sort_compare_rows(
     rows: list[dict[str, Any]],
     *,
@@ -145,7 +96,6 @@ def _fieldnames(rows: list[dict[str, Any]]) -> list[str]:
 class CompareRequest:
     inputs: tuple[Path, ...]
     labels: tuple[str, ...] | None = None
-    metric: str = "log-ratio"
     smoothing: float = 0.5
     min_total_count: float = 1
     top: int | None = None
@@ -166,8 +116,6 @@ def execute_compare_command(request: CompareRequest) -> CompareCommandResult:
     labels = list(request.labels) if request.labels is not None else None
     if len(inputs) < 2:
         raise CompareError("--inputs requires at least two frequency CSV files")
-    if request.metric not in METRICS:
-        raise CompareError(f"Unsupported metric: {request.metric}")
     if labels is not None and len(labels) != len(inputs):
         raise CompareError("--labels must have the same length as --inputs")
     effective_labels = labels or labels_from_paths(inputs)

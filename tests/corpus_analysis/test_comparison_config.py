@@ -39,7 +39,6 @@ def test_load_config_accepts_valid_comparison(tmp_path: Path) -> None:
                     "  scale: 10000",
                     "  zero_correction: 0.5",
                     "  min_total_count: 2",
-                    "  report: all",
                     "  sort:",
                     "    by: abs_log_ratio",
                     "    descending: false",

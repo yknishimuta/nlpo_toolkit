@@ -35,13 +35,19 @@ def test_repository_config_has_no_removed_nested_keys() -> None:
     filters = raw.get("filters", {})
     ref_tags = raw.get("ref_tags", {})
     normalization = raw.get("normalization", {})
+    analysis_cache = raw.get("analysis_cache", {})
+    comparisons = raw.get("comparisons", [])
     assert isinstance(filters, dict)
     assert isinstance(ref_tags, dict)
     assert isinstance(normalization, dict)
+    assert isinstance(analysis_cache, dict)
+    assert isinstance(comparisons, list)
 
     assert {"roman_exception_files", "exclude_lemmas", "exclude_lemmas_file"}.isdisjoint(filters)
     assert "ref_tags_file" not in ref_tags
     assert {"uv", "ij", "diacritics", "ligatures"}.isdisjoint(normalization)
+    assert {"use_manifest", "manifest_key_mode"}.isdisjoint(analysis_cache)
+    assert all(isinstance(item, dict) and "report" not in item for item in comparisons)
 
 
 def test_repository_config_contains_no_commented_alternative_blocks() -> None:

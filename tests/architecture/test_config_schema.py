@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 
 
 def test_config_parser_has_no_removed_top_level_fallbacks() -> None:
@@ -38,3 +39,16 @@ def test_production_code_has_no_removed_config_field_references() -> None:
                 offenders.append((path, fragment))
 
     assert offenders == []
+
+
+def test_generated_schema_excludes_removed_fields_but_keeps_partition_report() -> None:
+    schema = json.loads(
+        Path("config/groups.config.schema.json").read_text(encoding="utf-8")
+    )
+    definitions = schema["$defs"]
+    assert {"use_manifest", "manifest_key_mode"}.isdisjoint(
+        definitions["AnalysisCacheConfig"]["properties"]
+    )
+    assert "report" not in definitions["ComparisonSpec"]["properties"]
+    assert "report" in definitions["PartitionSpec"]["properties"]
+    assert "ComparisonReport" not in definitions
