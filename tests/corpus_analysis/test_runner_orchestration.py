@@ -40,12 +40,12 @@ def test_run_orchestrates_steps_in_order(monkeypatch, tmp_path: Path) -> None:
         lambda **kwargs: calls.append("comparisons") or comparisons,
     )
     monkeypatch.setattr(
-        runner_mod.run_reporting,
+        runner_mod,
         "write_run_report",
         lambda **kwargs: calls.append("report"),
     )
     monkeypatch.setattr(
-        runner_mod.run_reporting,
+        runner_mod,
         "build_run_result",
         lambda **kwargs: SimpleNamespace(exit_code=partitions.exit_code),
     )

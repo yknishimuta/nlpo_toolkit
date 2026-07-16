@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Mapping
 
 from nlpo_toolkit.nlp.contracts import NLPBackend
 
@@ -10,6 +10,8 @@ from .execution_session import NLPExecutionSession
 from .config_references import ConfigFileReference
 from .planning.models import ResolvedAnalysisPlan
 from .artifacts.models import ArtifactKind, ArtifactPlan
+from .partition_validation import PartitionResult
+from nlpo_toolkit.comparison.configured import ComparisonResult
 
 
 @dataclass(frozen=True)
@@ -17,17 +19,6 @@ class RunContext:
     session: NLPExecutionSession
     sentence_splitter: NLPBackend | None
     artifact_plan: ArtifactPlan
-
-
-def deduplicate_resolved_paths(paths: Iterable[Path]) -> tuple[Path, ...]:
-    seen: set[Path] = set()
-    result: list[Path] = []
-    for raw_path in paths:
-        path = Path(raw_path).resolve()
-        if path not in seen:
-            seen.add(path)
-            result.append(path)
-    return tuple(result)
 
 
 @dataclass(frozen=True)
@@ -39,7 +30,7 @@ class RunResult:
     cleaned_files: tuple[Path, ...]
     artifact_plan: ArtifactPlan
     config_references: tuple[ConfigFileReference, ...]
-    partition_mismatches: tuple[tuple[str, str, int, int], ...] = ()
+    partition_mismatches: tuple[PartitionRunMismatch, ...] = ()
 
     @property
     def generated_outputs(self) -> tuple[Path, ...]:
@@ -66,15 +57,20 @@ class RunResult:
 
 
 @dataclass(frozen=True)
+class PartitionRunMismatch:
+    name: str
+    level: str
+    token_delta: int
+    mismatched_items: int
+
+
+@dataclass(frozen=True)
 class PartitionRunResult:
-    results: tuple[Any, ...]
-    summaries: tuple[Mapping[str, object], ...]
-    metadata: tuple[Mapping[str, object], ...]
+    validations: tuple[PartitionResult, ...]
     exit_code: int
-    mismatches: tuple[tuple[str, str, int, int], ...] = ()
+    mismatches: tuple[PartitionRunMismatch, ...] = ()
 
 
 @dataclass(frozen=True)
 class ComparisonRunResult:
-    results: tuple[Any, ...]
-    metadata: tuple[Mapping[str, object], ...]
+    comparisons: tuple[ComparisonResult, ...]

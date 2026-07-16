@@ -27,17 +27,20 @@ def _imports(name: str) -> tuple[set[str], set[str]]:
 def test_analysis_modules_replace_pipeline() -> None:
     for name in (
         "analysis_execution.py",
-        "analysis_outputs.py",
         "analysis_orchestration.py",
     ):
         assert (PACKAGE / name).is_file()
+    assert not (PACKAGE / "analysis_outputs.py").exists()
+    assert (PACKAGE / "postprocessing/service.py").is_file()
+    assert (PACKAGE / "artifacts/writers/group.py").is_file()
     assert not (PACKAGE / "analysis_pipeline.py").exists()
 
 
 def test_orchestration_combines_execution_and_outputs_only_at_facade() -> None:
     modules, names = _imports("analysis_orchestration.py")
     assert "analysis_execution" in names
-    assert "analysis_outputs" in names
+    assert "postprocess_group_counter" in names
+    assert "write_group_artifacts" in names
     assert names.isdisjoint(
         {
             "evaluate_analysis_record",
@@ -57,17 +60,10 @@ def test_execution_boundary() -> None:
     )
 
 
-def test_output_boundary() -> None:
-    modules, names = _imports("analysis_outputs.py")
-    assert not any(module.endswith("analysis_orchestration") for module in modules)
-    assert names.isdisjoint(
-        {
-            "iter_nlp_analysis_records_from_text",
-            "evaluate_analysis_record",
-            "open_or_compute_analysis_records",
-            "AnalysisCacheRunStats",
-        }
-    )
+def test_postprocessing_boundary() -> None:
+    source = (PACKAGE / "postprocessing/service.py").read_text(encoding="utf-8")
+    assert "ArtifactPlan" not in source
+    assert "csv" not in source
 
 
 def test_production_has_no_analysis_pipeline_import_or_export() -> None:
@@ -90,7 +86,8 @@ def test_runner_imports_canonical_orchestrator() -> None:
 def test_analysis_modules_import_in_fresh_process() -> None:
     code = """
 import nlpo_toolkit.corpus_analysis.analysis_execution
-import nlpo_toolkit.corpus_analysis.analysis_outputs
+import nlpo_toolkit.corpus_analysis.postprocessing.service
+import nlpo_toolkit.corpus_analysis.artifacts.writers.group
 import nlpo_toolkit.corpus_analysis.analysis_orchestration
 import nlpo_toolkit.corpus_analysis.runner
 """

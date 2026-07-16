@@ -133,6 +133,18 @@ artifact and metadata, partition validation, group comparison, summary, and run
 metadata outputs. Every planned path is checked together for collisions before
 any output is written.
 
+Count postprocessing is I/O-free: it applies lemma normalization and dictionary
+classification to `Counter` values and returns typed results. Artifact writers
+receive a `PlannedArtifact`, validate its `ArtifactKind`, and publish UTF-8
+output through a same-directory temporary file; writers never reconstruct
+filenames. Reporting is split into typed report models, a pure summary renderer,
+a pure run-metadata builder/serializer, and a publication service. The service
+publishes `summary.txt` before `run_meta.json`, and metadata
+`generated_outputs` comes directly from `ArtifactPlan`, including
+`run_meta.json` itself. Analysis, partition, and comparison results do not carry
+generated-path inventories; `RunResult` exposes only read-only views derived
+from its single `artifact_plan` field.
+
 To validate the config without running preprocessing or NLP, use `--dry-run`:
 
 ```bash

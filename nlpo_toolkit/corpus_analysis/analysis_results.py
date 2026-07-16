@@ -39,11 +39,3 @@ class AnalysisResults:
                 raise ValueError(f"Duplicate group analysis result label: {label}")
             indexed[label] = result
         return cls(groups=indexed, cache_stats=cache_stats)
-
-    @property
-    def token_artifact_metadata(self) -> tuple[TokenArtifactMetadata, ...]:
-        return tuple(
-            group.token_artifact
-            for group in self.groups.values()
-            if group.token_artifact is not None
-        )

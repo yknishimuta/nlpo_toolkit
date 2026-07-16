@@ -29,9 +29,8 @@ def test_only_artifact_plan_stores_generated_artifact_tuple() -> None:
 
 def test_writers_and_reporting_do_not_construct_count_output_paths() -> None:
     forbidden = {
-        "analysis_outputs.py": ("frequency_", "ref_tags_"),
         "post_analysis.py": ("partition_validation_", "group_comparison_", "group_comparisons.json"),
-        "run_reporting.py": ("summary.txt", "run_meta.json"),
+        "reporting/service.py": ("summary.txt", "run_meta.json"),
     }
     for filename, fragments in forbidden.items():
         source = (PACKAGE / filename).read_text(encoding="utf-8")

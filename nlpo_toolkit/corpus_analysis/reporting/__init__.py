@@ -1,0 +1,1 @@
+"""Typed Count reporting pipeline."""

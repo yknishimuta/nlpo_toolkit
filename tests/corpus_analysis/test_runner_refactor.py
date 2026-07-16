@@ -10,16 +10,13 @@ from nlpo_toolkit.nlp.contracts import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.analysis_orchestration import analyze_corpora
 from nlpo_toolkit.corpus_analysis.analysis_cache.stats import AnalysisCacheRunStats
 from nlpo_toolkit.corpus_analysis.analysis_results import AnalysisResults, GroupAnalysisResult
-from nlpo_toolkit.corpus_analysis.analysis_outputs import (
-    apply_lemma_normalization,
-    split_known_unknown,
-)
+from nlpo_toolkit.corpus_analysis.postprocessing.lemma_normalization import apply_lemma_normalization
+from nlpo_toolkit.corpus_analysis.postprocessing.dictionary import classify_dictionary_entries
 from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
 from nlpo_toolkit.corpus_analysis.config import ensure_app_config
-from nlpo_toolkit.corpus_analysis.run_reporting import (
-    build_final_run_metadata,
-    build_summary_lines,
-)
+from nlpo_toolkit.corpus_analysis.reporting.environment import collect_runtime_environment
+from nlpo_toolkit.corpus_analysis.reporting.metadata import build_run_metadata, run_metadata_to_json_value
+from nlpo_toolkit.corpus_analysis.reporting.summary import render_run_summary
 from nlpo_toolkit.corpus_analysis.runner_types import (
     ComparisonRunResult,
     PartitionRunResult,
@@ -75,7 +72,7 @@ def test_apply_lemma_normalization_is_pure() -> None:
 
 
 def test_split_known_unknown() -> None:
-    split = split_known_unknown(
+    split = classify_dictionary_entries(
         Counter({"arma": 2, "ignotus": 1}),
         {"arma"},
     )
@@ -199,23 +196,24 @@ def test_summary_lines_and_metadata_include_existing_fields(tmp_path: Path) -> N
         )),),
         cache_stats=AnalysisCacheRunStats(enabled=False, directory=""),
     )
-    partitions = PartitionRunResult((), (), (), 0)
-    comparisons = ComparisonRunResult((), ())
+    partitions = PartitionRunResult((), 0)
+    comparisons = ComparisonRunResult(())
 
-    lines = build_summary_lines(
+    lines = render_run_summary(
         context=context,
         analysis=analysis,
         partitions=partitions,
         comparisons=comparisons,
     )
-    meta = build_final_run_metadata(
+    meta = run_metadata_to_json_value(build_run_metadata(
         context=context,
         analysis=analysis,
         partitions=partitions,
         comparisons=comparisons,
-    )
+        environment=collect_runtime_environment(tmp_path),
+    ))
 
-    assert lines[:6] == [
+    assert lines.splitlines()[:6] == [
         "# Summary",
         "",
         "language: la",

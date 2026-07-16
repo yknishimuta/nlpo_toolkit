@@ -47,17 +47,9 @@ def test_duplicate_group_label_is_rejected() -> None:
         )
 
 
-def test_artifact_metadata_preserves_group_order() -> None:
-    results = AnalysisResults.from_groups(
-        (
-            ("a", _group(artifact={"group": "a"})),
-            ("b", _group(artifact={"group": "b"})),
-            ("c", _group()),
-        ),
-        cache_stats=_stats(),
-    )
-
-    assert results.token_artifact_metadata == ({"group": "a"}, {"group": "b"})
+def test_results_do_not_duplicate_token_artifact_inventory() -> None:
+    results = AnalysisResults.from_groups((("a", _group()),), cache_stats=_stats())
+    assert not hasattr(results, "token_artifact_metadata")
     assert {field.name for field in fields(results)} == {"groups", "cache_stats"}
 
 

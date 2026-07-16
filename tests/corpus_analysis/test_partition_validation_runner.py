@@ -165,7 +165,7 @@ def test_runner_warn_mismatch_returns_zero_and_writes_stderr(tmp_path: Path, cap
     )
 
     assert rc.exit_code == 0
-    assert rc.partition_mismatches == (("full_split", "WARN", 1, 1),)
+    assert [(m.name, m.level, m.token_delta, m.mismatched_items) for m in rc.partition_mismatches] == [("full_split", "WARN", 1, 1)]
 
 
 def test_runner_error_mismatch_returns_one_but_keeps_outputs(tmp_path: Path, capsys) -> None:
@@ -182,7 +182,7 @@ def test_runner_error_mismatch_returns_one_but_keeps_outputs(tmp_path: Path, cap
     )
 
     assert rc.exit_code == 1
-    assert rc.partition_mismatches == (("full_split", "ERROR", 1, 1),)
+    assert [(m.name, m.level, m.token_delta, m.mismatched_items) for m in rc.partition_mismatches] == [("full_split", "ERROR", 1, 1)]
     assert (tmp_path / "output" / "partition_validation_full_split.csv").exists()
     assert (tmp_path / "output" / "partition_validation.json").exists()
     assert (tmp_path / "output" / "run_meta.json").exists()

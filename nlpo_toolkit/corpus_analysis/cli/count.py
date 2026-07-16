@@ -28,10 +28,10 @@ def _present_dry_run(result, *, stdout) -> None:
 
 
 def _present_count_result(result, *, project_root: Path, stdout, stderr) -> None:
-    for name, level, token_delta, mismatched_items in result.run.partition_mismatches:
+    for mismatch in result.run.partition_mismatches:
         print(
-            f"[{level}] partition {name} mismatch: "
-            f"token_delta={token_delta} mismatched_items={mismatched_items}",
+            f"[{mismatch.level}] partition {mismatch.name} mismatch: "
+            f"token_delta={mismatch.token_delta} mismatched_items={mismatch.mismatched_items}",
             file=stderr,
         )
     archive = result.archive

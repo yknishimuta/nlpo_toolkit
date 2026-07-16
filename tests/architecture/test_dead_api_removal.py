@@ -22,7 +22,7 @@ def test_removed_request_and_function_parameters_are_absent() -> None:
 
 def test_removed_symbols_are_not_defined_exported_or_imported() -> None:
     removed = {
-        "ComparisonReport", "compare_frequency_tables", "split_frequency_csv",
+        "compare_frequency_tables", "split_frequency_csv",
         "feature_upos_value", "prune_analysis_cache", "PruneReport",
     }
     offenders = []

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from . import post_analysis, run_reporting, runtime
+from . import post_analysis, runtime
 from .analysis_orchestration import analyze_corpora
 from .ports import RunnerDependencies
 from .runner_types import RunResult
 from .requests import CorpusPreparationRequest
+from .reporting.service import write_run_report
+from .result_builder import build_run_result
 
 
 def run(
@@ -26,13 +28,13 @@ def run(
         context=context,
         analysis=analysis,
     )
-    run_reporting.write_run_report(
+    write_run_report(
         context=context,
         analysis=analysis,
         partitions=partitions,
         comparisons=comparisons,
     )
-    return run_reporting.build_run_result(
+    return build_run_result(
         context=context,
         analysis=analysis,
         partitions=partitions,

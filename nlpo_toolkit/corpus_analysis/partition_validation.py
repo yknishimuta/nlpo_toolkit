@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import csv
-import json
 import re
 from collections import Counter
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 
@@ -111,34 +108,6 @@ def validate_partitions(
     return [validate_partition(spec, counters) for spec in specs]
 
 
-def write_partition_validation_csv(
-    path: Path,
-    result: PartitionResult,
-) -> Path:
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fieldnames = (
-        ["item", "whole_count"]
-        + [f"{part}_count" for part in result.parts]
-        + ["parts_sum", "delta", "status"]
-    )
-    with path.open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in result.mismatches:
-            out = {
-                "item": row.item,
-                "whole_count": row.whole_count,
-                "parts_sum": row.parts_sum,
-                "delta": row.delta,
-                "status": row.status,
-            }
-            for part in result.parts:
-                out[f"{part}_count"] = row.part_counts.get(part, 0)
-            writer.writerow(out)
-    return path
-
-
 def partition_result_summary(
     spec: PartitionSpec,
     result: PartitionResult,
@@ -168,15 +137,3 @@ def partition_result_meta(spec: PartitionSpec, result: PartitionResult) -> dict[
     data.pop("matched_items", None)
     return data
 
-
-def write_partition_validation_json(
-    path: Path,
-    summaries: Sequence[dict[str, Any]],
-) -> Path:
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps({"partitions": list(summaries)}, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    return path

@@ -18,10 +18,12 @@ RUNNER_SPLIT_MODULE_NAMES = (
     "nlpo_toolkit.corpus_analysis.analysis_records",
     "nlpo_toolkit.corpus_analysis.runtime",
     "nlpo_toolkit.corpus_analysis.analysis_execution",
-    "nlpo_toolkit.corpus_analysis.analysis_outputs",
+    "nlpo_toolkit.corpus_analysis.postprocessing.service",
+    "nlpo_toolkit.corpus_analysis.artifacts.writers.group",
     "nlpo_toolkit.corpus_analysis.analysis_orchestration",
     "nlpo_toolkit.corpus_analysis.post_analysis",
-    "nlpo_toolkit.corpus_analysis.run_reporting",
+    "nlpo_toolkit.corpus_analysis.reporting.service",
+    "nlpo_toolkit.corpus_analysis.reporting.metadata",
 )
 RUNNER_RELATED_MODULE_NAMES = (
     "nlpo_toolkit.corpus_analysis.ports",
@@ -59,14 +61,14 @@ def test_runner_responsibilities_live_in_dedicated_modules() -> None:
         execute_group_comparisons,
         execute_partition_validations,
     )
-    from nlpo_toolkit.corpus_analysis.run_reporting import build_final_run_metadata
+    from nlpo_toolkit.corpus_analysis.reporting.metadata import build_run_metadata
     from nlpo_toolkit.corpus_analysis.runtime import prepare_run_context
 
     assert prepare_run_context.__module__.endswith(".runtime")
     assert analyze_corpora.__module__.endswith(".analysis_orchestration")
     assert execute_partition_validations.__module__.endswith(".post_analysis")
     assert execute_group_comparisons.__module__.endswith(".post_analysis")
-    assert build_final_run_metadata.__module__.endswith(".run_reporting")
+    assert build_run_metadata.__module__.endswith(".reporting.metadata")
 
 
 @pytest.mark.parametrize(
