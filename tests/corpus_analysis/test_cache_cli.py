@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.cache import CacheClearError, resolve_cache_dir
+import pytest
+import nlpo_toolkit.corpus_analysis.cache as cache_module
 
 
 def test_cache_clear_uses_default_cache_dir_without_config(tmp_path, capsys):
@@ -129,3 +131,35 @@ def test_cache_clear_does_not_use_removed_cache_key(tmp_path, capsys):
     assert old_cache_dir.exists()
     assert not default_cache_dir.exists()
     assert "[OK] cache cleared: .analysis_cache" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("section", (
+    "analysis_cache:\n  dir: 12\n",
+    "analysis_cache:\n  unknown: value\n",
+    "analysis_cache:\n  dir: first\n  dir: second\n",
+))
+def test_cache_config_errors_do_not_delete_cache(tmp_path, section) -> None:
+    config = tmp_path / "groups.yml"
+    config.write_text(section, encoding="utf-8")
+    cache_dir = tmp_path / ".analysis_cache"
+    cache_dir.mkdir()
+    (cache_dir / "entry").write_text("data", encoding="utf-8")
+    with pytest.raises(CacheClearError):
+        resolve_cache_dir(tmp_path, config)
+    assert cache_dir.exists()
+
+
+def test_cache_config_is_loaded_once(tmp_path, monkeypatch) -> None:
+    config = tmp_path / "groups.yml"
+    config.write_text("analysis_cache:\n  dir: cache\n", encoding="utf-8")
+    real_loader = cache_module.load_yaml_mapping
+    calls = 0
+
+    def counted(path):
+        nonlocal calls
+        calls += 1
+        return real_loader(path)
+
+    monkeypatch.setattr(cache_module, "load_yaml_mapping", counted)
+    assert resolve_cache_dir(tmp_path, config) == (tmp_path / "cache").resolve()
+    assert calls == 1

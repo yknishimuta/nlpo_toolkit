@@ -4,7 +4,11 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import cast
 
-import yaml
+from nlpo_toolkit.configuration.yaml_loader import (
+    YamlErrorKind,
+    YamlLoadError,
+    load_yaml_mapping,
+)
 
 from nlpo_toolkit.cleaner_contracts import (
     CleanerConfig,
@@ -46,25 +50,13 @@ def _optional_string(raw: Mapping[str, object], key: str, path: Path) -> str | N
 def load_cleaner_config(path: str | Path) -> CleanerConfig:
     source_path = Path(path).expanduser().resolve()
     try:
-        text = source_path.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise CleanerConfigReadError(
-            f"Failed to read cleaner config: {source_path}: {exc}"
-        ) from exc
-    except UnicodeError as exc:
-        raise CleanerConfigReadError(
-            f"Cleaner config is not valid UTF-8: {source_path}: {exc}"
-        ) from exc
-    try:
-        raw = yaml.safe_load(text)
-    except yaml.YAMLError as exc:
-        raise CleanerConfigParseError(
-            f"Invalid cleaner YAML: {source_path}: {exc}"
-        ) from exc
-    if not isinstance(raw, Mapping):
-        raise CleanerConfigValidationError(
-            f"Cleaner config root must be a mapping: {source_path}"
-        )
+        raw = load_yaml_mapping(source_path)
+    except YamlLoadError as exc:
+        if exc.kind in {YamlErrorKind.READ, YamlErrorKind.UTF8}:
+            raise CleanerConfigReadError(str(exc)) from exc
+        if exc.kind in {YamlErrorKind.PARSE, YamlErrorKind.DUPLICATE_KEY}:
+            raise CleanerConfigParseError(str(exc)) from exc
+        raise CleanerConfigValidationError(str(exc)) from exc
 
     kind = _required_string(raw, "kind", source_path)
     if kind not in CLEANER_KINDS:

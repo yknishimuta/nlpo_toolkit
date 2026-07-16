@@ -79,15 +79,30 @@ def test_load_cleaner_config_rejects_invalid_schema(
 def test_load_cleaner_config_reports_read_and_yaml_errors(tmp_path: Path) -> None:
     with pytest.raises(CleanerConfigReadError) as missing:
         load_cleaner_config(tmp_path / "missing.yml")
-    assert isinstance(missing.value.__cause__, FileNotFoundError)
+    assert "Failed to read YAML file" in str(missing.value)
 
     invalid_utf8 = tmp_path / "utf8.yml"
     invalid_utf8.write_bytes(b"\xff\xfe")
     with pytest.raises(CleanerConfigReadError) as decoded:
         load_cleaner_config(invalid_utf8)
-    assert isinstance(decoded.value.__cause__, UnicodeDecodeError)
+    assert "not valid UTF-8" in str(decoded.value)
 
     invalid_yaml = tmp_path / "yaml.yml"
     invalid_yaml.write_text("kind: [\n", encoding="utf-8")
     with pytest.raises(CleanerConfigParseError):
         load_cleaner_config(invalid_yaml)
+
+
+@pytest.mark.parametrize("contents", (
+    "kind: corpus_corporum\nkind: scholastic_text\ninput: in\noutput: out\n",
+    "kind: corpus_corporum\ninput: in\noutput: out\nnested:\n  key: a\n  key: b\n",
+))
+def test_cleaner_config_rejects_duplicate_keys(
+    tmp_path: Path, contents: str
+) -> None:
+    path = tmp_path / "cleaner.yml"
+    path.write_text(contents, encoding="utf-8")
+    with pytest.raises(CleanerConfigParseError) as caught:
+        load_cleaner_config(path)
+    assert "Duplicate YAML key" in str(caught.value)
+    assert str(path.resolve()) in str(caught.value)

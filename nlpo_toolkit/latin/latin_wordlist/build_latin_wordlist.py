@@ -21,9 +21,9 @@ import string
 from pathlib import Path
 from collections import Counter
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Mapping
 
-import yaml
+from nlpo_toolkit.configuration.yaml_loader import load_yaml_mapping
 
 
 # ----------------------------
@@ -59,30 +59,59 @@ class AppCfg:
 
 def load_config(cfg_path: Path) -> AppCfg:
     """Load YAML config and resolve relative paths relative to config file dir."""
-    raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
-    project_root = Path(__file__).resolve().parent
-    base = project_root
+    cfg_path = Path(cfg_path).expanduser().resolve()
+    raw = load_yaml_mapping(cfg_path)
+    base = cfg_path.parent
+
+    def section(name: str) -> Mapping[str, object]:
+        value = raw.get(name, {})
+        if not isinstance(value, Mapping):
+            raise ValueError(f"{cfg_path}: {name} must be a mapping")
+        return value
+
+    def string_value(values: Mapping[str, object], key: str, default: str, *,
+                     allow_empty: bool = False) -> str:
+        value = values.get(key, default)
+        if not isinstance(value, str) or (not allow_empty and not value.strip()):
+            expected = "a string" if allow_empty else "a non-empty string"
+            raise ValueError(f"{cfg_path}: {key} must be {expected}")
+        return value
+
+    def integer_value(values: Mapping[str, object], key: str, default: int) -> int:
+        value = values.get(key, default)
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ValueError(f"{cfg_path}: {key} must be an integer")
+        return value
 
     def rp(x: str) -> Path:
         px = Path(x)
         return (base / px).resolve() if not px.is_absolute() else px
 
-    inputs = raw.get("inputs", {})
-    output = raw.get("output", {})
-    filters = raw.get("filters", {})
-    tok = raw.get("tokenize", {})
+    inputs = section("inputs")
+    output = section("output")
+    filters = section("filters")
+    tok = section("tokenize")
 
-    conllu_dir = rp(inputs.get("conllu_dir", "input/treebank_latin"))
-    latin_text_dir = rp(inputs.get("latin_text_dir", "input/latin_texts"))
-    extra_wordlists = [rp(p) for p in inputs.get("extra_wordlists", [])]
+    conllu_dir = rp(string_value(inputs, "conllu_dir", "input/treebank_latin"))
+    latin_text_dir = rp(string_value(inputs, "latin_text_dir", "input/latin_texts"))
+    extra_raw = inputs.get("extra_wordlists", [])
+    if not isinstance(extra_raw, list) or not all(
+        isinstance(item, str) and item.strip() for item in extra_raw
+    ):
+        raise ValueError(f"{cfg_path}: extra_wordlists must be a list of strings")
+    extra_wordlists = [rp(p) for p in extra_raw]
 
-    latin_wordlist_out = rp(output.get("latin_wordlist_out", "output/latin_words.txt"))
+    latin_wordlist_out = rp(string_value(
+        output, "latin_wordlist_out", "output/latin_words.txt"
+    ))
 
-    min_length = int(filters.get("min_length", 2))
-    min_form_freq = int(filters.get("min_form_freq", 2))
-    min_text_freq = int(filters.get("min_text_freq", 3))
+    min_length = integer_value(filters, "min_length", 2)
+    min_form_freq = integer_value(filters, "min_form_freq", 2)
+    min_text_freq = integer_value(filters, "min_text_freq", 3)
 
-    extra_punct = str(tok.get("extra_punct", "“”‘’«»…—–-­"))
+    extra_punct = string_value(
+        tok, "extra_punct", "“”‘’«»…—–-­", allow_empty=True
+    )
 
     return AppCfg(
         inputs=InputsCfg(

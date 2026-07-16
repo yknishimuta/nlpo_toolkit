@@ -1,4 +1,5 @@
 import textwrap
+import pytest
 
 from nlpo_toolkit.latin.latin_wordlist import build_latin_wordlist as mod
 
@@ -119,3 +120,28 @@ def test_build_latin_wordlist_small_corpus(tmp_path, monkeypatch):
     # From extra wordlist:
     assert "homo" in vocab
     assert "bonus" in vocab
+
+
+def test_wordlist_config_is_strict_and_resolves_from_config_parent(tmp_path) -> None:
+    config_dir = tmp_path / "nested"
+    config_dir.mkdir()
+    path = config_dir / "wordlist.yml"
+    path.write_text(
+        "inputs:\n  conllu_dir: treebank\n  latin_text_dir: texts\n"
+        "output:\n  latin_wordlist_out: output/words.txt\n"
+        "filters:\n  min_length: 2\n",
+        encoding="utf-8",
+    )
+    config = mod.load_config(path)
+    assert config.inputs.conllu_dir == (config_dir / "treebank").resolve()
+    assert config.output.latin_wordlist_out == (
+        config_dir / "output/words.txt"
+    ).resolve()
+
+    path.write_text("filters:\n  min_length: '2'\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="must be an integer"):
+        mod.load_config(path)
+
+    path.write_text("filters: {}\nfilters: {}\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="Duplicate YAML key"):
+        mod.load_config(path)

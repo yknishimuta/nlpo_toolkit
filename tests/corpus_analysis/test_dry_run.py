@@ -49,7 +49,7 @@ def _execute_dry_run(
     return 0 if result.successful else 1
 
 
-def test_dry_run_reports_config_paths_matches_and_warnings(tmp_path: Path, capsys):
+def test_dry_run_rejects_duplicate_keys(tmp_path: Path, capsys):
     project_root = tmp_path
     (project_root / "config").mkdir()
     (project_root / "input").mkdir()
@@ -114,23 +114,12 @@ def test_dry_run_reports_config_paths_matches_and_warnings(tmp_path: Path, capsy
     rc = _execute_dry_run(project_root=project_root, config_path=config_path)
 
     out = capsys.readouterr().out
-    assert rc == 0
-    assert "[OK] config loaded" in out
-    assert "[OK] preprocess cleaner config found: config/cleaner.yml" in out
-    assert "[OK] input files: 3" in out
-    assert "[OK] cleaned output dir: cleaned" in out
-    assert "[OK] group text matched files: 3" in out
-    assert "  - cleaned/a.txt" in out
-    assert "  - cleaned/b.txt" in out
-    assert "  - cleaned/c.txt" in out
-    assert "[WARN] duplicate YAML key: trace" in out
-    assert "[OK] dictcheck.wordlist found: data/wordlist/latin_words.txt" in out
-    assert "[OK] ref_tags.patterns found: config/ref_tags.txt" in out
-    assert (
-        "[OK] filters.roman_exceptions_file found: "
-        "config/roman_numeral_exceptions.txt"
-    ) in out
-    assert "[OK] output dir: output" in out
+    assert rc == 1
+    assert "Duplicate YAML key 'trace'" in out
+    assert "[WARN]" not in out
+    with pytest.raises(ConfigError) as caught:
+        load_config(config_path)
+    assert str(caught.value) in out
 
 
 def test_dry_run_error_on_empty_group(tmp_path: Path, capsys):
@@ -305,7 +294,7 @@ def test_dry_run_reports_missing_config_and_preserves_cause(
     assert "missing.yml" in capsys.readouterr().out
     with pytest.raises(ConfigError) as caught:
         load_config(config_path)
-    assert isinstance(caught.value.__cause__, FileNotFoundError)
+    assert "Failed to read YAML file" in str(caught.value)
 
 
 def test_dry_run_and_normal_planning_report_same_missing_reference(

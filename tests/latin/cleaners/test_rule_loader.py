@@ -27,11 +27,11 @@ def test_load_rule_set_types_references_order_and_disabled(tmp_path: Path) -> No
 @pytest.mark.parametrize(
     "text, message",
     [
-        ("- invalid\n", "root"),
+        ("- invalid\n", "Top-level YAML"),
         ("remove_line_patterns: {}\n", "must be a list"),
         ("remove_line_patterns: [x]\n", "must be a mapping"),
         ("remove_line_patterns: [{pattern: ''}]\n", "non-empty"),
-        ("remove_line_patterns: [{pattern: '[']} ]\n", "Invalid rule YAML"),
+        ("remove_line_patterns: [{pattern: '[']} ]\n", "Invalid YAML"),
         ("remove_line_patterns: [{pattern: '[', enabled: true}]\n", "invalid regex"),
         ("substitute_patterns: [{pattern: x, repl: 1}]\n", "repl must be a string"),
         ("remove_line_patterns: [{pattern: x, ref: 1}]\n", "ref must be"),
@@ -41,4 +41,17 @@ def test_load_rule_set_rejects_invalid_schema(tmp_path: Path, text: str, message
     path = tmp_path / "rules.yml"
     path.write_text(text, encoding="utf-8")
     with pytest.raises(CleanerRuleConfigError, match=message):
+        load_rule_set(path)
+
+
+@pytest.mark.parametrize("text", (
+    "remove_line_patterns: []\nremove_line_patterns: []\n",
+    "remove_line_patterns:\n  - pattern: x\n    pattern: y\n",
+))
+def test_rule_yaml_rejects_duplicate_sections_and_rule_fields(
+    tmp_path: Path, text: str
+) -> None:
+    path = tmp_path / "rules.yml"
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(CleanerRuleConfigError, match="Duplicate YAML key"):
         load_rule_set(path)

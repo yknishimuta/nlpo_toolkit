@@ -4,7 +4,7 @@ import re
 from collections.abc import Mapping
 from pathlib import Path
 
-import yaml
+from nlpo_toolkit.configuration.yaml_loader import YamlLoadError, load_yaml_mapping
 
 from .errors import CleanerRuleConfigError
 from .models import LineRemoveRule, RuleReference, RuleSet, SubstituteRule
@@ -57,17 +57,9 @@ def _compile(pattern: str, *, path: Path, section: str, index: int) -> re.Patter
 def load_rule_set(path: str | Path) -> RuleSet:
     source = Path(path).resolve()
     try:
-        text = source.read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as exc:
-        raise CleanerRuleConfigError(f"Failed to read rule YAML {source}: {exc}") from exc
-    try:
-        raw: object = yaml.safe_load(text)
-    except yaml.YAMLError as exc:
-        raise CleanerRuleConfigError(f"Invalid rule YAML {source}: {exc}") from exc
-    if raw is None:
-        raw = {}
-    if not isinstance(raw, Mapping):
-        raise CleanerRuleConfigError(f"{source}: rule YAML root must be a mapping")
+        raw = load_yaml_mapping(source)
+    except YamlLoadError as exc:
+        raise CleanerRuleConfigError(str(exc)) from exc
     unknown = set(raw) - {"remove_line_patterns", "substitute_patterns"}
     if unknown:
         raise CleanerRuleConfigError(f"{source}: unknown top-level keys: {sorted(map(str, unknown))}")

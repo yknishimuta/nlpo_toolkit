@@ -3,9 +3,10 @@ from __future__ import annotations
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from pydantic import ValidationError
 
-import yaml
+from nlpo_toolkit.configuration.yaml_loader import YamlLoadError, load_yaml_mapping
+from .config.models import AnalysisCacheConfig
 
 
 class CacheClearError(ValueError):
@@ -24,26 +25,21 @@ class CacheClearResult:
     removed: bool
 
 
-def _load_yaml_mapping(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        raise CacheClearError(f"Config not found: {path}")
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        raise CacheClearError("Top-level YAML must be a mapping.")
-    return data
-
-
 def _cache_dir_from_config(path: Path) -> str | None:
-    data = _load_yaml_mapping(path)
-    analysis_cache = data.get("analysis_cache")
-    if not isinstance(analysis_cache, dict):
+    try:
+        data = load_yaml_mapping(path)
+    except YamlLoadError as exc:
+        raise CacheClearError(str(exc)) from exc
+    section = data.get("analysis_cache")
+    if section is None:
         return None
-    cache_dir = analysis_cache.get("dir")
-    if cache_dir is None:
-        return None
-    if not isinstance(cache_dir, str) or not cache_dir.strip():
-        raise CacheClearError("analysis_cache.dir must be a non-empty string path.")
-    return cache_dir
+    try:
+        config = AnalysisCacheConfig.model_validate(
+            section, by_alias=True, by_name=False
+        )
+    except ValidationError as exc:
+        raise CacheClearError(f"Invalid analysis_cache config: {exc}") from exc
+    return config.directory
 
 
 def resolve_cache_dir(project_root: Path, config_path: Path | None = None) -> Path:

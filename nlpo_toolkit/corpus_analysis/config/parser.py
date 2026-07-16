@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Mapping
 
-import yaml
 from pydantic import ValidationError
+from nlpo_toolkit.configuration.yaml_loader import YamlLoadError, load_yaml_mapping
 
 from .models import AppConfig
 
@@ -32,23 +32,11 @@ def parse_config(raw: Mapping[str, object]) -> AppConfig:
 
 
 def load_config(path: Path) -> AppConfig:
-    if path.suffix.lower() not in {".yml", ".yaml"}:
-        raise ConfigError("Config file must be YAML (.yml / .yaml)")
     try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise ConfigError(f"Config not found or unreadable: {path}: {exc}") from exc
-    except UnicodeError as exc:
-        raise ConfigError(f"Config file is not valid UTF-8: {path}: {exc}") from exc
-    try:
-        data = yaml.safe_load(text)
-    except yaml.YAMLError as exc:
-        raise ConfigError(f"Invalid YAML in config file {path}: {exc}") from exc
-    if data is None:
-        data = {}
-    if not isinstance(data, Mapping):
-        raise ConfigError("Top-level YAML must be a mapping.")
-    return parse_config(data)
+        raw = load_yaml_mapping(path)
+    except YamlLoadError as exc:
+        raise ConfigError(str(exc)) from exc
+    return parse_config(raw)
 
 
 def ensure_app_config(config: AppConfig | Mapping[str, object]) -> AppConfig:

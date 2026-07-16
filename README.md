@@ -137,7 +137,6 @@ Example output:
 [OK] input files: 3
 [OK] cleaned output dir: cleaned
 [OK] group text matched files: 3
-[WARN] duplicate YAML key: trace
 [OK] dictcheck wordlist found
 [OK] ref_tags patterns found
 [OK] output dir: output
@@ -156,6 +155,13 @@ The groups configuration is validated by Pydantic v2. Unknown keys are errors
 at every level, and YAML scalar values are not implicitly coerced (for example,
 `enabled: "true"` is not accepted as a boolean). File paths remain relative to
 the project root, and referenced-file existence is checked during planning.
+
+All production YAML configuration files use the same strict loader. Files must
+be UTF-8 and their top level must be a mapping whose keys are strings. Duplicate
+mapping keys are errors at every depth, including mappings nested in sequences;
+a later value never silently overwrites an earlier value. Dry-run and normal
+execution use the same single configuration read and therefore accept or reject
+the same YAML document.
 
 ### Frequency Output Naming
 

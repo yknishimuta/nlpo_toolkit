@@ -3,9 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Mapping
-
-import yaml
 
 from .ports import CorpusPlanningDependencies
 from .config import ConfigError
@@ -14,14 +11,6 @@ from .corpus_errors import CorpusPreparationError
 from .preprocessing import inspect_analysis_plan
 from .run_plan import ResolvedAnalysisPlan, AnalysisPlanError, build_count_plan
 from .requests import CorpusPreparationRequest
-
-
-class DuplicateKeyLoader(yaml.SafeLoader):
-    pass
-
-
-class DryRunConfigError(ValueError):
-    """The root configuration could not be inspected."""
 
 
 class DiagnosticLevel(Enum):
@@ -45,61 +34,6 @@ class DryRunResult:
         return not any(
             item.level is DiagnosticLevel.ERROR for item in self.diagnostics
         )
-
-
-@dataclass(frozen=True)
-class DuplicateKeyConfig:
-    raw: Mapping[str, object]
-    duplicate_keys: tuple[str, ...]
-
-
-def _construct_mapping(loader: DuplicateKeyLoader, node: yaml.nodes.MappingNode, deep: bool = False) -> dict:
-    mapping: dict[Any, Any] = {}
-    duplicates = getattr(loader, "_duplicate_keys", [])
-
-    for key_node, value_node in node.value:
-        key = loader.construct_object(key_node, deep=deep)
-        if key in mapping:
-            duplicates.append(str(key))
-        mapping[key] = loader.construct_object(value_node, deep=deep)
-
-    loader._duplicate_keys = duplicates
-    return mapping
-
-
-DuplicateKeyLoader.add_constructor(
-    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
-    _construct_mapping,
-)
-
-
-def _load_yaml_with_duplicate_keys(path: Path) -> DuplicateKeyConfig:
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise DryRunConfigError(
-            f"Failed to read config file: {path}: {exc}"
-        ) from exc
-    except UnicodeError as exc:
-        raise DryRunConfigError(
-            f"Config file is not valid UTF-8: {path}: {exc}"
-        ) from exc
-
-    loader = DuplicateKeyLoader(text)
-    try:
-        try:
-            data = loader.get_single_data() or {}
-            duplicates = tuple(getattr(loader, "_duplicate_keys", ()))
-        except yaml.YAMLError as exc:
-            raise DryRunConfigError(
-                f"Invalid YAML in config file {path}: {exc}"
-            ) from exc
-    finally:
-        loader.dispose()
-
-    if not isinstance(data, dict):
-        raise DryRunConfigError("Top-level YAML must be a mapping.")
-    return DuplicateKeyConfig(raw=data, duplicate_keys=duplicates)
 
 
 def _display_path(path: Path, project_root: Path) -> str:
@@ -192,15 +126,13 @@ def execute_dry_run(
         diagnostics.append(DryRunDiagnostic(level, message))
 
     try:
-        duplicate_config = _load_yaml_with_duplicate_keys(config_path)
         cfg = dependencies.load_config(config_path)
-    except (DryRunConfigError, ConfigError) as exc:
+    except ConfigError as exc:
         return DryRunResult(
             diagnostics=(
                 DryRunDiagnostic(DiagnosticLevel.ERROR, f"config: {exc}"),
             )
         )
-    duplicate_keys = duplicate_config.duplicate_keys
     add(DiagnosticLevel.OK, "config loaded")
 
     try:
@@ -245,8 +177,5 @@ def execute_dry_run(
                 f"{reference.kind} found: "
                 f"{_display_path(reference.source_path, project_root)}",
             )
-
-    for key in duplicate_keys:
-        add(DiagnosticLevel.WARNING, f"duplicate YAML key: {key}")
 
     return DryRunResult(diagnostics=tuple(diagnostics))
