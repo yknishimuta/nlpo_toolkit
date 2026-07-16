@@ -510,11 +510,16 @@ artifacts:
 Run `nlpo count --project-root . --config config/groups.config.yml`
 to create the artifact. It records all NLP tokens with schema metadata in
 `output/tokens.meta.json`. Concordance matches included tokens; excluded tokens
-remain available in the surrounding context. File, group, and sentence metadata
-are included in the concordance output when present.
+remain available in the surrounding context. Context is built only from formal
+token records and never by re-tokenizing the sentence metadata string. File,
+group, and sentence metadata are included in the concordance output when present.
 
 Internally, the version 1 token-artifact protocol is split into schema, row
-codec, writer, reader, integrity, and full-validation modules. Metadata JSON is
+codec, writer, reader, integrity, and full-validation modules. N-gram and
+Concordance pass those typed records through the same token sequence collection.
+Its canonical `TokenSequenceId` boundary consists of group, source file, section,
+chunk, and sentence; tokens within each sequence are ordered by token index with
+global token index as the deterministic tie-breaker. Metadata JSON is
 strictly validated: strings are never coerced to booleans or integers, unknown
 keys are rejected, and row, included/excluded, byte-size, and SHA-256 values
 must agree with the TSV. The writer uses unique temporary files and publishes
@@ -660,8 +665,11 @@ nlpo ngram \
 ```
 
 Artifact n-grams use included tokens only and do not cross group, source-file,
-section, chunk, or sentence boundaries. Empty values and punctuation-only
-tokens are skipped.
+section, chunk, or sentence boundaries. They use the same `TokenSequenceId` and
+sequence collection as Concordance. Empty values and punctuation-only tokens
+end the current lexical run. Excluded tokens are omitted without ending a run.
+`--by-group` changes only the destination counter and output column; it never
+changes a sequence boundary.
 
 Raw text input through config groups is also available for token n-grams:
 
@@ -679,6 +687,8 @@ Config input uses the same corpus planning and preparation path as `count` and
 auto-single-cleaned resolution, text normalization, and reference-tag removal.
 All configured corpus files must be readable as UTF-8; if any file cannot be
 read, preparation fails and no partial corpus is analyzed.
+Each prepared corpus becomes one typed token sequence with no invented file,
+section, chunk, or sentence detail, and this path does not start an NLP backend.
 Token artifact input bypasses config loading, cleaner execution, and corpus
 planning; it reads the existing validated artifact directly. Config input
 supports `--field token`; use `--tokens` with an artifact for lemma n-grams.

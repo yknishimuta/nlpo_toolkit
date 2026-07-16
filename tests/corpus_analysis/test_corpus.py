@@ -339,14 +339,14 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
         ),
     )
 
-    original_iter_rows = ngram_mod.iter_config_token_rows
+    original_iter_rows = ngram_mod.iter_config_sequence_tokens
 
     def capture_config_rows(corpora):
         corpora = tuple(corpora)
         received["ngram"] = corpora[0].prepared_text
         return original_iter_rows(corpora)
 
-    monkeypatch.setattr(ngram_mod, "iter_config_token_rows", capture_config_rows)
+    monkeypatch.setattr(ngram_mod, "iter_config_sequence_tokens", capture_config_rows)
     ngram_mod.execute_config_ngram_command(
         request=ConfigNgramRequest(
             corpus_request(tmp_path, config_path),

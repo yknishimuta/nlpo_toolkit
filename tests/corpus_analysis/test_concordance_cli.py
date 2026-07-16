@@ -56,9 +56,9 @@ def test_concordance_writes_tsv_to_stdout(tmp_path, capsys):
     assert row[0] == "input/a.txt"
     assert row[1] == "g1"
     assert row[3] == "vir"
-    assert row[7] == "arma"
+    assert row[7] == ""
     assert row[8] == "virumque"
-    assert row[9] == "cano"
+    assert row[9] == ""
 
 
 def test_concordance_writes_csv_file_for_multiple_token_keys(tmp_path):

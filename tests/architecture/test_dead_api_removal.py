@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import ast
-import inspect
 from dataclasses import fields
 from pathlib import Path
 
 from nlpo_toolkit.comparison.cli_service import CompareRequest
-from nlpo_toolkit.corpus_analysis.ngram import read_token_artifact_rows
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -15,9 +13,6 @@ PRODUCTION = ROOT / "nlpo_toolkit"
 
 def test_removed_request_and_function_parameters_are_absent() -> None:
     assert "metric" not in {field.name for field in fields(CompareRequest)}
-    assert tuple(inspect.signature(read_token_artifact_rows).parameters) == (
-        "tokens_path", "field"
-    )
 
 
 def test_removed_symbols_are_not_defined_exported_or_imported() -> None:

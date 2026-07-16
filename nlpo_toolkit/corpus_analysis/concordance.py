@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-from .analysis_records import TokenRecord
 from .token_artifact.errors import TokenArtifactError
 from .token_artifact.reader import read_token_records
+from .token_sequences.context import build_token_context
+from .token_sequences.fields import TokenField, token_field_value
+from .token_sequences.grouping import TokenSequenceError, build_token_sequence_collection
 
 
 class ConcordanceError(ValueError):
@@ -19,7 +20,7 @@ class ConcordanceError(ValueError):
 class ConcordanceRequest:
     tokens_path: Path
     keys: tuple[str, ...]
-    field: str
+    field: TokenField
     window: int
 
 
@@ -29,125 +30,67 @@ class ConcordanceCommandResult:
     rows: tuple[dict[str, str], ...]
 
 
-def _field_value(record: TokenRecord, field: str) -> str:
-    if field == "token":
-        return record.token
-    return record.lemma or ""
-
-
-def _sequence_key(record: TokenRecord) -> tuple[str, str, str, int, int]:
-    return (
-        record.group,
-        record.source_file or "",
-        record.section or "",
-        record.chunk_index,
-        record.sentence_index,
-    )
-
-
-def _kwic_from_sequence(
-    sequence: list[TokenRecord],
-    record: TokenRecord,
-    *,
-    window: int,
-) -> tuple[str, str, str]:
-    ordered = sorted(sequence, key=lambda item: item.token_index)
-    try:
-        idx = ordered.index(record)
-    except ValueError:
-        idx = next(
-            (i for i, item in enumerate(ordered) if item.global_token_index == record.global_token_index),
-            -1,
-        )
-    if idx < 0:
-        return "", record.token, ""
-    if len(ordered) == 1 and record.sentence:
-        tokens = record.sentence.split()
-        if 0 <= record.token_index < len(tokens):
-            left = " ".join(tokens[max(0, record.token_index - window):record.token_index])
-            right = " ".join(tokens[record.token_index + 1:record.token_index + 1 + window])
-            return left, tokens[record.token_index], right
-    left = " ".join(item.token for item in ordered[max(0, idx - window):idx])
-    right = " ".join(item.token for item in ordered[idx + 1:idx + 1 + window])
-    return left, ordered[idx].token, right
-
-
 def build_concordance_rows(
-    *,
-    tokens_path: Path,
-    keys: list[str],
-    field: str,
-    window: int,
+    *, tokens_path: Path, keys: list[str], field: TokenField, window: int,
 ) -> tuple[list[str], list[dict[str, str]]]:
     if field not in {"token", "lemma"}:
         raise ConcordanceError("field must be 'token' or 'lemma'.")
     if window < 0:
         raise ConcordanceError("window must be zero or greater.")
-    if not keys:
-        raise ConcordanceError("--keys must contain at least one search key.")
-    key_set = {key.strip().lower() for key in keys if key.strip()}
+    key_set = {key.strip().casefold() for key in keys if key.strip()}
     if not key_set:
         raise ConcordanceError("--keys must contain at least one search key.")
 
     try:
-        all_records = list(read_token_records(tokens_path, verify_hash=True))
-    except TokenArtifactError as exc:
+        collection = build_token_sequence_collection(
+            read_token_records(tokens_path, verify_hash=True)
+        )
+    except (TokenArtifactError, TokenSequenceError) as exc:
         raise ConcordanceError(str(exc)) from exc
-    matched_records = [record for record in all_records if record.included]
 
+    all_items = tuple(
+        item for sequence in collection.sequences for item in sequence.items
+    )
     metadata_columns = [
-        column
-        for column, predicate in (
-            ("file", any(record.source_file for record in all_records)),
-            ("group", any(record.group for record in all_records)),
-            ("sentence", any(record.sentence for record in all_records)),
-        )
-        if predicate
+        column for column, present in (
+            ("file", any(item.source_file for item in all_items)),
+            ("group", any(item.group for item in all_items)),
+            ("sentence", any(item.sentence for item in all_items)),
+        ) if present
     ]
-    output_columns = metadata_columns + ["key", "field", "token", "lemma", "left", "node", "right"]
+    output_columns = metadata_columns + [
+        "key", "field", "token", "lemma", "left", "node", "right",
+    ]
     rows: list[dict[str, str]] = []
-    sequences: dict[tuple[str, str, str, int, int], list[TokenRecord]] = defaultdict(list)
-    for record in all_records:
-        sequences[_sequence_key(record)].append(record)
-
-    for record in matched_records:
-        value = _field_value(record, field).strip()
-        if value.lower() not in key_set:
+    candidates = sorted(
+        (item for item in all_items if item.included),
+        key=lambda item: item.global_token_index,
+    )
+    for item in candidates:
+        value = token_field_value(item, field).strip()
+        if value.casefold() not in key_set:
             continue
-
-        left, node, right = _kwic_from_sequence(
-            sequences[_sequence_key(record)],
-            record,
-            window=window,
-        )
-        out_row: dict[str, str] = {}
+        location = collection.require_location(item.global_token_index)
+        context = build_token_context(location, window=window)
+        row: dict[str, str] = {}
         if "file" in metadata_columns:
-            out_row["file"] = record.source_file or ""
+            row["file"] = item.source_file or ""
         if "group" in metadata_columns:
-            out_row["group"] = record.group
+            row["group"] = item.group
         if "sentence" in metadata_columns:
-            out_row["sentence"] = record.sentence
-        out_row.update(
-            {
-                "key": value,
-                "field": field,
-                "token": record.token,
-                "lemma": record.lemma or "",
-                "left": left,
-                "node": node,
-                "right": right,
-            }
-        )
-        rows.append(out_row)
-
+            row["sentence"] = item.sentence
+        row.update({
+            "key": value, "field": field, "token": item.token,
+            "lemma": item.lemma or "", "left": context.left_text(),
+            "node": context.node, "right": context.right_text(),
+        })
+        rows.append(row)
     return output_columns, rows
 
 
 def build_concordance(request: ConcordanceRequest) -> ConcordanceCommandResult:
     columns, rows = build_concordance_rows(
-        tokens_path=request.tokens_path,
-        keys=list(request.keys),
-        field=request.field,
-        window=request.window,
+        tokens_path=request.tokens_path, keys=list(request.keys),
+        field=request.field, window=request.window,
     )
-    return ConcordanceCommandResult(columns=tuple(columns), rows=tuple(rows))
+    return ConcordanceCommandResult(tuple(columns), tuple(rows))

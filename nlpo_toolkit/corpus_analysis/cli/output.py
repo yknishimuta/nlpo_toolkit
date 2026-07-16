@@ -72,7 +72,7 @@ def write_ngram_result(result, *, stream: TextIO, output_format: str) -> None:
     if result.by_group:
         columns.append("group")
     write_mapping_rows(
-        result.rows,
+        tuple(row.as_mapping(by_group=result.by_group) for row in result.rows),
         columns=columns,
         stream=stream,
         output_format=output_format,
