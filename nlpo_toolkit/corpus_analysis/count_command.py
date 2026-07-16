@@ -5,7 +5,6 @@ from pathlib import Path
 
 from .archive.errors import RunArchiveError
 from .archive_types import RunArchiveRequest, RunArchiveResult
-from .cleaner_runtime import CleanerError
 from .config_references import ConfigReferenceError
 from .corpus_errors import CorpusPreparationError
 from .ports import CountCommandDependencies
@@ -49,7 +48,6 @@ def execute_count_command(
             dependencies=dependencies.runner,
         )
     except (
-        CleanerError,
         ConfigReferenceError,
         CorpusPreparationError,
         FileNotFoundError,
@@ -57,7 +55,7 @@ def execute_count_command(
     ) as exc:
         raise CountCommandError(str(exc)) from exc
 
-    config = result.plan.config
+    config = result.plan.definition.config
     should_archive = (
         request.archive_run
         or bool(request.run_name)

@@ -1,173 +1,56 @@
 from __future__ import annotations
 
-from pathlib import Path
+import argparse
 import sys
+from collections.abc import Sequence
+from pathlib import Path
 
-from .config_loader import load_cleaner_config, resolve_cleaner_input_files
-from .events import append_ref_events
-from .models import CleanerProgram
-from .pipeline import clean_document, load_cleaner_program
+from nlpo_toolkit.cleaner_contracts import (
+    CleanerApplicationError,
+    CleanerExecutionRequest,
+    CleanerExecutionResult,
+)
+
+from .config_loader import inspect_cleaner_config
+from .service import execute_cleaner
 
 
-# Default config file. Modify this to switch the default config path.
 BASE_DIR = Path(__file__).resolve().parent
-DEFAULT_CONFIG: Path = BASE_DIR.parent / "cleaners" / "config" / "sample.yml"
+DEFAULT_CONFIG = BASE_DIR / "config" / "sample.yml"
 
 
-def _clean_single_file(
-    input_path: Path,
-    output_path: Path,
-    *,
-    program: CleanerProgram,
-    ref_tsv_path: Path | None,
-    doc_id: str = "",
-) -> None:
-    raw = input_path.read_text(encoding="utf-8")
-    result = clean_document(
-        raw,
-        profile=program.profile,
-        rules=program.rules,
-        lexicon_map=program.lexicon_map,
-        doc_id=doc_id,
-        snippet_chars=program.snippet_chars,
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Clean Latin corpus text files.")
+    parser.add_argument(
+        "config",
+        nargs="?",
+        type=Path,
+        default=DEFAULT_CONFIG,
+        help="Cleaner YAML config path.",
     )
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(result.text, encoding="utf-8")
-    if ref_tsv_path is not None:
-        append_ref_events(ref_tsv_path, result.events)
-    print(f"[{program.profile.kind}] cleaned: {input_path} -> {output_path}")
+    return parser
 
 
-def main(argv: list[str] | None = None) -> int:
-    """
-    Clean text(s) based on a YAML config file.
-
-    Usage:
-        python -m nlpo_toolkit.latin.cleaners.run_clean_corpus
-        python -m nlpo_toolkit.latin.cleaners.run_clean_corpus path/to/config.yml
-
-    YAML example (directory input + filename template):
-
-        kind: corpus_corporum
-        input: input
-        output: output
-        output_filename_template: "cleaned_{index:03d}.txt"
-        ref_tsv: ref_events.tsv
-        doc_id_prefix: TEST
-        rules_path: config/latin_cleaners/corpus_corporum.yml
-        lexicon_map_path: config/latin_cleaners/lexicon_map.tsv
-
-    Available template variables (for directory mode):
-        {index} : Auto-incrementing index (1, 2, 3, ...)
-        {stem}  : Original filename without extension
-        {ext}   : Original file extension (without the dot)
-    """
-    if argv is None:
-        argv = sys.argv[1:]
-
-    # Determine which config file to use
-    if argv:
-        config_path = Path(argv[0]).expanduser().resolve()
-    else:
-        config_path = DEFAULT_CONFIG.resolve()
-
-    config = load_cleaner_config(config_path)
-    print(f"[DEBUG] config_path={config_path}")
-
-    kind = config.kind
-    input_path = config.input_path
-    output_path = config.output_path
-    filename_template = config.output_filename_template
-    ref_tsv = config.ref_tsv_path
-    doc_id_prefix = config.doc_id_prefix or ""
-    rules_path = config.rules_path
-    lexicon_map_path = config.lexicon_map_path
-    source_files = resolve_cleaner_input_files(input_path)
-    program = load_cleaner_program(
-        kind=kind,
-        rules_path=rules_path,
-        lexicon_map_path=lexicon_map_path,
+def _present_result(result: CleanerExecutionResult) -> None:
+    for file in result.files:
+        print(f"[{result.kind}] cleaned: {file.input_path} -> {file.output_path}")
+    print(
+        f"[{result.kind}] cleaned_files={len(result.files)} "
+        f"reference_events={result.reference_event_count}"
     )
+    if result.ref_tsv_path is not None:
+        print(f"[{result.kind}] reference_events_tsv={result.ref_tsv_path}")
 
-    # Directory mode
-    if input_path.is_dir():
-        # In directory mode, output must also be a directory
-        if output_path.exists() and not output_path.is_dir():
-            raise ValueError(
-                f"When input is a directory ({input_path}), "
-                f"output must also be a directory, but got: {output_path}"
-            )
 
-        output_path.mkdir(parents=True, exist_ok=True)
-
-        sources = list(source_files)
-
-        stems = [p.stem for p in sources]
-        has_dup_stem = len(stems) != len(set(stems))
-
-        effective_template: str | None
-        if filename_template:
-            if has_dup_stem:
-                effective_template = filename_template
-            else:
-                effective_template = "{stem}.cleaned.{ext}"
-        else:
-            effective_template = None
-
-        idx = 0
-        for src in sources:
-            idx += 1
-
-            if effective_template:
-                stem = src.stem
-                ext = src.suffix.lstrip(".")
-                try:
-                    name = effective_template.format(index=idx, stem=stem, ext=ext)
-                except Exception as e:
-                    raise ValueError(
-                        f"Invalid output_filename_template={effective_template!r} "
-                        f"for file {src}: {e}"
-                    ) from e
-            else:
-                name = src.name
-
-            dst = output_path / name
-
-            # doc_id per file (prefix + stem)
-            if doc_id_prefix:
-                doc_id = f"{doc_id_prefix}:{src.stem}"
-            else:
-                doc_id = src.stem
-
-            _clean_single_file(
-                src,
-                dst,
-                program=program,
-                ref_tsv_path=ref_tsv,
-                doc_id=doc_id,
-            )
-
-        print(f"[{kind}] cleaned {idx} files in directory: {input_path} -> {output_path}")
-    else:
-        input_path = source_files[0]
-        if output_path.is_dir():
-            dst = output_path / input_path.name
-        else:
-            dst = output_path
-
-        if doc_id_prefix:
-            doc_id = f"{doc_id_prefix}:{input_path.stem}"
-        else:
-            doc_id = input_path.stem
-
-        _clean_single_file(
-            input_path,
-            dst,
-            program=program,
-            ref_tsv_path=ref_tsv,
-            doc_id=doc_id,
-        )
-
+def main(argv: Sequence[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
+    try:
+        inspection = inspect_cleaner_config(args.config)
+        result = execute_cleaner(CleanerExecutionRequest(inspection=inspection))
+    except CleanerApplicationError as exc:
+        print(f"[ERROR] {exc}", file=sys.stderr)
+        return 1
+    _present_result(result)
     return 0
 
 

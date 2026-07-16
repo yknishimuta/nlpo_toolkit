@@ -46,7 +46,7 @@ def _analyze_one_corpus(
         cache_stats=cache_stats,
     )
     output_counter = analysis_outputs.write_group_analysis_outputs(
-        plan=context.session.corpus.plan,
+        plan=context.session.corpus.plan.definition,
         artifact_plan=context.artifact_plan,
         corpus=corpus,
         counter=record_result.counter,
@@ -65,9 +65,9 @@ def _analyze_one_corpus(
 
 
 def analyze_corpora(context: RunContext) -> AnalysisResults:
-    plan = context.session.corpus.plan
-    normalization_map = analysis_outputs.load_configured_lemma_normalization(plan)
-    known_words = analysis_outputs.load_configured_known_words(plan)
+    definition = context.session.corpus.plan.definition
+    normalization_map = analysis_outputs.load_configured_lemma_normalization(definition)
+    known_words = analysis_outputs.load_configured_known_words(definition)
     cache_stats = analysis_execution.create_analysis_cache_stats(context)
     groups = (
         _analyze_one_corpus(

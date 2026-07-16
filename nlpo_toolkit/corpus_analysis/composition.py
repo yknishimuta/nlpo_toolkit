@@ -5,7 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 from nlpo_toolkit.backends import create_nlp_backend
 from nlpo_toolkit.backends.stanza_backend import StanzaBackend
-from nlpo_toolkit.cleaner_contracts import CleanerConfigInspection
+from nlpo_toolkit.cleaner_contracts import (
+    CleanerConfigInspection,
+    CleanerExecutionRequest,
+    CleanerExecutionResult,
+)
 from nlpo_toolkit.nlp.contracts import (
     BuiltNLPBackend,
     NLPBackend,
@@ -17,7 +21,6 @@ from .analysis_policy import (
     DEFAULT_ANALYSIS_EXTRACTION_POLICY,
 )
 from .archive.service import create_run_archive
-from .cleaner_runtime import load_default_cleaner
 from .config import NLPConfig, load_config
 from .ports import (
     BackendFactory,
@@ -39,6 +42,12 @@ def _inspect_cleaner_config(path: Path) -> CleanerConfigInspection:
     from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 
     return inspect_cleaner_config(path)
+
+
+def _execute_cleaner(request: CleanerExecutionRequest) -> CleanerExecutionResult:
+    from nlpo_toolkit.latin.cleaners.service import execute_cleaner
+
+    return execute_cleaner(request)
 
 
 def _to_backend_spec(config: NLPConfig) -> NLPBackendSpec:
@@ -80,7 +89,7 @@ def default_corpus_planning_dependencies() -> CorpusPlanningDependencies:
 
 
 def default_corpus_preparation_dependencies() -> CorpusPreparationDependencies:
-    return CorpusPreparationDependencies(cleaner_loader=load_default_cleaner)
+    return CorpusPreparationDependencies(execute_cleaner=_execute_cleaner)
 
 
 def default_corpus_execution_dependencies() -> CorpusExecutionDependencies:

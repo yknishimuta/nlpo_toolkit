@@ -9,7 +9,7 @@ import nlpo_toolkit.nlp.vocabulary as vocabulary
 from .corpus import PreparedCorpus
 from . import dictcheck
 from .outputs import write_frequency_csv
-from .run_plan import AnalysisPlan
+from .planning.models import AnalysisPlan
 from .artifacts.models import ArtifactKind, ArtifactPlan
 
 __all__ = [
@@ -58,7 +58,7 @@ def load_configured_known_words(plan: AnalysisPlan) -> frozenset[str] | None:
     if plan.config.dictcheck.enabled and path is None:
         raise ValueError(
             "dictcheck.wordlist is required when dictcheck.enabled=true "
-            f"(analysis_unit={plan.analysis_unit})"
+            f"(analysis_unit={plan.analysis_mode.unit})"
         )
     return vocabulary.load_wordlist(path) if plan.config.dictcheck.enabled else None
 
@@ -77,10 +77,10 @@ def write_dictcheck_outputs(
     split = split_known_unknown(counter, known_words)
     write_frequency_csv(artifact_plan.require(ArtifactKind.DICTCHECK_KNOWN,
                                               group=label).path,
-                        split.known, header=plan.csv_header)
+                        split.known, header=plan.analysis_mode.csv_header)
     write_frequency_csv(artifact_plan.require(ArtifactKind.DICTCHECK_UNKNOWN,
                                               group=label).path,
-                        split.unknown, header=plan.csv_header)
+                        split.unknown, header=plan.analysis_mode.csv_header)
     return split
 
 
@@ -104,7 +104,9 @@ def write_group_analysis_outputs(
         write_frequency_csv(ref_tags_path, corpus.ref_tag_counts, header=("tag", "count"))
     frequency_path = artifact_plan.require(ArtifactKind.FREQUENCY,
                                            group=corpus.label).path
-    write_frequency_csv(frequency_path, result_counter, header=plan.csv_header)
+    write_frequency_csv(
+        frequency_path, result_counter, header=plan.analysis_mode.csv_header
+    )
     write_dictcheck_outputs(
         plan=plan,
         artifact_plan=artifact_plan,

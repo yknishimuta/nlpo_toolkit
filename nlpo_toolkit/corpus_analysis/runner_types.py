@@ -8,7 +8,7 @@ from nlpo_toolkit.nlp.contracts import NLPBackend
 
 from .execution_session import NLPExecutionSession
 from .config_references import ConfigFileReference
-from .run_plan import ResolvedAnalysisPlan
+from .planning.models import ResolvedAnalysisPlan
 from .artifacts.models import ArtifactKind, ArtifactPlan
 
 

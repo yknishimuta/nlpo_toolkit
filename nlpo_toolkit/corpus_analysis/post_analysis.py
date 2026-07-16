@@ -37,13 +37,14 @@ def execute_partition_validations(
     analysis: AnalysisResults,
 ) -> PartitionRunResult:
     plan = context.session.corpus.plan
-    partition_results = validate_partitions(plan.partition_specs, _group_counters(analysis))
+    specs = plan.definition.config.validations.partitions
+    partition_results = validate_partitions(specs, _group_counters(analysis))
     summaries: list[Mapping[str, object]] = []
     metadata: list[Mapping[str, object]] = []
     exit_code = 0
     mismatches: list[tuple[str, str, int, int]] = []
 
-    for spec, result in zip(plan.partition_specs, partition_results):
+    for spec, result in zip(specs, partition_results):
         csv_path = context.artifact_plan.require(
             ArtifactKind.PARTITION_VALIDATION_CSV, name=spec.name
         ).path
@@ -60,7 +61,7 @@ def execute_partition_validations(
             if spec.on_mismatch == "error":
                 exit_code = 1
 
-    if plan.partition_specs:
+    if specs:
         partition_json_path = context.artifact_plan.require(
             ArtifactKind.PARTITION_VALIDATION_JSON
         ).path
@@ -81,10 +82,11 @@ def execute_group_comparisons(
     analysis: AnalysisResults,
 ) -> ComparisonRunResult:
     plan = context.session.corpus.plan
+    definition = plan.definition
     comparison_results = run_comparisons(
-        specs=plan.comparison_specs,
+        specs=definition.config.comparisons,
         counters=_group_counters(analysis),
-        analysis_unit=plan.analysis_unit,
+        analysis_unit=definition.analysis_mode.unit,
     )
     metadata: list[Mapping[str, object]] = []
     for result in comparison_results:

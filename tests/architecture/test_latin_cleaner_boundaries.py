@@ -32,7 +32,22 @@ def test_cleaner_package_has_no_legacy_typing_or_api_definitions() -> None:
     assert definitions.isdisjoint(forbidden)
 
 
-def test_runner_loads_program_only_outside_single_file_function() -> None:
-    tree = ast.parse((ROOT / "run_clean_corpus.py").read_text(encoding="utf-8"))
-    single = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "_clean_single_file")
-    assert "load_cleaner_program" not in {node.func.id for node in ast.walk(single) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)}
+def test_cli_is_only_an_adapter_and_service_owns_execution() -> None:
+    cli = (ROOT / "run_clean_corpus.py").read_text(encoding="utf-8")
+    assert not any(name in cli for name in ("clean_document", "load_cleaner_program", "write_ref_events", "append_ref_events"))
+    service = (ROOT / "service.py").read_text(encoding="utf-8")
+    assert not any(name in service for name in ("import sys", "import argparse", "corpus_analysis", "print("))
+    assert not any(name in service for name in ("load_cleaner_config", "inspect_cleaner_config"))
+
+
+def test_corpus_analysis_uses_the_typed_cleaner_service_contract() -> None:
+    contracts = Path("nlpo_toolkit/cleaner_contracts.py").read_text(encoding="utf-8")
+    corpus = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in Path("nlpo_toolkit/corpus_analysis").rglob("*.py")
+    )
+    assert "CleanerRunner" not in contracts
+    assert "CleanerLoader" not in contracts
+    assert "run_clean_corpus" not in corpus
+    assert "main([" not in corpus
+    assert not Path("nlpo_toolkit/corpus_analysis/cleaner_runtime.py").exists()

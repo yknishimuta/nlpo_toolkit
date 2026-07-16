@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, Protocol
 
 from nlpo_toolkit.nlp.contracts import BuiltNLPBackend, NLPBackend
 from nlpo_toolkit.cleaner_contracts import (
+    CleanerApplicationService,
     CleanerConfigInspection,
-    CleanerLoader,
 )
 
 from .analysis_policy import AnalysisExtractionPolicy
@@ -54,7 +54,7 @@ class CorpusPlanningDependencies:
 
 @dataclass(frozen=True)
 class CorpusPreparationDependencies:
-    cleaner_loader: CleanerLoader
+    execute_cleaner: CleanerApplicationService
 
 
 @dataclass(frozen=True)

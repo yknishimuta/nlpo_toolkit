@@ -3,8 +3,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from ..cleaner_runtime import CleanerError
 from ..composition import default_feature_command_dependencies
+from ..corpus_errors import CorpusPreparationError
 from ..features.errors import FeatureError
 from ..features.models import FeatureRequest
 from ..features.service import execute_feature_command
@@ -96,6 +96,6 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
         with open_cli_output(path=args.out, stdout=context.stdout) as stream:
             write_feature_result(result, stream=stream, output_format=args.format)
         return 0
-    except (CleanerError, FeatureError, ValueError, FileNotFoundError) as exc:
+    except (CorpusPreparationError, FeatureError, ValueError, FileNotFoundError) as exc:
         present_error(exc, stderr=context.stderr)
         return 1

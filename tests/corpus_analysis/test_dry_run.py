@@ -9,7 +9,7 @@ from nlpo_toolkit.corpus_analysis.dry_run import DiagnosticLevel, execute_dry_ru
 from nlpo_toolkit.corpus_analysis.config import load_config
 from nlpo_toolkit.corpus_analysis.config import ConfigError
 from nlpo_toolkit.corpus_analysis.config_references import ConfigReferenceError
-from nlpo_toolkit.corpus_analysis.run_plan import build_count_plan
+from nlpo_toolkit.corpus_analysis.planning.build import build_count_plan
 from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
 from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 

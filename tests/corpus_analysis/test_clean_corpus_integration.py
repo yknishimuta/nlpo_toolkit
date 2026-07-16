@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from nlpo_toolkit.latin.cleaners import run_clean_corpus
 
 
@@ -113,7 +111,4 @@ rules_path: latin_cleaners/NO_SUCH.yml
         encoding="utf-8",
     )
 
-    from nlpo_toolkit.latin.cleaners.errors import CleanerRuleConfigError
-
-    with pytest.raises(CleanerRuleConfigError):
-        run_clean_corpus.main(argv=[str(config_path)])
+    assert run_clean_corpus.main(argv=[str(config_path)]) == 1

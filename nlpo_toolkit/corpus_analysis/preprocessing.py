@@ -1,45 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-from nlpo_toolkit.cleaner_contracts import CleanerConfigError, CleanerConfigInspection
+from nlpo_toolkit.cleaner_contracts import (
+    CleanerApplicationError,
+    CleanerExecutionRequest,
+)
 
-from .cleaner_runtime import run_cleaner
-from .config import AppConfig
-from .corpus import resolve_project_path
-from .corpus_errors import CleanerInspectionError, CorpusPreparationError
-
-if TYPE_CHECKING:
-    from .ports import CleanerConfigInspector, CorpusPreparationDependencies
-    from .run_plan import AnalysisPlan, ResolvedAnalysisPlan
-
-
-@dataclass(frozen=True)
-class CleanerPlan:
-    config_path: Path
-    inspection: CleanerConfigInspection
-
-
-def resolve_cleaner_plan(
-    config: AppConfig,
-    project_root: Path,
-    *,
-    inspector: CleanerConfigInspector,
-) -> CleanerPlan | None:
-    if config.preprocess.kind != "cleaner":
-        return None
-    if not config.preprocess.config:
-        raise CorpusPreparationError(
-            "'preprocess.config' is required when preprocess.kind=cleaner"
-        )
-    config_path = resolve_project_path(project_root, config.preprocess.config)
-    try:
-        inspection = inspector(config_path)
-    except CleanerConfigError as exc:
-        raise CleanerInspectionError(str(exc)) from exc
-    return CleanerPlan(config_path=config_path, inspection=inspection)
+from .corpus_errors import (
+    CleanerExecutionError,
+    CleanerInspectionError,
+)
+from .planning.models import CleanerPlan
+from .ports import CorpusPreparationDependencies
 
 
 def execute_preprocess(
@@ -51,30 +24,18 @@ def execute_preprocess(
         return None
     if not plan.config_path.exists():
         raise CleanerInspectionError(f"Cleaner config file not found: {plan.config_path}")
-    run_cleaner(
-        config_path=plan.config_path,
-        cleaner_loader=dependencies.cleaner_loader,
-    )
-    return plan.inspection.config.output_path
-
-
-def inspect_analysis_plan(plan: AnalysisPlan) -> ResolvedAnalysisPlan:
-    from .run_plan import resolve_analysis_inputs
-
-    cleaned_dir = (
-        plan.cleaner_plan.inspection.config.output_path
-        if plan.cleaner_plan is not None
-        else None
-    )
-    return resolve_analysis_inputs(plan, cleaned_dir=cleaned_dir)
-
-
-def prepare_analysis_plan(
-    plan: AnalysisPlan,
-    *,
-    dependencies: CorpusPreparationDependencies,
-) -> ResolvedAnalysisPlan:
-    from .run_plan import resolve_analysis_inputs
-
-    cleaned_dir = execute_preprocess(plan.cleaner_plan, dependencies=dependencies)
-    return resolve_analysis_inputs(plan, cleaned_dir=cleaned_dir)
+    try:
+        result = dependencies.execute_cleaner(
+            CleanerExecutionRequest(inspection=plan.inspection)
+        )
+    except CleanerApplicationError as exc:
+        raise CleanerExecutionError(
+            f"Cleaner preprocessing failed: {plan.config_path}: {exc}"
+        ) from exc
+    expected = plan.inspection.config.output_path.resolve()
+    if result.configured_output_path != expected:
+        raise CleanerExecutionError(
+            f"Cleaner returned an unexpected output path: expected={expected}; "
+            f"actual={result.configured_output_path}"
+        )
+    return result.configured_output_path

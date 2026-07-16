@@ -4,6 +4,7 @@ from dataclasses import fields
 from pathlib import Path
 
 import pytest
+from nlpo_toolkit.cleaner_contracts import CleanerExecutionResult
 
 from nlpo_toolkit.corpus_analysis.config import ensure_app_config
 from nlpo_toolkit.corpus_analysis.corpus_errors import CorpusPreparationError
@@ -11,17 +12,19 @@ from nlpo_toolkit.corpus_analysis.ports import (
     CorpusPlanningDependencies,
     CorpusPreparationDependencies,
 )
-from nlpo_toolkit.corpus_analysis.preprocessing import (
+from nlpo_toolkit.corpus_analysis.planning.resolve import (
     inspect_analysis_plan,
     prepare_analysis_plan,
 )
 from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
-from nlpo_toolkit.corpus_analysis.run_plan import (
-    AnalysisPlanError,
+from nlpo_toolkit.corpus_analysis.planning.build import (
     build_analysis_plan,
     build_count_plan,
+)
+from nlpo_toolkit.corpus_analysis.planning.resolve import (
     prepare_count_plan,
 )
+from nlpo_toolkit.corpus_analysis.planning.validate import AnalysisPlanError
 from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 
 
@@ -62,6 +65,13 @@ def _config(*, preprocess: dict | None = None, mode: str = "groups") -> dict:
     if preprocess is not None:
         result["preprocess"] = preprocess
     return result
+
+
+def _result(request) -> CleanerExecutionResult:
+    config = request.inspection.config
+    return CleanerExecutionResult(
+        config.source_path, config.kind, config.output_path, (), config.ref_tsv_path
+    )
 
 
 def test_analysis_plan_is_static_and_planning_has_no_loader(tmp_path: Path) -> None:
@@ -106,15 +116,13 @@ def test_prepare_runs_cleaner_once_then_resolves_generated_glob(tmp_path: Path) 
     _cleaner_config(tmp_path)
     calls = 0
 
-    class Cleaner:
-        @staticmethod
-        def main(_argv):
-            nonlocal calls
-            calls += 1
-            output = tmp_path / "cleaned"
-            output.mkdir(exist_ok=True)
-            (output / "generated.txt").write_text("new", encoding="utf-8")
-            return 0
+    def cleaner(request):
+        nonlocal calls
+        calls += 1
+        output = tmp_path / "cleaned"
+        output.mkdir(exist_ok=True)
+        (output / "generated.txt").write_text("new", encoding="utf-8")
+        return _result(request)
 
     definition = build_analysis_plan(
         _request(tmp_path),
@@ -124,7 +132,7 @@ def test_prepare_runs_cleaner_once_then_resolves_generated_glob(tmp_path: Path) 
     )
     resolved = prepare_analysis_plan(
         definition,
-        dependencies=CorpusPreparationDependencies(cleaner_loader=lambda: Cleaner()),
+        dependencies=CorpusPreparationDependencies(execute_cleaner=cleaner),
     )
 
     assert calls == 1
@@ -136,13 +144,11 @@ def test_prepare_runs_cleaner_once_then_resolves_generated_glob(tmp_path: Path) 
 def test_auto_single_cleaned_uses_post_cleaner_state(tmp_path: Path) -> None:
     _cleaner_config(tmp_path)
 
-    class Cleaner:
-        @staticmethod
-        def main(_argv):
-            output = tmp_path / "cleaned"
-            output.mkdir(exist_ok=True)
-            (output / "only.txt").write_text("new", encoding="utf-8")
-            return 0
+    def cleaner(request):
+        output = tmp_path / "cleaned"
+        output.mkdir(exist_ok=True)
+        (output / "only.txt").write_text("new", encoding="utf-8")
+        return _result(request)
 
     definition = build_analysis_plan(
         _request(tmp_path, override="auto_single_cleaned"),
@@ -152,7 +158,7 @@ def test_auto_single_cleaned_uses_post_cleaner_state(tmp_path: Path) -> None:
     )
     resolved = prepare_analysis_plan(
         definition,
-        dependencies=CorpusPreparationDependencies(cleaner_loader=lambda: Cleaner()),
+        dependencies=CorpusPreparationDependencies(execute_cleaner=cleaner),
     )
 
     assert resolved.work_items[0].files == (
@@ -163,14 +169,12 @@ def test_auto_single_cleaned_uses_post_cleaner_state(tmp_path: Path) -> None:
 def test_auto_single_cleaned_rejects_multiple_post_cleaner_files(tmp_path: Path) -> None:
     _cleaner_config(tmp_path)
 
-    class Cleaner:
-        @staticmethod
-        def main(_argv):
-            output = tmp_path / "cleaned"
-            output.mkdir(exist_ok=True)
-            for name in ("a.txt", "b.txt"):
-                (output / name).write_text(name, encoding="utf-8")
-            return 0
+    def cleaner(request):
+        output = tmp_path / "cleaned"
+        output.mkdir(exist_ok=True)
+        for name in ("a.txt", "b.txt"):
+            (output / name).write_text(name, encoding="utf-8")
+        return _result(request)
 
     definition = build_analysis_plan(
         _request(tmp_path, override="auto_single_cleaned"),
@@ -181,7 +185,7 @@ def test_auto_single_cleaned_rejects_multiple_post_cleaner_files(tmp_path: Path)
     with pytest.raises(CorpusPreparationError, match="exactly one"):
         prepare_analysis_plan(
             definition,
-            dependencies=CorpusPreparationDependencies(cleaner_loader=lambda: Cleaner()),
+            dependencies=CorpusPreparationDependencies(execute_cleaner=cleaner),
         )
 
 
@@ -195,7 +199,7 @@ def test_no_cleaner_resolves_normal_groups_with_no_cleaned_dir(tmp_path: Path) -
     resolved = prepare_analysis_plan(
         definition,
         dependencies=CorpusPreparationDependencies(
-            cleaner_loader=lambda: pytest.fail("loader called")
+            execute_cleaner=lambda _request: pytest.fail("service called")
         ),
     )
 
@@ -229,6 +233,6 @@ def test_count_validation_is_split_between_structure_and_references(tmp_path: Pa
         prepare_count_plan(
             definition,
             dependencies=CorpusPreparationDependencies(
-                cleaner_loader=lambda: pytest.fail("loader called")
+                execute_cleaner=lambda _request: pytest.fail("service called")
             ),
         )

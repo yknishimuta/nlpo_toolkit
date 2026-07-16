@@ -58,20 +58,21 @@ def build_summary_lines(
     comparisons: ComparisonRunResult,
 ) -> list[str]:
     plan = context.session.corpus.plan
+    definition = plan.definition
     lines: list[str] = [
         "# Summary",
         "",
-        f"language: {plan.config.nlp.language}",
-        f"stanza_package: {plan.config.nlp.stanza_package}",
+        f"language: {definition.config.nlp.language}",
+        f"stanza_package: {definition.config.nlp.stanza_package}",
         f"nlp_backend: {context.session.backend.info.name}",
-        f"analysis_unit: {plan.analysis_unit}",
-        f"normalization: {_format_normalization_kv(plan.config.normalization)}",
+        f"analysis_unit: {definition.analysis_mode.unit}",
+        f"normalization: {_format_normalization_kv(definition.config.normalization)}",
         "",
     ]
     lines.extend(render_backend_info(context.session.backend.info))
     lines.append("")
 
-    if plan.config.ref_tags.enabled:
+    if definition.config.ref_tags.enabled:
         for label, group in analysis.groups.items():
             counts = group.ref_tag_counts
             lines.append(
@@ -103,7 +104,9 @@ def build_summary_lines(
 
     if partitions.results:
         lines.extend(["", "# Partition validation", ""])
-        for spec, result in zip(plan.partition_specs, partitions.results):
+        for spec, result in zip(
+            definition.config.validations.partitions, partitions.results
+        ):
             if result.exact_match:
                 lines.append(
                     f"- name={result.name} status=OK whole={result.whole} "
@@ -151,31 +154,34 @@ def build_final_run_metadata(
     comparisons: ComparisonRunResult,
 ) -> dict[str, object]:
     plan = context.session.corpus.plan
+    definition = plan.definition
     meta = build_run_meta(
         groups_files={
             label: [str(path) for path in group.files]
             for label, group in analysis.groups.items()
         },
     )
-    meta["analysis_unit"] = plan.analysis_unit
+    meta["analysis_unit"] = definition.analysis_mode.unit
     meta["nlp"] = context.session.backend.info.to_dict()
-    if plan.auto_mode:
+    if definition.auto_mode:
         meta["grouping"] = {
             "mode": "auto_single_cleaned",
-            "auto_group_name": plan.auto_group_name,
+            "auto_group_name": definition.config.grouping.auto_group_name,
         }
     else:
-        meta["grouping"] = {"mode": "per_file" if plan.per_file else "groups"}
-    meta["environment"] = collect_runtime_environment(plan.project_root)
+        meta["grouping"] = {
+            "mode": "per_file" if definition.per_file else "groups"
+        }
+    meta["environment"] = collect_runtime_environment(definition.project_root)
 
-    norm_dict = plan.config.normalization.model_dump(mode="json")
+    norm_dict = definition.config.normalization.model_dump(mode="json")
     norm_canon = json.dumps(norm_dict, ensure_ascii=False, sort_keys=True)
     meta["normalization"] = norm_dict
     meta["normalization_hash_sha256"] = hashlib.sha256(norm_canon.encode("utf-8")).hexdigest()
     meta["partition_validations"] = list(partitions.metadata)
     meta["group_comparisons"] = list(comparisons.metadata)
     meta["trace"] = {
-        "enabled": plan.config.trace.enabled,
+        "enabled": definition.config.trace.enabled,
         "files": {
             artifact.group: str(artifact.path)
             for artifact in context.artifact_plan.select(
@@ -224,6 +230,7 @@ def build_run_result(
     partitions: PartitionRunResult,
 ) -> RunResult:
     plan = context.session.corpus.plan
+    definition = plan.definition
     groups_files = {
         label: deduplicate_resolved_paths(group.files)
         for label, group in analysis.groups.items()
@@ -236,8 +243,8 @@ def build_run_result(
         cleaned_files: tuple[Path, ...] = ()
     else:
         input_files = deduplicate_resolved_paths(
-            plan.cleaner_inspection.input_files
-            if plan.cleaner_inspection is not None
+            definition.cleaner_plan.inspection.input_files
+            if definition.cleaner_plan is not None
             else ()
         )
         cleaned_root = plan.cleaned_dir.resolve()
@@ -251,6 +258,6 @@ def build_run_result(
         input_files=input_files,
         cleaned_files=cleaned_files,
         artifact_plan=context.artifact_plan,
-        config_references=plan.config_files.references,
+        config_references=definition.config_files.references,
         partition_mismatches=partitions.mismatches,
     )

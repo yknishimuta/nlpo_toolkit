@@ -41,7 +41,8 @@ def _copy_sources(paths: tuple[Path, ...]) -> tuple[ArchiveCopySource, ...]:
 def collect_archive_inventory(
     *, run_result: RunResult, request: RunArchiveRequest
 ) -> ArchiveInventory:
-    project_root = run_result.plan.project_root.resolve()
+    definition = run_result.plan.definition
+    project_root = definition.project_root
     creation_time = request.created_at or datetime.now().astimezone()
     run_name = _sanitize_run_name(
         request.run_name or creation_time.strftime("%Y%m%d-%H%M%S")
@@ -106,8 +107,8 @@ def collect_archive_inventory(
         run_name=run_name,
         creation_time=creation_time,
         command_line=request.command_line or tuple(sys.argv),
-        config_path=run_result.plan.config_path.resolve(),
-        output_dir=run_result.plan.out_dir.resolve(),
+        config_path=definition.config_path,
+        output_dir=definition.out_dir,
         groups_files=run_result.groups_files,
         output_sources=_copy_sources(outputs),
         trace_sources=_copy_sources(traces),

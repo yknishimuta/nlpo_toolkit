@@ -11,6 +11,10 @@ class CleanerInspectionError(CorpusPreparationError):
     """A cleaner configuration could not be inspected."""
 
 
+class CleanerExecutionError(CorpusPreparationError):
+    """Cleaner preprocessing failed during corpus preparation."""
+
+
 class CorpusReadError(CorpusPreparationError):
     """A configured corpus file could not be read as UTF-8."""
 

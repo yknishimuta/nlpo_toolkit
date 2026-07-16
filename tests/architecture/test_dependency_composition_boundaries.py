@@ -75,7 +75,7 @@ def test_ports_contains_only_interfaces_and_dependency_containers() -> None:
             "create_nlp_backend",
             "build_sentence_splitter",
             "load_config",
-            "load_default_cleaner",
+            "execute_cleaner",
             "create_run_archive",
             "run",
         }
@@ -85,7 +85,7 @@ def test_ports_contains_only_interfaces_and_dependency_containers() -> None:
             "composition",
             "runner",
             "archive",
-            "cleaner_runtime",
+            "latin.cleaners.service",
         }
     )
 
@@ -145,7 +145,8 @@ def test_application_services_use_ports_not_composition() -> None:
     service_paths = (
         "runner.py",
         "runtime.py",
-        "run_plan.py",
+        "planning/build.py",
+        "planning/resolve.py",
         "count_command.py",
         "features/service.py",
         "ngram.py",
@@ -197,7 +198,7 @@ def test_production_composition_selects_expected_implementations() -> None:
     count = composition.default_count_command_dependencies()
 
     assert planning.load_config is load_config
-    assert preparation.cleaner_loader is composition.load_default_cleaner
+    assert preparation.execute_cleaner is composition._execute_cleaner
     assert planning.cleaner_inspector is composition._inspect_cleaner_config
     assert count.run_analysis is run
     assert count.archive_creator is create_run_archive
@@ -281,15 +282,18 @@ def test_fresh_interpreter_imports_all_dependency_consumers() -> None:
     assert completed.returncode == 0, completed.stderr
 
 
-def test_ports_and_composition_preserve_bundled_cleaner_lazy_loading() -> None:
+def test_ports_and_composition_preserve_bundled_cleaner_service_lazy_loading() -> None:
     code = """
 import sys
 import nlpo_toolkit.corpus_analysis.ports
-assert 'nlpo_toolkit.latin.cleaners.run_clean_corpus' not in sys.modules
+assert 'nlpo_toolkit.latin.cleaners.service' not in sys.modules
 import nlpo_toolkit.corpus_analysis.composition as composition
-assert 'nlpo_toolkit.latin.cleaners.run_clean_corpus' not in sys.modules
-composition.load_default_cleaner()
-assert 'nlpo_toolkit.latin.cleaners.run_clean_corpus' in sys.modules
+assert 'nlpo_toolkit.latin.cleaners.service' not in sys.modules
+try:
+    composition._execute_cleaner(None)
+except AttributeError:
+    pass
+assert 'nlpo_toolkit.latin.cleaners.service' in sys.modules
 """
     completed = subprocess.run(
         [sys.executable, "-c", code],

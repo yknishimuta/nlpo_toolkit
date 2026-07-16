@@ -84,7 +84,7 @@ def test_dependency_objects_are_frozen() -> None:
         load_config=lambda _path: None,  # type: ignore[return-value]
         cleaner_inspector=lambda _path: None,  # type: ignore[return-value]
     )
-    preparation = CorpusPreparationDependencies(cleaner_loader=lambda: None)
+    preparation = CorpusPreparationDependencies(execute_cleaner=lambda _request: None)
     dependencies = RunnerDependencies(
         corpus=CorpusExecutionDependencies(planning=planning, preparation=preparation),
         nlp=NLPExecutionDependencies(

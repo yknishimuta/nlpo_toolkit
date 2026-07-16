@@ -62,16 +62,16 @@ class AnalysisRecordSource:
 
 
 def _analysis_cache_dir(context: RunContext) -> Path:
-    plan = context.session.corpus.plan
-    directory = Path(plan.config.analysis_cache.directory)
+    definition = context.session.corpus.plan.definition
+    directory = Path(definition.config.analysis_cache.directory)
     if not directory.is_absolute():
-        directory = plan.project_root / directory
+        directory = definition.project_root / directory
     return directory.resolve()
 
 
 def create_analysis_cache_stats(context: RunContext) -> AnalysisCacheRunStats:
     return AnalysisCacheRunStats(
-        enabled=context.session.corpus.plan.config.analysis_cache.enabled,
+        enabled=context.session.corpus.plan.definition.config.analysis_cache.enabled,
         directory=str(_analysis_cache_dir(context)),
     )
 
@@ -98,12 +98,12 @@ def build_analysis_options(
     context: RunContext,
     corpus: PreparedCorpus,
 ) -> AnalysisOptions:
-    plan = context.session.corpus.plan
-    filters = plan.config.filters
+    definition = context.session.corpus.plan.definition
+    filters = definition.config.filters
     return AnalysisOptions(
         group=corpus.label,
         source_files=tuple(corpus.files),
-        use_lemma=plan.use_lemma,
+        use_lemma=definition.analysis_mode.use_lemma,
         upos_targets=frozenset(filters.upos_targets),
         min_token_length=filters.min_token_length,
         drop_roman_numerals=filters.drop_roman_numerals,
@@ -118,7 +118,7 @@ def obtain_analysis_records(
     text: str,
 ) -> Iterator[AnalysisRecordSource]:
     session = context.session
-    plan = session.corpus.plan
+    definition = session.corpus.plan.definition
     policy = session.extraction_policy
     fingerprint = build_analysis_fingerprint(
         backend_info=session.backend.info,
@@ -129,7 +129,7 @@ def obtain_analysis_records(
         prepared_text_sha256=text_hash,
         fingerprint=fingerprint,
     )
-    if plan.config.analysis_cache.enabled:
+    if definition.config.analysis_cache.enabled:
         repository = AnalysisCacheRepository(_analysis_cache_dir(context))
         with open_or_compute_analysis_records(
             repository=repository,
@@ -142,7 +142,7 @@ def obtain_analysis_records(
                 nlp=session.backend.backend,
                 policy=policy,
             ),
-            lock_timeout_sec=plan.config.analysis_cache.lock_timeout_sec,
+            lock_timeout_sec=definition.config.analysis_cache.lock_timeout_sec,
         ) as cached:
             yield AnalysisRecordSource(cached.records, cached.status, cache_key)
         return
@@ -179,16 +179,16 @@ def consume_analysis_records(
 def _token_artifact_metadata(
     *, context: RunContext, corpus: PreparedCorpus, path: Path
 ) -> TokenArtifactMetadata:
-    plan = context.session.corpus.plan
+    definition = context.session.corpus.plan.definition
     return TokenArtifactMetadata(
         group=corpus.label,
         source_files=tuple(str(file) for file in corpus.files),
-        analysis_unit=plan.analysis_unit,
-        upos_targets=tuple(sorted(plan.config.filters.upos_targets)),
+        analysis_unit=definition.analysis_mode.unit,
+        upos_targets=tuple(sorted(definition.config.filters.upos_targets)),
         nlp=context.session.backend.info.to_dict(),
         filters={
-            "min_token_length": plan.config.filters.min_token_length,
-            "drop_roman_numerals": plan.config.filters.drop_roman_numerals,
+            "min_token_length": definition.config.filters.min_token_length,
+            "drop_roman_numerals": definition.config.filters.drop_roman_numerals,
         },
         artifact_path=str(path.resolve()),
     )
@@ -237,9 +237,9 @@ def execute_record_analysis(
             trace_writer = stack.enter_context(
                 DiagnosticTraceWriter(
                     trace_path,
-                    max_rows=int(context.session.corpus.plan.config.trace.max_rows or 0),
-                    only_keys=context.session.corpus.plan.config.trace.only_keys,
-                    write_truncation_marker=context.session.corpus.plan.config.trace.write_truncation_marker,
+                    max_rows=int(context.session.corpus.plan.definition.config.trace.max_rows or 0),
+                    only_keys=context.session.corpus.plan.definition.config.trace.only_keys,
+                    write_truncation_marker=context.session.corpus.plan.definition.config.trace.write_truncation_marker,
                 )
             )
         source = stack.enter_context(obtain_analysis_records(context=context, text=text))

@@ -7,10 +7,9 @@ from pathlib import Path
 from nlpo_toolkit.corpus_analysis import diagnostic_trace, token_artifact
 from nlpo_toolkit.corpus_analysis.normalizer import normalize_text
 from nlpo_toolkit.corpus_analysis.ports import CountRunner
-from nlpo_toolkit.corpus_analysis.run_plan import (
+from nlpo_toolkit.corpus_analysis.planning.build import (
     build_analysis_plan,
     build_count_plan,
-    resolve_run_paths,
 )
 from nlpo_toolkit.corpus_analysis.runner import run
 from nlpo_toolkit.corpus_analysis.runtime import prepare_run_context
@@ -44,7 +43,6 @@ def _top_level_function(tree: ast.Module, name: str) -> ast.FunctionDef:
 
 def test_production_callables_do_not_accept_script_dir() -> None:
     for function in (
-        resolve_run_paths,
         build_analysis_plan,
         build_count_plan,
         prepare_run_context,
@@ -53,11 +51,7 @@ def test_production_callables_do_not_accept_script_dir() -> None:
     ):
         assert "script_dir" not in inspect.signature(function).parameters
 
-    assert tuple(inspect.signature(resolve_run_paths).parameters) == (
-        "project_root",
-        "config_path",
-    )
-    assert inspect.signature(resolve_run_paths).parameters["project_root"].default is inspect.Parameter.empty
+    assert not Path("nlpo_toolkit/corpus_analysis/run_plan.py").exists()
 
 
 def test_production_code_has_no_script_dir_fallback() -> None:
@@ -84,8 +78,8 @@ def test_compare_strips_only_the_canonical_frequency_prefix() -> None:
 
 
 def test_cleaner_calls_canonical_clean_document_signature_directly() -> None:
-    tree = _tree("nlpo_toolkit/latin/cleaners/run_clean_corpus.py")
-    function = _top_level_function(tree, "_clean_single_file")
+    tree = _tree("nlpo_toolkit/latin/cleaners/service.py")
+    function = _top_level_function(tree, "_execute_file")
     calls = [
         node
         for node in ast.walk(function)

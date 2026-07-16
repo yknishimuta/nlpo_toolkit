@@ -8,8 +8,10 @@ from .ports import CorpusPlanningDependencies
 from .config import ConfigError
 from .config_references import ConfigReferenceError
 from .corpus_errors import CorpusPreparationError
-from .preprocessing import inspect_analysis_plan
-from .run_plan import ResolvedAnalysisPlan, AnalysisPlanError, build_count_plan
+from .planning.build import build_count_plan
+from .planning.models import ResolvedAnalysisPlan
+from .planning.resolve import inspect_analysis_plan
+from .planning.validate import AnalysisPlanError
 from .requests import CorpusPreparationRequest
 
 
@@ -47,15 +49,16 @@ def _display_path(path: Path, project_root: Path) -> str:
 def render_analysis_plan(plan: ResolvedAnalysisPlan, *, project_root: Path) -> list[str]:
     lines: list[str] = []
 
-    if plan.auto_mode:
+    definition = plan.definition
+    if definition.auto_mode:
         lines.append("grouping mode: auto_single_cleaned")
-        files = plan.group_files.get(plan.auto_group_name, ())
+        files = plan.group_files.get(definition.config.grouping.auto_group_name, ())
         if files:
             lines.append(
                 "auto selected cleaned file: "
                 f"{_display_path(files[0], project_root)}"
             )
-    elif plan.per_file:
+    elif definition.per_file:
         lines.append("grouping mode: per_file")
 
     for group_name, files in plan.group_files.items():
@@ -69,7 +72,8 @@ def render_analysis_plan(plan: ResolvedAnalysisPlan, *, project_root: Path) -> l
 def _render_spec_diagnostics(plan: ResolvedAnalysisPlan) -> list[DryRunDiagnostic]:
     diagnostics: list[DryRunDiagnostic] = []
 
-    for spec in plan.partition_specs:
+    config = plan.definition.config
+    for spec in config.validations.partitions:
         empty_refs = [name for name in (spec.whole, *spec.parts) if not plan.group_files.get(name)]
         if empty_refs:
             for group_name in empty_refs:
@@ -87,7 +91,7 @@ def _render_spec_diagnostics(plan: ResolvedAnalysisPlan) -> list[DryRunDiagnosti
                 )
             )
 
-    for spec in plan.comparison_specs:
+    for spec in config.comparisons:
         empty_refs = [name for name in (spec.group_a, spec.group_b) if not plan.group_files.get(name)]
         if empty_refs:
             for group_name in empty_refs:
@@ -147,7 +151,11 @@ def execute_dry_run(
     except (ConfigReferenceError, AnalysisPlanError, CorpusPreparationError) as exc:
         add(DiagnosticLevel.ERROR, str(exc))
     else:
-        cleaner_inspection = definition.cleaner_inspection
+        cleaner_inspection = (
+            definition.cleaner_plan.inspection
+            if definition.cleaner_plan is not None
+            else None
+        )
         if cleaner_inspection is None:
             add(
                 DiagnosticLevel.OK,

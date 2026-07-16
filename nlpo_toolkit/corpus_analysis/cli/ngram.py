@@ -3,8 +3,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from ..cleaner_runtime import CleanerError
 from ..composition import default_config_ngram_dependencies
+from ..corpus_errors import CorpusPreparationError
 from ..ngram import (
     ConfigNgramRequest,
     NgramError,
@@ -97,6 +97,6 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
         with open_cli_output(path=args.out, stdout=context.stdout) as stream:
             write_ngram_result(result, stream=stream, output_format=args.format)
         return 0
-    except (CleanerError, NgramError, ValueError, FileNotFoundError) as exc:
+    except (CorpusPreparationError, NgramError, ValueError, FileNotFoundError) as exc:
         present_error(exc, stderr=context.stderr)
         return 1

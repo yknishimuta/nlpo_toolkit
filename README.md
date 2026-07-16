@@ -86,16 +86,29 @@ single `grouping_override` value represents CLI grouping overrides. Config-input
 N-grams always use tokens; dry-run is an independent use case rather than a
 Count request mode.
 
-Corpus preparation uses four explicit stages. `build_analysis_plan()` validates
-configuration, paths, cleaner configuration, and referenced files and returns a
-static plan without running the cleaner or resolving corpus globs.
-`inspect_analysis_plan()` resolves currently existing inputs for dry-run and
-never runs the cleaner. Count, Features, and config-input N-gram use
-`prepare_analysis_plan()`, which runs the cleaner first and resolves inputs
-afterwards. Finally, `prepare_corpora()` reads the resolved inputs and applies
-normalization and reference-tag removal. Planning dependencies contain only
-configuration loading and cleaner inspection; cleaner execution is supplied by
-separate preparation dependencies.
+Corpus preparation is split across a one-way `planning` package. Immutable
+models live in `planning.models`; `planning.build` validates configuration,
+paths, Cleaner configuration, and referenced files and returns a static plan
+without running the Cleaner or resolving corpus globs. Pure Count structure and
+resolved-group checks live in `planning.validate`.
+`planning.resolve.inspect_analysis_plan()` resolves currently existing inputs
+for dry-run and never runs the Cleaner. Count, Features, and config-input N-gram
+use `planning.resolve.prepare_analysis_plan()`, which runs the Cleaner first and
+then resolves inputs from the resulting filesystem state. Finally,
+`prepare_corpora()` reads those resolved inputs and applies normalization and
+reference-tag removal. `ResolvedAnalysisPlan` contains its static
+`AnalysisPlan` as `definition`; it does not duplicate static values through
+proxy fields or properties. The dependency direction is models to validation
+to build or resolve, with resolve alone calling preprocessing.
+
+Cleaner execution is a typed application-service call to
+`latin.cleaners.service.execute_cleaner()`, not an invocation of the standalone
+Cleaner CLI. The `CleanerConfigInspection` produced during corpus planning is
+passed directly to execution, so Count, Features, and config-input N-gram do not
+reload the Cleaner config. The Cleaner program is built once per run. The CLI
+adapter only converts its config argument to a request, presents the typed
+result, and maps domain errors to a process exit code. For directory inputs, a
+configured `output_filename_template` is always used exactly as configured.
 
 Execution commands compose these stages through two typed sessions.
 `CorpusExecutionSession` owns the resolved plan and prepared corpora shared by

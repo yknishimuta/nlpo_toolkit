@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 import csv
+from nlpo_toolkit.cleaner_contracts import CleanerExecutionResult
 
 
 from nlpo_toolkit.corpus_analysis.count_command import CountRequest, execute_count_command
@@ -76,28 +76,28 @@ def test_preprocess_cleaner_integration_fixed(tmp_path):
     )
 
     
-    # --- Stub cleaner runner: it should be invoked with argv=[<cleaner_cfg_path>]
+    # --- Stub typed cleaner service.
     cleaner_called = {"ok": False}
 
-    def fake_cleaner_main(argv):
-        assert argv and Path(argv[0]).resolve() == cleaner_cfg_path.resolve()
+    def fake_cleaner_service(request):
+        config = request.inspection.config
+        assert config.source_path == cleaner_cfg_path.resolve()
         cleaner_called["ok"] = True
 
         cleaned_dir = script_dir / "cleaned"
         cleaned_dir.mkdir(parents=True, exist_ok=True)
         (cleaned_dir / "c1.txt").write_text("Puella rosam amat.\n", encoding="utf-8")
         (cleaned_dir / "c2.txt").write_text("Rosa pulchra est.\n", encoding="utf-8")
-        return 0
-
-    class FakeCleaner:
-        main = staticmethod(fake_cleaner_main)
+        return CleanerExecutionResult(
+            config.source_path, config.kind, config.output_path, (), config.ref_tsv_path
+        )
 
     dependencies = count_command_dependencies(
         lambda _path: load_config(groups_cfg_path),
         fake_backend_factory(
             [("rosa", "rosa", "NOUN"), ("rosa", "rosa", "NOUN"), ("puella", "puella", "NOUN")]
         ),
-        cleaner=FakeCleaner(),
+        cleaner=fake_cleaner_service,
     )
 
     # --- Act

@@ -7,7 +7,7 @@ from nlpo_toolkit.comparison.configured import sanitize_comparison_name
 
 from ..corpus import PreparedCorpus, sanitize_label
 from ..partition_validation import sanitize_partition_name
-from ..run_plan import ResolvedAnalysisPlan
+from ..planning.models import ResolvedAnalysisPlan
 from .models import ArtifactKind, ArtifactPlan, PlannedArtifact
 
 
@@ -38,18 +38,19 @@ def _labeled_paths(base: Path, labels: Sequence[str]) -> dict[str, Path]:
 
 def build_count_artifact_plan(*, plan: ResolvedAnalysisPlan,
                               corpora: Sequence[PreparedCorpus]) -> ArtifactPlan:
-    config = plan.config
-    out_dir = plan.out_dir.resolve()
+    definition = plan.definition
+    config = definition.config
+    out_dir = definition.out_dir
     labels = [corpus.label for corpus in corpora]
     artifacts: list[PlannedArtifact] = []
     trace_paths: dict[str, Path] = {}
     if config.trace.enabled:
-        trace_base = (_configured_path(str(config.trace.path), plan.project_root)
+        trace_base = (_configured_path(str(config.trace.path), definition.project_root)
                       if config.trace.path else out_dir / "trace.tsv")
         trace_paths = _labeled_paths(trace_base, labels)
     token_paths: dict[str, Path] = {}
     if config.artifacts.tokens.enabled:
-        token_base = _configured_path(config.artifacts.tokens.path, plan.project_root,
+        token_base = _configured_path(config.artifacts.tokens.path, definition.project_root,
                                       default_suffix=".tsv")
         token_paths = _labeled_paths(token_base, labels)
 
@@ -77,22 +78,22 @@ def build_count_artifact_plan(*, plan: ResolvedAnalysisPlan,
                                 token.with_name(f"{token.stem}.meta.json"), group=label),
             ))
 
-    for spec in plan.partition_specs:
+    for spec in config.validations.partitions:
         artifacts.append(PlannedArtifact(
             ArtifactKind.PARTITION_VALIDATION_CSV,
             out_dir / f"partition_validation_{sanitize_partition_name(spec.name)}.csv",
             name=spec.name,
         ))
-    if plan.partition_specs:
+    if config.validations.partitions:
         artifacts.append(PlannedArtifact(ArtifactKind.PARTITION_VALIDATION_JSON,
                                          out_dir / "partition_validation.json"))
-    for spec in plan.comparison_specs:
+    for spec in config.comparisons:
         artifacts.append(PlannedArtifact(
             ArtifactKind.GROUP_COMPARISON_CSV,
             out_dir / f"group_comparison_{sanitize_comparison_name(spec.name)}.csv",
             name=spec.name,
         ))
-    if plan.comparison_specs:
+    if config.comparisons:
         artifacts.append(PlannedArtifact(ArtifactKind.GROUP_COMPARISONS_JSON,
                                          out_dir / "group_comparisons.json"))
     artifacts.extend((

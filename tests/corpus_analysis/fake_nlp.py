@@ -126,10 +126,10 @@ def runner_dependencies(
     def canonical_loader(path) -> AppConfig:
         return ensure_app_config(load_config(path))
 
-    def cleaner_loader():
+    def execute_cleaner(request):
         if cleaner is None:
-            raise AssertionError("cleaner loader must not be called")
-        return cleaner
+            raise AssertionError("cleaner service must not be called")
+        return cleaner(request)
 
     return RunnerDependencies(
         corpus=CorpusExecutionDependencies(
@@ -137,7 +137,7 @@ def runner_dependencies(
                 load_config=canonical_loader,
                 cleaner_inspector=inspect_cleaner_config,
             ),
-            preparation=CorpusPreparationDependencies(cleaner_loader=cleaner_loader),
+            preparation=CorpusPreparationDependencies(execute_cleaner=execute_cleaner),
         ),
         nlp=NLPExecutionDependencies(
             backend_factory=backend_factory,

@@ -23,7 +23,9 @@ from nlpo_toolkit.corpus_analysis.count_command import CountRequest, execute_cou
 from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
 from nlpo_toolkit.corpus_analysis.composition import default_runner_dependencies
 from nlpo_toolkit.corpus_analysis.ports import CountCommandDependencies
-from nlpo_toolkit.corpus_analysis.run_plan import AnalysisPlan, ResolvedAnalysisPlan
+from nlpo_toolkit.corpus_analysis.planning.models import (
+    AnalysisMode, AnalysisPlan, ResolvedAnalysisPlan,
+)
 from nlpo_toolkit.corpus_analysis.runner_types import RunResult
 from nlpo_toolkit.corpus_analysis.artifacts.models import (
     ArtifactKind, ArtifactPlan, PlannedArtifact,
@@ -46,8 +48,10 @@ def make_run_result(
         project_root=tmp_path.resolve(),
         config_path=config_path.resolve(),
         config=config,
+        out_dir=(tmp_path / "output").resolve(),
         grouping_mode="groups",
         error_on_empty_group=False,
+        analysis_mode=AnalysisMode("lemma", ("lemma", "count")),
         cleaner_plan=None,
         config_files=ResolvedConfigFiles(config_references),
     )
@@ -76,7 +80,7 @@ def make_run_result(
         input_files=tuple(input_files),
         cleaned_files=tuple(cleaned_files),
         artifact_plan=ArtifactPlan(tuple(artifacts)),
-        config_references=plan.config_files.references,
+        config_references=plan.definition.config_files.references,
     )
 
 
@@ -188,7 +192,7 @@ def test_count_cli_uses_run_result_without_reloading_config_or_manifest(
     )
     command_result = execute_count_command(
         CountRequest(
-            corpus=CorpusPreparationRequest(tmp_path, result.plan.config_path),
+            corpus=CorpusPreparationRequest(tmp_path, result.plan.definition.config_path),
             run_name="cli-result",
         ),
         dependencies=dependencies,
@@ -211,7 +215,7 @@ def test_count_cli_does_not_archive_nonzero_run_result(
     )
     command_result = execute_count_command(
         CountRequest(
-            corpus=CorpusPreparationRequest(tmp_path, result.plan.config_path),
+            corpus=CorpusPreparationRequest(tmp_path, result.plan.definition.config_path),
             run_name="must-not-exist",
         ),
         dependencies=dependencies,

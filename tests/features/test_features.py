@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from nlpo_toolkit.cleaner_contracts import CleanerExecutionResult
 from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.features.errors import FeatureError
 from nlpo_toolkit.corpus_analysis.features.models import (
@@ -85,10 +86,10 @@ def _analyzed(records, text: str, *, raw: int, sentences: int, files: int = 1):
 def _dependencies(cleaner=None) -> FeatureCommandDependencies:
     from nlpo_toolkit.corpus_analysis.config import load_config
 
-    def cleaner_loader():
+    def execute_cleaner(request):
         if cleaner is None:
-            raise AssertionError("cleaner loader must not be called")
-        return cleaner
+            raise AssertionError("cleaner service must not be called")
+        return cleaner(request)
 
     return FeatureCommandDependencies(
         corpus=CorpusExecutionDependencies(
@@ -96,12 +97,19 @@ def _dependencies(cleaner=None) -> FeatureCommandDependencies:
                 load_config=load_config,
                 cleaner_inspector=inspect_cleaner_config,
             ),
-            preparation=CorpusPreparationDependencies(cleaner_loader=cleaner_loader),
+            preparation=CorpusPreparationDependencies(execute_cleaner=execute_cleaner),
         ),
         nlp=NLPExecutionDependencies(
             backend_factory=_backend_factory,
             extraction_policy=AnalysisExtractionPolicy(),
         ),
+    )
+
+
+def _successful_cleaner(request) -> CleanerExecutionResult:
+    config = request.inspection.config
+    return CleanerExecutionResult(
+        config.source_path, config.kind, config.output_path, (), config.ref_tsv_path
     )
 
 
@@ -644,9 +652,7 @@ def test_run_features_auto_single_cleaned(tmp_path: Path) -> None:
         FeatureRequest(
             corpus=CorpusPreparationRequest(tmp_path, config_path),
         ),
-        dependencies=_dependencies(
-            type("Clean", (), {"main": staticmethod(lambda _argv: 0)})
-        ),
+        dependencies=_dependencies(_successful_cleaner),
     )
 
     with out.open("w", encoding="utf-8", newline="") as stream:
@@ -685,9 +691,7 @@ def test_run_features_auto_single_cleaned_errors_on_multiple(tmp_path: Path) -> 
             FeatureRequest(
                 corpus=CorpusPreparationRequest(tmp_path, config_path),
             ),
-            dependencies=_dependencies(
-                type("Clean", (), {"main": staticmethod(lambda _argv: 0)})
-            ),
+            dependencies=_dependencies(_successful_cleaner),
         )
 
 

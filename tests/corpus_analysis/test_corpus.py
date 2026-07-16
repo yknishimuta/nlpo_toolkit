@@ -318,7 +318,7 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
         cleaner_inspector=inspect_cleaner_config,
     )
     preparation = CorpusPreparationDependencies(
-        cleaner_loader=lambda: pytest.fail("cleaner loader must not be called")
+        execute_cleaner=lambda _request: pytest.fail("cleaner service must not be called")
     )
     features_mod.execute_feature_command(
             FeatureRequest(

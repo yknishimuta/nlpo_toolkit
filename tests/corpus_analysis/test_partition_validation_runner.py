@@ -198,7 +198,7 @@ def test_runner_rejects_empty_partition_reference_even_without_empty_group_flag(
     config_path = tmp_path / "cfg.yml"
     config_path.write_text("dummy", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="Partition full_split references empty group: part_b"):
+    with pytest.raises(ValueError, match="partition full_split references empty group: part_b"):
         runner_mod.run(
             corpus_request(tmp_path, config_path),
             dependencies=runner_dependencies(

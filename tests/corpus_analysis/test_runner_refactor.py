@@ -103,9 +103,9 @@ def test_prepare_run_context_resolves_per_file_work_items(tmp_path: Path) -> Non
         dependencies=deps,
     )
 
-    assert context.session.corpus.plan.per_file is True
+    assert context.session.corpus.plan.definition.per_file is True
     assert [item.label for item in context.session.corpus.plan.work_items] == ["sample_text_a"]
-    assert context.session.corpus.plan.out_dir == (tmp_path / "output").resolve()
+    assert context.session.corpus.plan.definition.out_dir == (tmp_path / "output").resolve()
 
 
 def test_analyze_corpora_writes_expected_outputs_from_record_pipeline(tmp_path: Path) -> None:

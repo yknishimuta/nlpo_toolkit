@@ -10,14 +10,10 @@ from nlpo_toolkit.nlp.roman_numerals import load_roman_exceptions
 from .analysis_policy import AnalysisExtractionPolicy
 from .corpus import PreparedCorpus, prepare_corpora
 from .ports import CorpusExecutionDependencies, NLPExecutionDependencies
-from .preprocessing import prepare_analysis_plan
+from .planning.build import build_analysis_plan, build_count_plan
+from .planning.models import ResolvedAnalysisPlan
+from .planning.resolve import prepare_analysis_plan, prepare_count_plan
 from .requests import CorpusPreparationRequest
-from .run_plan import (
-    ResolvedAnalysisPlan,
-    build_analysis_plan,
-    build_count_plan,
-    prepare_count_plan,
-)
 
 
 @dataclass(frozen=True)

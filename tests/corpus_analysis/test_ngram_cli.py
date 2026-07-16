@@ -321,7 +321,7 @@ def test_config_ngram_uses_canonical_analysis_plan_with_overrides(tmp_path, monk
                     cleaner_inspector=inspect_cleaner_config,
                 ),
                 preparation=CorpusPreparationDependencies(
-                    cleaner_loader=lambda: pytest.fail("cleaner loader must not be called")
+                    execute_cleaner=lambda _request: pytest.fail("cleaner service must not be called")
                 ),
             ),
         ),
@@ -371,7 +371,7 @@ def test_config_ngram_does_not_apply_count_partition_validation(tmp_path) -> Non
                     cleaner_inspector=inspect_cleaner_config,
                 ),
                 preparation=CorpusPreparationDependencies(
-                    cleaner_loader=lambda: pytest.fail("cleaner must not run")
+                    execute_cleaner=lambda _request: pytest.fail("cleaner must not run")
                 ),
             ),
         ),

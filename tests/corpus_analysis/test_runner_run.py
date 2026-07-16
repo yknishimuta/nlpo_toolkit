@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from nlpo_toolkit.cleaner_contracts import CleanerExecutionResult
 
 import nlpo_toolkit.corpus_analysis.analysis_outputs as analysis_outputs_mod
 import nlpo_toolkit.corpus_analysis.run_reporting as run_reporting_mod
@@ -14,9 +15,11 @@ from tests.corpus_analysis.fake_nlp import fake_backend_factory, runner_dependen
 
 
 class NoopCleaner:
-    @staticmethod
-    def main(_argv):
-        return 0
+    def __call__(self, request):
+        config = request.inspection.config
+        return CleanerExecutionResult(
+            config.source_path, config.kind, config.output_path, (), config.ref_tsv_path
+        )
 
 
 def _write_cleaner_config(root: Path) -> None:
