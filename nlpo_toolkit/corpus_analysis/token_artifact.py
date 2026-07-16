@@ -186,9 +186,10 @@ def _row_to_record(row: Mapping[str, str], *, path: Path, line_number: int) -> _
 
 
 class TokenArtifactWriter:
-    def __init__(self, path: Path, *, metadata: TokenArtifactMetadata) -> None:
+    def __init__(self, path: Path, metadata_path: Path, *,
+                 metadata: TokenArtifactMetadata) -> None:
         self.path = Path(path)
-        self.metadata_path = token_artifact_metadata_path(self.path)
+        self.metadata_path = Path(metadata_path)
         self._metadata = metadata
         self._tmp = _tmp_path(self.path)
         self._meta_tmp = _tmp_path(self.metadata_path)

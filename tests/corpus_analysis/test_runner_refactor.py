@@ -164,12 +164,13 @@ def test_analyze_corpora_writes_expected_outputs_from_record_pipeline(tmp_path: 
     ).groups["group_a"]
 
     assert result.counter == Counter({"item_a": 2, "item_b": 1})
-    generated_names = [path.name for path in result.output_files]
+    generated_names = [artifact.path.name for artifact in context.artifact_plan.artifacts
+                       if artifact.group == "group_a" and artifact.kind.value != "diagnostic_trace"]
     assert generated_names == [
-        "ref_tags_group_a.csv",
         "frequency_group_a.csv",
         "frequency_group_a.known.csv",
         "frequency_group_a.unknown.csv",
+        "ref_tags_group_a.csv",
     ]
 
 
@@ -195,12 +196,11 @@ def test_summary_lines_and_metadata_include_existing_fields(tmp_path: Path) -> N
             files=((tmp_path / "input" / "a.txt").resolve(),),
             counter=Counter(),
             ref_tag_counts=Counter(),
-            output_files=(),
         )),),
         cache_stats=AnalysisCacheRunStats(enabled=False, directory=""),
     )
-    partitions = PartitionRunResult((), (), (), (), 0)
-    comparisons = ComparisonRunResult((), (), ())
+    partitions = PartitionRunResult((), (), (), 0)
+    comparisons = ComparisonRunResult((), ())
 
     lines = build_summary_lines(
         context=context,
@@ -213,7 +213,6 @@ def test_summary_lines_and_metadata_include_existing_fields(tmp_path: Path) -> N
         analysis=analysis,
         partitions=partitions,
         comparisons=comparisons,
-        generated_outputs=(context.session.corpus.plan.out_dir / "summary.txt", context.session.corpus.plan.out_dir / "run_meta.json"),
     )
 
     assert lines[:6] == [
@@ -230,6 +229,7 @@ def test_summary_lines_and_metadata_include_existing_fields(tmp_path: Path) -> N
     assert meta["grouping"] == {"mode": "groups"}
     assert meta["nlp"]["backend"] == "fake"
     assert [Path(p).name for p in meta["generated_outputs"]] == [
+        "frequency_group_a.csv",
         "summary.txt",
         "run_meta.json",
     ]

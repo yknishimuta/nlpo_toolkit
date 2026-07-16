@@ -7,6 +7,7 @@ from .analysis_cache.stats import AnalysisCacheRunStats
 from .analysis_results import AnalysisResults, GroupAnalysisResult
 from .corpus import PreparedCorpus
 from .runner_types import RunContext
+from .artifacts.models import ArtifactKind
 
 __all__ = ["analyze_corpora"]
 
@@ -26,44 +27,44 @@ def _analyze_one_corpus(
     *,
     context: RunContext,
     corpus: PreparedCorpus,
-    output_paths: analysis_outputs.GroupOutputPaths,
     normalization_map: Mapping[str, str] | None,
     known_words: frozenset[str] | None,
     cache_stats: AnalysisCacheRunStats,
 ) -> tuple[str, GroupAnalysisResult]:
+    artifacts = context.artifact_plan
+    token = artifacts.optional(ArtifactKind.TOKEN_ARTIFACT, group=corpus.label)
+    token_meta = artifacts.optional(ArtifactKind.TOKEN_ARTIFACT_METADATA,
+                                    group=corpus.label)
+    trace = artifacts.optional(ArtifactKind.DIAGNOSTIC_TRACE, group=corpus.label)
     record_result = analysis_execution.execute_record_analysis(
         context=context,
         corpus=corpus,
         text=_prepare_counting_text(context, corpus),
-        token_artifact_path=output_paths.token_artifact,
-        trace_path=output_paths.trace,
+        token_artifact_path=token.path if token else None,
+        token_artifact_metadata_path=token_meta.path if token_meta else None,
+        trace_path=trace.path if trace else None,
         cache_stats=cache_stats,
     )
-    output_result = analysis_outputs.write_group_analysis_outputs(
+    output_counter = analysis_outputs.write_group_analysis_outputs(
         plan=context.session.corpus.plan,
+        artifact_plan=context.artifact_plan,
         corpus=corpus,
         counter=record_result.counter,
         normalization_map=normalization_map,
         known_words=known_words,
-        token_generated_outputs=record_result.generated_outputs,
     )
     return (
         corpus.label,
         GroupAnalysisResult(
             files=tuple(corpus.files),
-            counter=output_result.counter.copy(),
+            counter=output_counter.copy(),
             ref_tag_counts=corpus.ref_tag_counts.copy(),
-            output_files=output_result.generated_outputs,
-            trace_path=output_paths.trace,
             token_artifact=record_result.token_artifact,
         ),
     )
 
 
 def analyze_corpora(context: RunContext) -> AnalysisResults:
-    output_plan = analysis_outputs.build_analysis_output_plan(
-        plan=context.session.corpus.plan, corpora=context.session.corpus.corpora
-    )
     plan = context.session.corpus.plan
     normalization_map = analysis_outputs.load_configured_lemma_normalization(plan)
     known_words = analysis_outputs.load_configured_known_words(plan)
@@ -72,7 +73,6 @@ def analyze_corpora(context: RunContext) -> AnalysisResults:
         _analyze_one_corpus(
             context=context,
             corpus=corpus,
-            output_paths=output_plan.for_group(corpus.label),
             normalization_map=normalization_map,
             known_words=known_words,
             cache_stats=cache_stats,

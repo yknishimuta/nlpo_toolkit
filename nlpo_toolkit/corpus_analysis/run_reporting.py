@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Sequence
 
 from nlpo_toolkit.backends import render_backend_info
 
@@ -17,13 +16,7 @@ from .runner_types import (
     RunResult,
     deduplicate_resolved_paths,
 )
-
-
-@dataclass(frozen=True)
-class RunReport:
-    summary_path: Path
-    metadata_path: Path
-    generated_outputs: tuple[Path, ...]
+from .artifacts.models import ArtifactKind
 
 
 def _format_normalization_kv(norm: object) -> str:
@@ -150,26 +143,12 @@ def write_summary(path: Path, lines: Sequence[str]) -> Path:
     return path
 
 
-def merge_generated_outputs(*groups: Iterable[Path]) -> tuple[Path, ...]:
-    seen: set[Path] = set()
-    merged: list[Path] = []
-    for group in groups:
-        for path in group:
-            resolved = Path(path)
-            if resolved in seen:
-                continue
-            seen.add(resolved)
-            merged.append(resolved)
-    return tuple(merged)
-
-
 def build_final_run_metadata(
     *,
     context: RunContext,
     analysis: AnalysisResults,
     partitions: PartitionRunResult,
     comparisons: ComparisonRunResult,
-    generated_outputs: Sequence[Path],
 ) -> dict[str, object]:
     plan = context.session.corpus.plan
     meta = build_run_meta(
@@ -198,14 +177,15 @@ def build_final_run_metadata(
     meta["trace"] = {
         "enabled": plan.config.trace.enabled,
         "files": {
-            label: str(group.trace_path.resolve())
-            for label, group in analysis.groups.items()
-            if group.trace_path is not None
+            artifact.group: str(artifact.path)
+            for artifact in context.artifact_plan.select(
+                kinds={ArtifactKind.DIAGNOSTIC_TRACE}
+            )
         },
     }
     meta["token_artifacts"] = list(analysis.token_artifact_metadata)
     meta["analysis_cache"] = analysis.cache_stats.to_dict()
-    meta["generated_outputs"] = [str(path.resolve()) for path in generated_outputs]
+    meta["generated_outputs"] = [str(path) for path in context.artifact_plan.paths]
     return meta
 
 
@@ -215,9 +195,9 @@ def write_run_report(
     analysis: AnalysisResults,
     partitions: PartitionRunResult,
     comparisons: ComparisonRunResult,
-) -> RunReport:
+) -> None:
     summary_path = write_summary(
-        context.session.corpus.plan.out_dir / "summary.txt",
+        context.artifact_plan.require(ArtifactKind.SUMMARY).path,
         build_summary_lines(
             context=context,
             analysis=analysis,
@@ -225,27 +205,15 @@ def write_run_report(
             comparisons=comparisons,
         ),
     )
-    run_meta_path = context.session.corpus.plan.out_dir / "run_meta.json"
-    generated_outputs = merge_generated_outputs(
-        analysis.generated_outputs,
-        partitions.generated_outputs,
-        comparisons.generated_outputs,
-        (summary_path, run_meta_path),
-    )
+    run_meta_path = context.artifact_plan.require(ArtifactKind.RUN_METADATA).path
     write_run_meta(
         build_final_run_metadata(
             context=context,
             analysis=analysis,
             partitions=partitions,
             comparisons=comparisons,
-            generated_outputs=generated_outputs,
         ),
-        context.session.corpus.plan.out_dir,
-    )
-    return RunReport(
-        summary_path=summary_path,
-        metadata_path=run_meta_path,
-        generated_outputs=generated_outputs,
+        run_meta_path,
     )
 
 
@@ -254,7 +222,6 @@ def build_run_result(
     context: RunContext,
     analysis: AnalysisResults,
     partitions: PartitionRunResult,
-    report: RunReport,
 ) -> RunResult:
     plan = context.session.corpus.plan
     groups_files = {
@@ -277,25 +244,13 @@ def build_run_result(
         cleaned_files = tuple(
             path for path in used_files if path.is_relative_to(cleaned_root)
         )
-    trace_files = deduplicate_resolved_paths(
-        group.trace_path
-        for group in analysis.groups.values()
-        if group.trace_path is not None
-    )
-    trace_set = set(trace_files)
-    output_files = deduplicate_resolved_paths(
-        path for path in report.generated_outputs if Path(path).resolve() not in trace_set
-    )
     return RunResult(
         exit_code=partitions.exit_code,
         plan=plan,
         groups_files=groups_files,
         input_files=input_files,
         cleaned_files=cleaned_files,
-        output_files=output_files,
-        trace_files=trace_files,
+        artifact_plan=context.artifact_plan,
         config_references=plan.config_files.references,
-        summary_path=report.summary_path.resolve(),
-        metadata_path=report.metadata_path.resolve(),
         partition_mismatches=partitions.mismatches,
     )

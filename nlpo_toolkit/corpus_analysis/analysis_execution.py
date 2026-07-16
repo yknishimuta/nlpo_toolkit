@@ -26,7 +26,6 @@ from .runner_types import RunContext
 from .token_artifact import (
     TokenArtifactMetadata,
     TokenArtifactWriter,
-    token_artifact_metadata_path,
 )
 
 __all__ = [
@@ -53,7 +52,6 @@ class RecordAnalysisResult:
     counter: Counter[str]
     record_count: int
     token_artifact: Mapping[str, object] | None
-    generated_outputs: tuple[Path, ...]
 
 
 @dataclass(frozen=True)
@@ -217,6 +215,7 @@ def execute_record_analysis(
     corpus: PreparedCorpus,
     text: str,
     token_artifact_path: Path | None,
+    token_artifact_metadata_path: Path | None,
     trace_path: Path | None,
     cache_stats: AnalysisCacheRunStats,
 ) -> RecordAnalysisResult:
@@ -227,6 +226,7 @@ def execute_record_analysis(
             artifact_writer = stack.enter_context(
                 TokenArtifactWriter(
                     token_artifact_path,
+                    token_artifact_metadata_path,
                     metadata=_token_artifact_metadata(
                         context=context, corpus=corpus, path=token_artifact_path
                     ),
@@ -256,16 +256,14 @@ def execute_record_analysis(
             record_count=consumed.record_count,
         )
 
-    generated: tuple[Path, ...] = ()
     if token_artifact_path is not None:
-        metadata_path = token_artifact_metadata_path(token_artifact_path)
-        generated = (token_artifact_path, metadata_path)
+        assert token_artifact_metadata_path is not None
         final = artifact_writer.final_metadata if artifact_writer is not None else None
         if final is not None:
             artifact_metadata = {
                 "group": corpus.label,
                 "path": str(token_artifact_path.resolve()),
-                "metadata_path": str(metadata_path.resolve()),
+                "metadata_path": str(token_artifact_metadata_path.resolve()),
                 "schema_version": final.schema_version,
                 "row_count": final.row_count,
                 "included_row_count": final.included_row_count,
@@ -276,5 +274,4 @@ def execute_record_analysis(
         counter=consumed.counter,
         record_count=consumed.record_count,
         token_artifact=artifact_metadata,
-        generated_outputs=generated,
     )

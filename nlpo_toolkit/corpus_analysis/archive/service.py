@@ -26,7 +26,10 @@ def create_run_archive(
         copied = copy_archive_inventory(inventory)
         input_metadata = read_source_files_metadata(inventory.input_files)
         cleaned_metadata = read_source_files_metadata(inventory.cleaned_files)
-        generated_metadata = read_source_files_metadata(inventory.generated_outputs)
+        generated_metadata = read_source_files_metadata(tuple(
+            source.source_path
+            for source in (*inventory.output_sources, *inventory.trace_sources)
+        ))
         external_metadata = tuple(
             read_external_reference_metadata(reference.kind, reference.source_path)
             for reference in inventory.metadata_only_references

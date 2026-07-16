@@ -36,7 +36,7 @@ def test_build_run_meta_shape_and_groups_files() -> None:
 
 def test_write_run_meta_writes_json(tmp_path: Path) -> None:
     meta = {"hello": "world", "n": 1}
-    p = write_run_meta(meta, tmp_path)
+    p = write_run_meta(meta, tmp_path / "run_meta.json")
 
     assert p.name == "run_meta.json"
     loaded = json.loads(p.read_text(encoding="utf-8"))

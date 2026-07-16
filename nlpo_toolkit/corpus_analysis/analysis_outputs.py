@@ -2,27 +2,19 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Iterable, Mapping, Sequence
+from typing import Iterable, Mapping
 
 import nlpo_toolkit.nlp.vocabulary as vocabulary
 
-from .config import TraceConfig
-from .corpus import PreparedCorpus, sanitize_label
+from .corpus import PreparedCorpus
 from . import dictcheck
-from .outputs import build_frequency_output_paths, write_frequency_csv
+from .outputs import write_frequency_csv
 from .run_plan import AnalysisPlan
-from .runner_types import DictCheckOutput
-from .token_artifact import token_artifact_metadata_path
+from .artifacts.models import ArtifactKind, ArtifactPlan
 
 __all__ = [
-    "AnalysisOutputPlan",
-    "GroupOutputPaths",
-    "GroupOutputResult",
     "KnownUnknownCounters",
     "apply_lemma_normalization",
-    "build_analysis_output_plan",
-    "build_labeled_output_paths",
     "load_configured_known_words",
     "load_configured_lemma_normalization",
     "split_known_unknown",
@@ -32,126 +24,9 @@ __all__ = [
 
 
 @dataclass(frozen=True)
-class GroupOutputPaths:
-    trace: Path | None
-    token_artifact: Path | None
-
-
-@dataclass(frozen=True)
-class AnalysisOutputPlan:
-    by_group: Mapping[str, GroupOutputPaths]
-
-    def for_group(self, label: str) -> GroupOutputPaths:
-        return self.by_group[label]
-
-    @property
-    def trace_paths(self) -> dict[str, Path]:
-        return {
-            label: paths.trace
-            for label, paths in self.by_group.items()
-            if paths.trace is not None
-        }
-
-
-@dataclass(frozen=True)
 class KnownUnknownCounters:
     known: Counter[str]
     unknown: Counter[str]
-
-
-@dataclass(frozen=True)
-class GroupOutputResult:
-    counter: Counter[str]
-    generated_outputs: tuple[Path, ...]
-
-
-def _trace_base_path(trace: TraceConfig, out_dir: Path, project_root: Path) -> Path:
-    if trace.path:
-        path = Path(str(trace.path))
-        return (project_root / path).resolve() if not path.is_absolute() else path
-    return out_dir / "trace.tsv"
-
-
-def _token_artifact_base_path(path_value: str, project_root: Path) -> Path:
-    path = Path(path_value)
-    if not path.is_absolute():
-        path = (project_root / path).resolve()
-    return path if path.suffix else path.with_suffix(".tsv")
-
-
-def build_labeled_output_paths(
-    *, base_path: Path, labels: Sequence[str]
-) -> dict[str, Path]:
-    counts: dict[str, int] = {}
-    paths: dict[str, Path] = {}
-    for label in labels:
-        safe = sanitize_label(label)
-        counts[safe] = counts.get(safe, 0) + 1
-        effective = safe if counts[safe] == 1 else f"{safe}_{counts[safe]}"
-        if len(labels) <= 1:
-            paths[label] = base_path
-        else:
-            suffix = base_path.suffix or ".tsv"
-            stem = base_path.stem or "trace"
-            paths[label] = base_path.with_name(f"{stem}_{effective}{suffix}")
-    return paths
-
-
-def _validate_output_paths(plan: AnalysisOutputPlan) -> None:
-    owners: dict[Path, str] = {}
-    for label, paths in plan.by_group.items():
-        candidates = (("trace", paths.trace), ("token artifact", paths.token_artifact))
-        for kind, path in candidates:
-            if path is None:
-                continue
-            resolved = path.resolve()
-            previous = owners.get(resolved)
-            if previous is not None:
-                if {previous.split(" ", 1)[0], kind} == {"trace", "token artifact"}:
-                    raise ValueError(
-                        "Token artifact path and diagnostic trace path must be "
-                        f"different: {resolved}"
-                    )
-                raise ValueError(f"Analysis output path collision: {previous} and {kind} {label}: {resolved}")
-            owners[resolved] = f"{kind} {label}"
-            if kind == "token artifact":
-                metadata = token_artifact_metadata_path(path).resolve()
-                previous = owners.get(metadata)
-                if previous is not None:
-                    raise ValueError(f"Analysis output path collision: {previous} and token artifact metadata {label}: {metadata}")
-                owners[metadata] = f"token artifact metadata {label}"
-
-
-def build_analysis_output_plan(
-    *, plan: AnalysisPlan, corpora: Sequence[PreparedCorpus]
-) -> AnalysisOutputPlan:
-    labels = [corpus.label for corpus in corpora]
-    traces = (
-        build_labeled_output_paths(
-            base_path=_trace_base_path(plan.config.trace, plan.out_dir, plan.project_root),
-            labels=labels,
-        )
-        if plan.config.trace.enabled
-        else {}
-    )
-    artifacts = (
-        build_labeled_output_paths(
-            base_path=_token_artifact_base_path(
-                plan.config.artifacts.tokens.path, plan.project_root
-            ),
-            labels=labels,
-        )
-        if plan.config.artifacts.tokens.enabled
-        else {}
-    )
-    result = AnalysisOutputPlan(
-        {
-            label: GroupOutputPaths(traces.get(label), artifacts.get(label))
-            for label in labels
-        }
-    )
-    _validate_output_paths(result)
-    return result
 
 
 def apply_lemma_normalization(
@@ -191,49 +66,50 @@ def load_configured_known_words(plan: AnalysisPlan) -> frozenset[str] | None:
 def write_dictcheck_outputs(
     *,
     plan: AnalysisPlan,
+    artifact_plan: ArtifactPlan,
     label: str,
     counter: Mapping[str, int],
     known_words: Iterable[str] | None,
-) -> DictCheckOutput | None:
+) -> KnownUnknownCounters | None:
     if not plan.config.dictcheck.enabled:
         return None
     assert known_words is not None
     split = split_known_unknown(counter, known_words)
-    paths = build_frequency_output_paths(plan.out_dir, label)
-    write_frequency_csv(paths.known, split.known, header=plan.csv_header)
-    write_frequency_csv(paths.unknown, split.unknown, header=plan.csv_header)
-    return DictCheckOutput(split.known, split.unknown, (paths.known, paths.unknown))
+    write_frequency_csv(artifact_plan.require(ArtifactKind.DICTCHECK_KNOWN,
+                                              group=label).path,
+                        split.known, header=plan.csv_header)
+    write_frequency_csv(artifact_plan.require(ArtifactKind.DICTCHECK_UNKNOWN,
+                                              group=label).path,
+                        split.unknown, header=plan.csv_header)
+    return split
 
 
 def write_group_analysis_outputs(
     *,
     plan: AnalysisPlan,
+    artifact_plan: ArtifactPlan,
     corpus: PreparedCorpus,
     counter: Counter[str],
     normalization_map: Mapping[str, str] | None,
     known_words: Iterable[str] | None,
-    token_generated_outputs: tuple[Path, ...],
-) -> GroupOutputResult:
+) -> Counter[str]:
     result_counter = (
         apply_lemma_normalization(counter, normalization_map)
         if normalization_map is not None
         else counter
     )
-    generated: list[Path] = []
     if plan.config.ref_tags.enabled:
-        ref_tags_path = plan.out_dir / f"ref_tags_{corpus.label}.csv"
+        ref_tags_path = artifact_plan.require(ArtifactKind.REFERENCE_TAGS,
+                                              group=corpus.label).path
         write_frequency_csv(ref_tags_path, corpus.ref_tag_counts, header=("tag", "count"))
-        generated.append(ref_tags_path)
-    frequency_paths = build_frequency_output_paths(plan.out_dir, corpus.label)
-    write_frequency_csv(frequency_paths.base, result_counter, header=plan.csv_header)
-    generated.append(frequency_paths.base)
-    dictcheck = write_dictcheck_outputs(
+    frequency_path = artifact_plan.require(ArtifactKind.FREQUENCY,
+                                           group=corpus.label).path
+    write_frequency_csv(frequency_path, result_counter, header=plan.csv_header)
+    write_dictcheck_outputs(
         plan=plan,
+        artifact_plan=artifact_plan,
         label=corpus.label,
         counter=result_counter,
         known_words=known_words,
     )
-    if dictcheck is not None:
-        generated.extend(dictcheck.generated_outputs)
-    generated.extend(token_generated_outputs)
-    return GroupOutputResult(result_counter, tuple(generated))
+    return result_counter

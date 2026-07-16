@@ -28,6 +28,7 @@ from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
 from nlpo_toolkit.corpus_analysis.token_artifact import (
     TokenArtifactMetadata,
     TokenArtifactWriter,
+    token_artifact_metadata_path,
 )
 
 
@@ -55,7 +56,7 @@ def _write_artifact(path):
             TokenRecord(group, f"input/{group}.txt", 0, int(sentence_index), token_index, global_index, None, None, None, None, "", token, lemma, "NOUN", lemma, True, None, None)
         )
         global_index += 1
-    with TokenArtifactWriter(path, metadata=TokenArtifactMetadata(group="mixed")) as writer:
+    with TokenArtifactWriter(path, token_artifact_metadata_path(path), metadata=TokenArtifactMetadata(group="mixed")) as writer:
         for record in records:
             writer.write(record)
 
@@ -214,7 +215,7 @@ def test_ngram_cli_reads_token_artifact_and_respects_boundaries(tmp_path, capsys
         TokenRecord("g2", "input/b.txt", 0, 0, 0, 4, None, None, None, None, "e f", "e", "e", "NOUN", "e", True, None, None),
         TokenRecord("g2", "input/b.txt", 0, 0, 1, 5, None, None, None, None, "e f", "f", "f", "NOUN", "f", True, None, None),
     ]
-    with TokenArtifactWriter(artifact, metadata=TokenArtifactMetadata(group="mixed")) as writer:
+    with TokenArtifactWriter(artifact, token_artifact_metadata_path(artifact), metadata=TokenArtifactMetadata(group="mixed")) as writer:
         for record in records:
             writer.write(record)
 
@@ -239,7 +240,7 @@ def test_artifact_ngram_uses_included_records_order_and_all_boundaries(tmp_path)
         TokenRecord("g", "b.txt", 1, 0, 0, 6, None, None, None, None, "", "e", "e", "NOUN", "e", True, None, None, section="s2"),
         TokenRecord("h", "b.txt", 1, 0, 0, 7, None, None, None, None, "", "f", "f", "NOUN", "f", True, None, None, section="s2"),
     ]
-    with TokenArtifactWriter(artifact, metadata=TokenArtifactMetadata(group="mixed")) as writer:
+    with TokenArtifactWriter(artifact, token_artifact_metadata_path(artifact), metadata=TokenArtifactMetadata(group="mixed")) as writer:
         for record in records:
             writer.write(record)
 

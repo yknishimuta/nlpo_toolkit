@@ -68,7 +68,6 @@ class ArchiveInventory:
     cleaned_sources: tuple[ArchiveCopySource, ...]
     input_files: tuple[Path, ...]
     cleaned_files: tuple[Path, ...]
-    generated_outputs: tuple[Path, ...]
     metadata_only_references: tuple[ConfigFileReference, ...]
 
     def __post_init__(self) -> None:

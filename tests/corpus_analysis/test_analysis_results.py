@@ -19,16 +19,12 @@ def _stats() -> AnalysisCacheRunStats:
 
 def _group(
     *,
-    outputs: tuple[Path, ...] = (),
-    trace: Path | None = None,
     artifact: dict[str, object] | None = None,
 ) -> GroupAnalysisResult:
     return GroupAnalysisResult(
         files=(),
         counter=Counter({"rosa": 1}),
         ref_tag_counts=Counter(),
-        output_files=outputs,
-        trace_path=trace,
         token_artifact=artifact,
     )
 
@@ -52,24 +48,16 @@ def test_duplicate_group_label_is_rejected() -> None:
         )
 
 
-def test_derived_outputs_and_artifacts_preserve_group_order(tmp_path: Path) -> None:
-    shared = tmp_path / "shared.csv"
-    trace = tmp_path / "trace.tsv"
-    second = tmp_path / "second.csv"
+def test_artifact_metadata_preserves_group_order() -> None:
     results = AnalysisResults.from_groups(
         (
-            ("a", _group(outputs=(shared,), trace=trace, artifact={"group": "a"})),
-            ("b", _group(outputs=(shared, second), artifact={"group": "b"})),
+            ("a", _group(artifact={"group": "a"})),
+            ("b", _group(artifact={"group": "b"})),
             ("c", _group()),
         ),
         cache_stats=_stats(),
     )
 
-    assert results.generated_outputs == (
-        shared.resolve(),
-        trace.resolve(),
-        second.resolve(),
-    )
     assert results.token_artifact_metadata == ({"group": "a"}, {"group": "b"})
     assert {field.name for field in fields(results)} == {"groups", "cache_stats"}
 

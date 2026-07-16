@@ -11,6 +11,7 @@ from nlpo_toolkit.corpus_analysis.token_artifact import (
     TOKEN_ARTIFACT_COLUMNS,
     TokenArtifactMetadata,
     TokenArtifactWriter,
+    token_artifact_metadata_path,
 )
 
 
@@ -113,7 +114,7 @@ def test_token_artifact_output_schema_and_row_are_unchanged(tmp_path: Path) -> N
         ref_tag=None,
     )
 
-    with TokenArtifactWriter(path, metadata=TokenArtifactMetadata(group="text")) as writer:
+    with TokenArtifactWriter(path, token_artifact_metadata_path(path), metadata=TokenArtifactMetadata(group="text")) as writer:
         writer.write(record)
 
     with path.open("r", encoding="utf-8", newline="") as f:

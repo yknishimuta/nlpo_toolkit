@@ -84,7 +84,7 @@ def test_token_artifact_round_trip_and_metadata(tmp_path: Path) -> None:
         ),
     ]
 
-    with TokenArtifactWriter(path, metadata=metadata) as writer:
+    with TokenArtifactWriter(path, token_artifact_metadata_path(path), metadata=metadata) as writer:
         for record in records:
             writer.write(record)
 
@@ -111,7 +111,7 @@ def test_counter_from_token_records_counts_only_included_keys() -> None:
 def test_token_artifact_atomic_write_does_not_publish_failed_files(tmp_path: Path) -> None:
     path = tmp_path / "tokens.tsv"
     with pytest.raises(RuntimeError):
-        with TokenArtifactWriter(path, metadata=TokenArtifactMetadata(group="text")) as writer:
+        with TokenArtifactWriter(path, token_artifact_metadata_path(path), metadata=TokenArtifactMetadata(group="text")) as writer:
             writer.write(_record())
             raise RuntimeError("boom")
 
@@ -122,7 +122,7 @@ def test_token_artifact_atomic_write_does_not_publish_failed_files(tmp_path: Pat
 
 def test_token_artifact_reader_rejects_row_count_mismatch(tmp_path: Path) -> None:
     path = tmp_path / "tokens.tsv"
-    with TokenArtifactWriter(path, metadata=TokenArtifactMetadata(group="text")) as writer:
+    with TokenArtifactWriter(path, token_artifact_metadata_path(path), metadata=TokenArtifactMetadata(group="text")) as writer:
         writer.write(_record())
 
     meta_path = token_artifact_metadata_path(path)

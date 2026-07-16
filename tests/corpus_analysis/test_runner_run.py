@@ -85,7 +85,7 @@ def test_run_minimal_success(tmp_path: Path, monkeypatch):
     # meta
     assert len(meta_calls) == 1
     meta, meta_out_dir = meta_calls[0]
-    assert meta_out_dir == out_dir
+    assert meta_out_dir == out_dir / "run_meta.json"
     assert meta["analysis_unit"] == "lemma"
     assert meta["environment"] == {"py": "x"}
 

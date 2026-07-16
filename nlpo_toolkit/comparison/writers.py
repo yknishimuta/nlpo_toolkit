@@ -3,13 +3,9 @@
 import csv
 import json
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
-from .configured import ComparisonResult, ComparisonSpec, sanitize_comparison_name
-
-
-def comparison_csv_name(spec: ComparisonSpec) -> str:
-    return f"group_comparison_{sanitize_comparison_name(spec.name)}.csv"
+from .configured import ComparisonResult
 
 
 def write_group_comparison_csv(path: Path, result: ComparisonResult) -> Path:
@@ -36,9 +32,10 @@ def comparison_result_meta(result: ComparisonResult, *, csv_name: str) -> dict[s
     return data
 
 
-def write_group_comparisons_json(path: Path, results: Sequence[ComparisonResult]) -> Path:
+def write_group_comparisons_json(path: Path, results: Sequence[ComparisonResult], *,
+                                 csv_names: Mapping[str, str]) -> Path:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    data = {"analysis_unit": results[0].analysis_unit if results else "", "comparisons": [comparison_result_summary(result, csv_name=comparison_csv_name(result.spec)) for result in results]}
+    data = {"analysis_unit": results[0].analysis_unit if results else "", "comparisons": [comparison_result_summary(result, csv_name=csv_names[result.spec.name]) for result in results]}
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return path

@@ -10,6 +10,7 @@ from ..config_references import ConfigArchivePolicy
 from ..runner_types import RunResult
 from .errors import RunArchiveError
 from .models import ArchiveCopySource, ArchiveInventory
+from ..artifacts.models import ArtifactKind
 
 
 def _sanitize_run_name(name: str) -> str:
@@ -52,14 +53,18 @@ def collect_archive_inventory(
     if archive_directory.exists():
         raise RunArchiveError(f"Run archive already exists: {archive_directory}")
 
-    outputs = tuple(_validate_source(path, "run output") for path in run_result.output_files)
-    traces = tuple(_validate_source(path, "run trace") for path in run_result.trace_files)
+    outputs = tuple(
+        _validate_source(artifact.path, "run output")
+        for artifact in run_result.artifact_plan.artifacts
+        if artifact.kind is not ArtifactKind.DIAGNOSTIC_TRACE
+    )
+    traces = tuple(
+        _validate_source(artifact.path, "run trace")
+        for artifact in run_result.artifact_plan.artifacts
+        if artifact.kind is ArtifactKind.DIAGNOSTIC_TRACE
+    )
     inputs = tuple(_validate_source(path, "run input") for path in run_result.input_files)
     cleaned = tuple(_validate_source(path, "cleaned run file") for path in run_result.cleaned_files)
-    generated = tuple(
-        _validate_source(path, "generated run output")
-        for path in run_result.generated_outputs
-    )
 
     snapshots = []
     metadata_only = []
@@ -111,6 +116,5 @@ def collect_archive_inventory(
         cleaned_sources=cleaned_sources,
         input_files=inputs,
         cleaned_files=cleaned,
-        generated_outputs=generated,
         metadata_only_references=tuple(metadata_only),
     )

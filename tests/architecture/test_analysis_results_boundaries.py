@@ -18,10 +18,7 @@ def test_analysis_result_fields_have_one_canonical_group_store() -> None:
     assert {field.name for field in fields(AnalysisResults)} == {"groups", "cache_stats"}
     group_fields = {field.name for field in fields(GroupAnalysisResult)}
     assert "label" not in group_fields
-    assert group_fields == {
-        "files", "counter", "ref_tag_counts", "output_files",
-        "trace_path", "token_artifact",
-    }
+    assert group_fields == {"files", "counter", "ref_tag_counts", "token_artifact"}
 
 
 def test_production_has_no_legacy_analysis_result_access() -> None:

@@ -20,7 +20,7 @@ def _imports(path: Path) -> set[str]:
 def test_session_and_dependency_fields_are_nonduplicating() -> None:
     assert {field.name for field in fields(CorpusExecutionSession)} == {"plan", "corpora"}
     assert {field.name for field in fields(NLPExecutionSession)} == {"corpus", "backend", "extraction_policy", "roman_exceptions"}
-    assert {field.name for field in fields(RunContext)} == {"session", "sentence_splitter"}
+    assert {field.name for field in fields(RunContext)} == {"session", "sentence_splitter", "artifact_plan"}
     assert {field.name for field in fields(RunnerDependencies)} == {"corpus", "nlp", "count"}
     assert {field.name for field in fields(FeatureCommandDependencies)} == {"corpus", "nlp"}
     assert {field.name for field in fields(ConfigNgramDependencies)} == {"corpus"}

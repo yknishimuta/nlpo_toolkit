@@ -136,5 +136,5 @@ artifacts:
     path: output/shared.tsv
 """
 
-    with pytest.raises(ValueError, match="Token artifact path and diagnostic trace path"):
+    with pytest.raises(ValueError, match="Artifact path collision.*diagnostic_trace.*token_artifact"):
         _run(tmp_path, config, backend)

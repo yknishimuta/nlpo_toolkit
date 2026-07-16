@@ -26,7 +26,7 @@ def run(
         context=context,
         analysis=analysis,
     )
-    report = run_reporting.write_run_report(
+    run_reporting.write_run_report(
         context=context,
         analysis=analysis,
         partitions=partitions,
@@ -36,5 +36,4 @@ def run(
         context=context,
         analysis=analysis,
         partitions=partitions,
-        report=report,
     )

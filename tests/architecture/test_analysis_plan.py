@@ -127,7 +127,7 @@ def test_build_count_plan_validates_without_reconstructing_plan() -> None:
 
 
 def test_runtime_result_types_use_resolved_analysis_plan() -> None:
-    assert set(get_type_hints(RunContext)) == {"session", "sentence_splitter"}
+    assert set(get_type_hints(RunContext)) == {"session", "sentence_splitter", "artifact_plan"}
     assert get_type_hints(RunResult)["plan"] is ResolvedAnalysisPlan
 
 

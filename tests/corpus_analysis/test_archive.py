@@ -25,6 +25,9 @@ from nlpo_toolkit.corpus_analysis.composition import default_runner_dependencies
 from nlpo_toolkit.corpus_analysis.ports import CountCommandDependencies
 from nlpo_toolkit.corpus_analysis.run_plan import AnalysisPlan, ResolvedAnalysisPlan
 from nlpo_toolkit.corpus_analysis.runner_types import RunResult
+from nlpo_toolkit.corpus_analysis.artifacts.models import (
+    ArtifactKind, ArtifactPlan, PlannedArtifact,
+)
 
 
 def make_run_result(
@@ -54,19 +57,26 @@ def make_run_result(
         work_items=(),
         group_files={"g": tuple(input_files)},
     )
-    summary = next((p for p in output_files if p.name == "summary.txt"), tmp_path / "summary.txt")
-    metadata = next((p for p in output_files if p.name == "run_meta.json"), tmp_path / "run_meta.json")
+    artifacts = []
+    for path in output_files:
+        kind = (ArtifactKind.RUN_METADATA if path.name == "run_meta.json"
+                else ArtifactKind.SUMMARY if path.name == "summary.txt"
+                else ArtifactKind.FREQUENCY)
+        artifacts.append(PlannedArtifact(
+            kind, path, group="g" if kind is ArtifactKind.FREQUENCY else None
+        ))
+    artifacts.extend(
+        PlannedArtifact(ArtifactKind.DIAGNOSTIC_TRACE, path, group=f"trace-{index}")
+        for index, path in enumerate(trace_files)
+    )
     return RunResult(
         exit_code=0,
         plan=plan,
         groups_files={"g": tuple(input_files or cleaned_files)},
         input_files=tuple(input_files),
         cleaned_files=tuple(cleaned_files),
-        output_files=tuple(output_files),
-        trace_files=tuple(trace_files),
+        artifact_plan=ArtifactPlan(tuple(artifacts)),
         config_references=plan.config_files.references,
-        summary_path=summary,
-        metadata_path=metadata,
     )
 
 
