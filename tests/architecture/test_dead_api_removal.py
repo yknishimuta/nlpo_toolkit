@@ -4,7 +4,7 @@ import ast
 from dataclasses import fields
 from pathlib import Path
 
-from nlpo_toolkit.comparison.cli_service import CompareRequest
+from nlpo_toolkit.comparison.services.csv import CsvComparisonRequest
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -12,7 +12,7 @@ PRODUCTION = ROOT / "nlpo_toolkit"
 
 
 def test_removed_request_and_function_parameters_are_absent() -> None:
-    assert "metric" not in {field.name for field in fields(CompareRequest)}
+    assert "metric" not in {field.name for field in fields(CsvComparisonRequest)}
 
 
 def test_removed_symbols_are_not_defined_exported_or_imported() -> None:

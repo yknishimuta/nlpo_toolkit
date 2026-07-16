@@ -11,7 +11,9 @@ from .config_references import ConfigFileReference
 from .planning.models import ResolvedAnalysisPlan
 from .artifacts.models import ArtifactKind, ArtifactPlan
 from .partition_validation import PartitionResult
-from nlpo_toolkit.comparison.configured import ComparisonResult
+from nlpo_toolkit.comparison.config import ComparisonSpec
+from nlpo_toolkit.comparison.engine import FrequencyTable
+from nlpo_toolkit.comparison.results import ConfiguredComparisonResult
 
 
 @dataclass(frozen=True)
@@ -73,4 +75,4 @@ class PartitionRunResult:
 
 @dataclass(frozen=True)
 class ComparisonRunResult:
-    comparisons: tuple[ComparisonResult, ...]
+    comparisons: tuple[ConfiguredComparisonResult[ComparisonSpec, FrequencyTable], ...]

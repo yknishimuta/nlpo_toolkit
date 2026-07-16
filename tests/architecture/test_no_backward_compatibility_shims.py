@@ -67,11 +67,11 @@ def test_production_code_has_no_script_dir_fallback() -> None:
 
 
 def test_compare_strips_only_the_canonical_frequency_prefix() -> None:
-    from nlpo_toolkit.comparison.frequency_io import labels_from_paths
+    from nlpo_toolkit.comparison.frequency_io import derive_frequency_labels
 
-    assert labels_from_paths(
+    assert derive_frequency_labels(
         [Path("frequency_text.csv"), Path("noun_frequency_text.csv")]
-    ) == ["text", "noun_frequency_text"]
+    ) == ("text", "noun_frequency_text")
 
     source = (PACKAGE_ROOT / "comparison/frequency_io.py").read_text(encoding="utf-8")
     assert "noun_frequency_" not in source

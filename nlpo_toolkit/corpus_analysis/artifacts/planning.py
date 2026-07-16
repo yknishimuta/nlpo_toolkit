@@ -1,15 +1,22 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from collections.abc import Sequence
-
-from nlpo_toolkit.comparison.configured import sanitize_comparison_name
 
 from ..corpus import PreparedCorpus, sanitize_label
 from ..partition_validation import sanitize_partition_name
 from ..planning.models import ResolvedAnalysisPlan
 from ..token_artifact.paths import token_artifact_metadata_path
 from .models import ArtifactKind, ArtifactPlan, PlannedArtifact
+
+
+_SAFE_COMPARISON_NAME_RE = re.compile(r"[^0-9A-Za-z]+")
+
+
+def _sanitize_comparison_name(name: str) -> str:
+    safe = _SAFE_COMPARISON_NAME_RE.sub("_", name).strip("_").lower()
+    return safe or "comparison"
 
 
 def _configured_path(value: str, project_root: Path, *, default_suffix: str = "") -> Path:
@@ -91,7 +98,7 @@ def build_count_artifact_plan(*, plan: ResolvedAnalysisPlan,
     for spec in config.comparisons:
         artifacts.append(PlannedArtifact(
             ArtifactKind.GROUP_COMPARISON_CSV,
-            out_dir / f"group_comparison_{sanitize_comparison_name(spec.name)}.csv",
+            out_dir / f"group_comparison_{_sanitize_comparison_name(spec.name)}.csv",
             name=spec.name,
         ))
     if config.comparisons:

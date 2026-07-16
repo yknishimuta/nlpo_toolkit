@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
+from enum import Enum
 from types import MappingProxyType
-from typing import Sequence
+from typing import Mapping, Sequence
+
+from .errors import ComparisonEngineError
 
 from .metrics import (
     EPSILON,
@@ -11,15 +15,88 @@ from .metrics import (
     calculate_ratio,
     normalized_rate,
 )
-from .models import (
-    ComparisonEngineError,
-    FrequencyTable,
+from .results import (
     MultiComparisonResult,
     MultiComparisonRow,
-    PairwiseComparisonOptions,
     PairwiseComparisonResult,
     PairwiseComparisonRow,
 )
+
+
+class ZeroHandlingMode(str, Enum):
+    ZERO_ONLY = "zero_only"
+    ADDITIVE = "additive"
+
+
+@dataclass(frozen=True)
+class ZeroHandling:
+    mode: ZeroHandlingMode
+    value: float
+
+    def __post_init__(self) -> None:
+        try:
+            mode = self.mode if isinstance(self.mode, ZeroHandlingMode) else ZeroHandlingMode(self.mode)
+        except ValueError as exc:
+            raise ComparisonEngineError(f"unsupported zero handling mode: {self.mode!r}") from exc
+        if isinstance(self.value, bool) or not isinstance(self.value, (int, float)):
+            raise ComparisonEngineError("zero handling value must be a finite number")
+        value = float(self.value)
+        if not math.isfinite(value):
+            raise ComparisonEngineError("zero handling value must be finite")
+        if mode is ZeroHandlingMode.ZERO_ONLY and value <= 0:
+            raise ComparisonEngineError("zero-only correction must be positive")
+        if mode is ZeroHandlingMode.ADDITIVE and value < 0:
+            raise ComparisonEngineError("additive smoothing must be non-negative")
+        object.__setattr__(self, "mode", mode)
+        object.__setattr__(self, "value", value)
+
+
+@dataclass(frozen=True)
+class FrequencyTable:
+    label: str
+    counts: Mapping[str, float]
+    total: float
+
+    @classmethod
+    def from_counts(cls, label: str, counts: Mapping[str, int | float]) -> FrequencyTable:
+        if not isinstance(label, str) or not label.strip():
+            raise ComparisonEngineError("frequency table label must be a non-empty string")
+        normalized: dict[str, float] = {}
+        for key, value in counts.items():
+            if not isinstance(key, str):
+                raise ComparisonEngineError("frequency table keys must be strings")
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ComparisonEngineError(f"count for {key!r} must be a finite number")
+            numeric = float(value)
+            if not math.isfinite(numeric):
+                raise ComparisonEngineError(f"count for {key!r} must be finite")
+            if numeric < 0:
+                raise ComparisonEngineError(f"count for {key!r} must be >= 0")
+            normalized[key] = numeric
+        total = sum(normalized.values())
+        if total <= 0:
+            raise ComparisonEngineError(f"frequency table '{label}' has zero total count")
+        return cls(label.strip(), MappingProxyType(normalized), float(total))
+
+
+@dataclass(frozen=True)
+class PairwiseComparisonOptions:
+    scale: float = 1.0
+    min_total_count: float = 1.0
+    zero_handling: ZeroHandling = ZeroHandling(ZeroHandlingMode.ZERO_ONLY, 0.5)
+
+    def __post_init__(self) -> None:
+        if isinstance(self.scale, bool) or not isinstance(self.scale, (int, float)):
+            raise ComparisonEngineError("scale must be a positive finite number")
+        if isinstance(self.min_total_count, bool) or not isinstance(self.min_total_count, (int, float)):
+            raise ComparisonEngineError("min_total_count must be a finite number")
+        scale, minimum = float(self.scale), float(self.min_total_count)
+        if not math.isfinite(scale) or scale <= 0:
+            raise ComparisonEngineError("scale must be a positive finite number")
+        if not math.isfinite(minimum) or minimum < 0:
+            raise ComparisonEngineError("min_total_count must be >= 0")
+        object.__setattr__(self, "scale", scale)
+        object.__setattr__(self, "min_total_count", minimum)
 
 
 def compare_pair(

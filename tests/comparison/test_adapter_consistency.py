@@ -6,14 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from nlpo_toolkit.comparison.frequency_io import load_frequency_table
-from nlpo_toolkit.comparison import (
+from nlpo_toolkit.comparison.frequency_io import read_frequency_table
+from nlpo_toolkit.comparison.engine import (
     PairwiseComparisonOptions,
     ZeroHandling,
     ZeroHandlingMode,
     compare_pair,
 )
-from nlpo_toolkit.comparison.configured import ComparisonSpec, compare_counters
+from nlpo_toolkit.comparison.config import ComparisonSpec
+from nlpo_toolkit.comparison.services.configured import compare_configured_counters
 
 
 def _write_frequency(path: Path, rows: list[tuple[str, int]]) -> Path:
@@ -35,15 +36,15 @@ def test_csv_table_and_counter_group_comparison_share_pairwise_values(tmp_path: 
     )
 
     engine_result = compare_pair(
-        load_frequency_table(a_path, label="group_a"),
-        load_frequency_table(b_path, label="group_b"),
+        read_frequency_table(a_path, label="group_a"),
+        read_frequency_table(b_path, label="group_b"),
         options=PairwiseComparisonOptions(
             scale=10000,
             min_total_count=1,
             zero_handling=ZeroHandling(ZeroHandlingMode.ZERO_ONLY, 0.5),
         ),
     )
-    group_result = compare_counters(
+    group_result = compare_configured_counters(
         counter_a=Counter({"item_common": 10, "item_a": 8, "item_rare_a": 1}),
         counter_b=Counter({"item_common": 20, "item_b": 7, "item_rare_b": 1}),
         spec=ComparisonSpec(
@@ -58,12 +59,11 @@ def test_csv_table_and_counter_group_comparison_share_pairwise_values(tmp_path: 
     assert set(engine_rows) == set(group_rows)
     for item, engine_row in engine_rows.items():
         group_row = group_rows[item]
-        assert group_row.group_a_count == engine_row.count_a
-        assert group_row.group_b_count == engine_row.count_b
-        assert group_row.group_a_tokens == engine_result.table_a.total
-        assert group_row.group_b_tokens == engine_result.table_b.total
-        assert group_row.group_a_rate == pytest.approx(engine_row.rate_a)
-        assert group_row.group_b_rate == pytest.approx(engine_row.rate_b)
+        assert group_row == engine_row
+        assert group_result.group_a_tokens == engine_result.table_a.total
+        assert group_result.group_b_tokens == engine_result.table_b.total
+        assert group_row.rate_a == pytest.approx(engine_row.rate_a)
+        assert group_row.rate_b == pytest.approx(engine_row.rate_b)
         assert group_row.rate_difference == pytest.approx(engine_row.rate_difference)
         assert group_row.log_ratio == pytest.approx(engine_row.log_ratio)
         assert group_row.total_count == engine_row.total_count

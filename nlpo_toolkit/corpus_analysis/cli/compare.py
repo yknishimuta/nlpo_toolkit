@@ -3,10 +3,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from nlpo_toolkit.comparison.cli_service import (
-    CompareError,
-    CompareRequest,
-    execute_compare_command,
+from nlpo_toolkit.comparison.errors import ComparisonError
+from nlpo_toolkit.comparison.services.csv import (
+    CsvComparisonRequest, execute_csv_comparison,
 )
 
 from .common import CLIContext, set_handler
@@ -61,8 +60,8 @@ def register(subparsers: argparse._SubParsersAction) -> None:
 
 def execute(args: argparse.Namespace, context: CLIContext) -> int:
     try:
-        result = execute_compare_command(
-            CompareRequest(
+        result = execute_csv_comparison(
+            CsvComparisonRequest(
             inputs=tuple(args.inputs),
             labels=tuple(args.labels) if args.labels is not None else None,
             smoothing=args.smoothing,
@@ -77,6 +76,6 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
         with open_cli_output(path=args.out, stdout=context.stdout) as stream:
             write_compare_result(result, stream=stream, output_format=args.format)
         return 0
-    except CompareError as exc:
+    except ComparisonError as exc:
         present_error(exc, stderr=context.stderr)
         return 1

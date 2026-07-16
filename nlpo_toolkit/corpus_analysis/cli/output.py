@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from ..features.models import FeatureCommandResult, FeatureScalar
+from .compare_rendering import render_csv_comparison_rows
 
 
 @contextmanager
@@ -89,6 +90,7 @@ def write_concordance_result(result, *, stream: TextIO, output_format: str) -> N
 
 
 def write_compare_result(result, *, stream: TextIO, output_format: str) -> None:
+    rendered = render_csv_comparison_rows(result)
     def format_value(value: Any) -> Any:
         if isinstance(value, float):
             if value.is_integer():
@@ -98,11 +100,11 @@ def write_compare_result(result, *, stream: TextIO, output_format: str) -> None:
 
     rows = tuple(
         {key: format_value(value) for key, value in row.items()}
-        for row in result.rows
+        for row in rendered.rows
     )
     write_mapping_rows(
         rows,
-        columns=result.columns,
+        columns=rendered.columns,
         stream=stream,
         output_format=output_format,
     )

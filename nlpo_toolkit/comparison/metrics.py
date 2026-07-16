@@ -1,8 +1,18 @@
 from __future__ import annotations
 
 import math
+from typing import Protocol
 
-from .models import ComparisonEngineError, ZeroHandling, ZeroHandlingMode
+from .errors import ComparisonEngineError
+
+
+class ZeroHandlingModeValue(Protocol):
+    value: str
+
+
+class ZeroHandlingValue(Protocol):
+    mode: ZeroHandlingModeValue
+    value: float
 
 
 EPSILON = 1e-12
@@ -28,10 +38,10 @@ def _relative_for_ratio(
     *,
     count: float,
     total: float,
-    zero_handling: ZeroHandling,
+    zero_handling: ZeroHandlingValue,
     vocabulary_size: int,
 ) -> float:
-    if zero_handling.mode is ZeroHandlingMode.ZERO_ONLY:
+    if zero_handling.mode.value == "zero_only":
         adjusted = count if count > 0 else zero_handling.value
         return adjusted / total
 
@@ -47,7 +57,7 @@ def calculate_ratio(
     count_b: float,
     total_a: float,
     total_b: float,
-    zero_handling: ZeroHandling,
+    zero_handling: ZeroHandlingValue,
     vocabulary_size: int = 1,
 ) -> float:
     _validate_count_total(count=count_a, total=total_a, label="group_a")
@@ -76,7 +86,7 @@ def calculate_log_ratio(
     count_b: float,
     total_a: float,
     total_b: float,
-    zero_handling: ZeroHandling,
+    zero_handling: ZeroHandlingValue,
     vocabulary_size: int = 1,
 ) -> float:
     ratio = calculate_ratio(

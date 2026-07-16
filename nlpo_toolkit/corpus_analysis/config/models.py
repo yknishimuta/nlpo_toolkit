@@ -13,7 +13,7 @@ from pydantic import (
     model_validator,
 )
 
-from nlpo_toolkit.comparison.configured import ComparisonSpec
+from nlpo_toolkit.comparison.config import ComparisonSpec
 from nlpo_toolkit.config_model import (
     ConfigModel,
     NonBlankStr,

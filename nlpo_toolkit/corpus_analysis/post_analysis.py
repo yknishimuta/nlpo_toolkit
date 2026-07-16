@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from nlpo_toolkit.comparison.configured import (
-    run_comparisons,
-)
+from nlpo_toolkit.comparison.services.configured import compare_configured_counters
 from .partition_validation import (
     validate_partitions,
 )
@@ -81,11 +79,14 @@ def execute_group_comparisons(
 ) -> ComparisonRunResult:
     plan = context.session.corpus.plan
     definition = plan.definition
-    comparison_results = run_comparisons(
-        specs=definition.config.comparisons,
-        counters=_group_counters(analysis),
-        analysis_unit=definition.analysis_mode.unit,
-    )
+    counters = _group_counters(analysis)
+    comparison_results = [
+        compare_configured_counters(
+            counter_a=counters[spec.group_a], counter_b=counters[spec.group_b],
+            spec=spec, analysis_unit=definition.analysis_mode.unit,
+        )
+        for spec in definition.config.comparisons
+    ]
     csv_names: dict[str, str] = {}
     for result in comparison_results:
         artifact = context.artifact_plan.require(

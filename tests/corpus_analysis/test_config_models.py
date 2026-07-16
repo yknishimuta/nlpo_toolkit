@@ -5,7 +5,7 @@ import math
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from nlpo_toolkit.comparison.configured import (
+from nlpo_toolkit.comparison.config import (
     ComparisonSortConfig,
     ComparisonSpec,
 )

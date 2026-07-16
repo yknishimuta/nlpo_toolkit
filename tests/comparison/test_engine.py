@@ -4,16 +4,16 @@ import math
 
 import pytest
 
-from nlpo_toolkit.comparison import (
-    ComparisonEngineError,
+from nlpo_toolkit.comparison.engine import (
     FrequencyTable,
     PairwiseComparisonOptions,
     ZeroHandling,
     ZeroHandlingMode,
     compare_many,
     compare_pair,
-    normalized_rate,
 )
+from nlpo_toolkit.comparison.errors import ComparisonEngineError
+from nlpo_toolkit.comparison.metrics import normalized_rate
 
 
 def test_frequency_table_validates_counts_and_freezes_input() -> None:

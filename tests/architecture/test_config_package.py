@@ -34,7 +34,7 @@ def test_config_models_and_serializer_are_io_free() -> None:
 
 
 def test_domain_modules_do_not_parse_raw_config() -> None:
-    comparison = Path("nlpo_toolkit/comparison/configured.py").read_text(encoding="utf-8")
+    comparison = Path("nlpo_toolkit/comparison/services/configured.py").read_text(encoding="utf-8")
     partition = Path("nlpo_toolkit/corpus_analysis/partition_validation.py").read_text(encoding="utf-8")
     assert "parse_comparison_specs" not in comparison
     assert "parse_partition_specs" not in partition

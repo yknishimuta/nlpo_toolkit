@@ -6,7 +6,7 @@ from nlpo_toolkit.corpus_analysis.config import (
     NormalizationConfig,
     AnalysisCacheConfig,
 )
-from nlpo_toolkit.comparison.configured import ComparisonSpec
+from nlpo_toolkit.comparison.config import ComparisonSpec
 from nlpo_toolkit.corpus_analysis.partition_models import PartitionSpec
 
 

@@ -5,7 +5,7 @@ import inspect
 import io
 from pathlib import Path
 
-from nlpo_toolkit.comparison.cli_service import execute_compare_command
+from nlpo_toolkit.comparison.services.csv import execute_csv_comparison
 from nlpo_toolkit.corpus_analysis.cache import clear_cache
 from nlpo_toolkit.corpus_analysis.cli.common import CLIContext
 from nlpo_toolkit.corpus_analysis.concordance import build_concordance
@@ -25,7 +25,7 @@ APPLICATION_MODULES = (
     Path("nlpo_toolkit/corpus_analysis/ngram.py"),
     Path("nlpo_toolkit/corpus_analysis/concordance.py"),
     Path("nlpo_toolkit/corpus_analysis/cache.py"),
-    Path("nlpo_toolkit/comparison/cli_service.py"),
+    Path("nlpo_toolkit/comparison/services/csv.py"),
 )
 APPLICATION_SERVICES = (
     execute_count_command,
@@ -34,7 +34,7 @@ APPLICATION_SERVICES = (
     execute_config_ngram_command,
     execute_token_ngram_command,
     build_concordance,
-    execute_compare_command,
+    execute_csv_comparison,
     clear_cache,
 )
 
