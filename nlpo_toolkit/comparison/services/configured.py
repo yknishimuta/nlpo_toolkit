@@ -5,11 +5,12 @@ from dataclasses import replace
 
 from ..config import ComparisonSpec
 from ..engine import (
-    FrequencyTable, PairwiseComparisonOptions, ZeroHandling, ZeroHandlingMode,
+    PairwiseComparisonOptions, ZeroHandling, ZeroHandlingMode,
     compare_pair,
 )
 from ..errors import ComparisonEngineError, ComparisonServiceError
 from ..results import ConfiguredComparisonResult, PairwiseComparisonRow
+from ..models import FrequencyTable
 
 
 def _frequency_table(label: str, counter: Mapping[str, int]) -> FrequencyTable:
@@ -45,7 +46,7 @@ def _sorted_rows(
 def compare_configured_counters(
     *, counter_a: Mapping[str, int], counter_b: Mapping[str, int],
     spec: ComparisonSpec, analysis_unit: str,
-) -> ConfiguredComparisonResult[ComparisonSpec, FrequencyTable]:
+) -> ConfiguredComparisonResult:
     for label, counter in ((spec.group_a, counter_a), (spec.group_b, counter_b)):
         if sum(counter.values()) == 0:
             cause = ComparisonEngineError(
@@ -72,6 +73,7 @@ def compare_configured_counters(
             f"comparison '{spec.name}': {exc}"
         ) from exc
     return ConfiguredComparisonResult(
-        spec, analysis_unit,
-        replace(comparison, rows=_sorted_rows(comparison.rows, spec)),
+        spec=spec,
+        analysis_unit=analysis_unit,
+        comparison=replace(comparison, rows=_sorted_rows(comparison.rows, spec)),
     )

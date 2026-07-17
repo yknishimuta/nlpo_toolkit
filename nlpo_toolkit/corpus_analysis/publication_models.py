@@ -5,8 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from nlpo_toolkit.comparison.config import ComparisonSpec
-from nlpo_toolkit.comparison.engine import FrequencyTable
 from nlpo_toolkit.comparison.results import ConfiguredComparisonResult
 from nlpo_toolkit.immutable_collections import freeze_count_mapping
 
@@ -16,9 +14,6 @@ from .partition_validation import PartitionResult
 from .postprocessing.dictionary import DictionaryClassification
 from .reporting.models import RunMetadata
 from .token_artifact.schema import TokenArtifactDescriptor
-
-
-ConfiguredResult = ConfiguredComparisonResult[ComparisonSpec, FrequencyTable]
 
 
 @dataclass(frozen=True)
@@ -50,7 +45,7 @@ class PartitionArtifactPublication:
 @dataclass(frozen=True)
 class ComparisonArtifactPublication:
     artifact_plan: ArtifactPlan
-    results: tuple[ConfiguredResult, ...]
+    results: tuple[ConfiguredComparisonResult, ...]
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "results", tuple(self.results))

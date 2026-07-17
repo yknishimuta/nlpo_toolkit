@@ -3,9 +3,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from enum import Enum
-from collections.abc import Mapping, Sequence
-
-from nlpo_toolkit.immutable_collections import freeze_mapping
+from collections.abc import Sequence
 
 from .errors import ComparisonEngineError
 
@@ -16,6 +14,7 @@ from .metrics import (
     calculate_ratio,
     normalized_rate,
 )
+from .models import FrequencyTable
 from .results import (
     MultiComparisonResult,
     MultiComparisonRow,
@@ -50,52 +49,6 @@ class ZeroHandling:
             raise ComparisonEngineError("additive smoothing must be non-negative")
         object.__setattr__(self, "mode", mode)
         object.__setattr__(self, "value", value)
-
-
-@dataclass(frozen=True)
-class FrequencyTable:
-    label: str
-    counts: Mapping[str, float]
-    total: float
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.label, str) or not self.label.strip():
-            raise ComparisonEngineError("frequency table label must be a non-empty string")
-        normalized: dict[str, float] = {}
-        for key, value in self.counts.items():
-            if not isinstance(key, str):
-                raise ComparisonEngineError("frequency table keys must be strings")
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
-                raise ComparisonEngineError(f"count for {key!r} must be a finite number")
-            numeric = float(value)
-            if not math.isfinite(numeric) or numeric < 0:
-                raise ComparisonEngineError(f"count for {key!r} must be finite and >= 0")
-            normalized[key] = numeric
-        total = float(self.total)
-        if not math.isfinite(total) or total <= 0 or not math.isclose(total, sum(normalized.values())):
-            raise ComparisonEngineError("frequency table total must equal a positive count sum")
-        object.__setattr__(self, "label", self.label.strip())
-        object.__setattr__(self, "counts", freeze_mapping(normalized))
-        object.__setattr__(self, "total", total)
-
-    @classmethod
-    def from_counts(cls, label: str, counts: Mapping[str, int | float]) -> FrequencyTable:
-        normalized: dict[str, float] = {}
-        for key, value in counts.items():
-            if not isinstance(key, str):
-                raise ComparisonEngineError("frequency table keys must be strings")
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
-                raise ComparisonEngineError(f"count for {key!r} must be a finite number")
-            numeric = float(value)
-            if not math.isfinite(numeric):
-                raise ComparisonEngineError(f"count for {key!r} must be finite")
-            if numeric < 0:
-                raise ComparisonEngineError(f"count for {key!r} must be >= 0")
-            normalized[key] = numeric
-        total = sum(normalized.values())
-        if total <= 0:
-            raise ComparisonEngineError(f"frequency table '{label}' has zero total count")
-        return cls(label=label, counts=normalized, total=float(total))
 
 
 @dataclass(frozen=True)

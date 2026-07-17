@@ -560,12 +560,15 @@ informational `artifact_path` stored when it was created.
 ## Compare CLI
 
 Both configured group comparisons and `nlpo compare` use the same pure
-`nlpo_toolkit.comparison.engine`. The engine depends on neither filesystems nor
-Pydantic configuration. `comparison.config` owns only configured-comparison
-settings, while `comparison.results` owns immutable engine and application
-results. In-memory configured Counters and frequency CSV files enter through
-separate adapters in `comparison.services.configured` and
-`comparison.services.csv`.
+`nlpo_toolkit.comparison.engine`. `comparison.models` owns the concrete
+`FrequencyTable` engine input, and the engine compares that model without
+depending on filesystems or Pydantic configuration. `comparison.config` owns
+configured-comparison settings, while `comparison.results` owns concrete,
+non-generic engine and application results. Configured results hold a concrete
+`ComparisonSpec`; configured and CSV comparison services share the same table
+and result models without generic table protocols or type ignores. In-memory
+configured Counters and frequency CSV files enter through separate adapters in
+`comparison.services.configured` and `comparison.services.csv`.
 
 Configured comparisons retain zero-only correction and scale 10000. CSV
 comparisons retain additive smoothing and scale 1. CSV/JSON serialization and

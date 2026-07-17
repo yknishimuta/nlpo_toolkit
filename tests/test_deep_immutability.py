@@ -2,7 +2,7 @@ from collections import Counter
 
 import pytest
 
-from nlpo_toolkit.comparison.engine import FrequencyTable
+from nlpo_toolkit.comparison.models import FrequencyTable
 from nlpo_toolkit.comparison.results import MultiComparisonRow
 from nlpo_toolkit.corpus_analysis.analysis_cache.stats import AnalysisCacheStatsCollector
 from nlpo_toolkit.corpus_analysis.analysis_results import AnalysisResults, GroupAnalysisResult

@@ -258,3 +258,29 @@ def find_forbidden_identifiers(
                 )
     unique = {(item.source_path, item.line_number, item.qualified_name): item for item in violations}
     return tuple(sorted(unique.values(), key=lambda item: (str(item.source_path), item.line_number, item.qualified_name)))
+
+
+def find_generic_class_bases(
+    paths: Iterable[Path], *, class_names: Collection[str]
+) -> tuple[SourceViolation, ...]:
+    violations: list[SourceViolation] = []
+    selected = set(class_names)
+    for path, tree in _trees(paths):
+        for node in tree.body:
+            if not isinstance(node, ast.ClassDef) or node.name not in selected:
+                continue
+            for base in node.bases:
+                target = base.value if isinstance(base, ast.Subscript) else base
+                if _qualified(target, {}) not in {"Generic", "typing.Generic"}:
+                    continue
+                violations.append(
+                    SourceViolation(
+                        "generic-comparison-result",
+                        path,
+                        node.lineno,
+                        node.name,
+                        "Comparison result models use the concrete FrequencyTable model. "
+                        "Do not reintroduce a generic table type without a concrete second implementation.",
+                    )
+                )
+    return tuple(sorted(violations, key=lambda item: (str(item.source_path), item.line_number)))

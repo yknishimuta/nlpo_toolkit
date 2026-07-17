@@ -7,7 +7,7 @@ import math
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
-from .engine import FrequencyTable
+from .models import FrequencyTable
 from .errors import ComparisonEngineError, FrequencyTableReadError
 
 

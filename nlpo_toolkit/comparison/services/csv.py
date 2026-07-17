@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 from ..engine import (
-    FrequencyTable, PairwiseComparisonOptions, ZeroHandling, ZeroHandlingMode,
+    PairwiseComparisonOptions, ZeroHandling, ZeroHandlingMode,
     compare_many, compare_pair,
 )
 from ..errors import ComparisonEngineError, ComparisonServiceError
@@ -36,7 +36,7 @@ class CsvComparisonRequest:
     count_column: str | None = None
 
 
-CsvComparisonResult = CsvPairComparisonResult[FrequencyTable] | CsvMultiComparisonResult[FrequencyTable]
+CsvComparisonResult = CsvPairComparisonResult | CsvMultiComparisonResult
 
 
 def _validate(request: CsvComparisonRequest) -> None:
@@ -97,7 +97,9 @@ def execute_csv_comparison(request: CsvComparisonRequest) -> CsvComparisonResult
             rows.sort(key=lambda row: _pair_value(row, sort_key), reverse=not request.ascending)
             if request.top is not None:
                 rows = rows[:request.top]
-            return CsvPairComparisonResult(replace(comparison, rows=tuple(rows)))
+            return CsvPairComparisonResult(
+                comparison=replace(comparison, rows=tuple(rows))
+            )
         sort_key = request.sort or "range-relative"
         if sort_key in {"abs-log-ratio", "log-ratio", "difference"}:
             raise ComparisonServiceError(f"{sort_key} sort requires exactly two inputs")
@@ -106,6 +108,8 @@ def execute_csv_comparison(request: CsvComparisonRequest) -> CsvComparisonResult
         many_rows.sort(key=lambda row: _many_value(row, sort_key), reverse=not request.ascending)
         if request.top is not None:
             many_rows = many_rows[:request.top]
-        return CsvMultiComparisonResult(replace(comparison_many, rows=tuple(many_rows)))
+        return CsvMultiComparisonResult(
+            comparison=replace(comparison_many, rows=tuple(many_rows))
+        )
     except ComparisonEngineError as exc:
         raise ComparisonServiceError(str(exc)) from exc

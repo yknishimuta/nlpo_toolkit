@@ -53,6 +53,7 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.comparison.engine",
             "nlpo_toolkit.comparison.errors",
             "nlpo_toolkit.comparison.metrics",
+            "nlpo_toolkit.comparison.models",
             "nlpo_toolkit.comparison.results",
             "nlpo_toolkit.corpus_analysis.analysis_policy",
             "nlpo_toolkit.corpus_analysis.analysis_records",
@@ -327,9 +328,15 @@ DEPENDENCY_RULES = (
     ),
     DependencyRule(
         "comparison-core-no-services",
-        ("nlpo_toolkit.comparison.engine", "nlpo_toolkit.comparison.metrics", "nlpo_toolkit.comparison.results"),
+        ("nlpo_toolkit.comparison.engine", "nlpo_toolkit.comparison.metrics"),
         ("nlpo_toolkit.comparison.config", "nlpo_toolkit.comparison.frequency_io", "nlpo_toolkit.comparison.services", CLI),
-        explanation="Comparison calculations and results do not depend on configuration, adapters, or services.",
+        explanation="Comparison calculations do not depend on configuration, adapters, or services.",
+    ),
+    DependencyRule(
+        "comparison-results-no-services",
+        ("nlpo_toolkit.comparison.results",),
+        ("nlpo_toolkit.comparison.frequency_io", "nlpo_toolkit.comparison.services", CLI),
+        explanation="Comparison results may own configured result values but do not depend on adapters or services.",
     ),
     DependencyRule(
         "planning-models-inward",

@@ -2,13 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from collections.abc import Mapping
-from typing import Generic, TypeVar
 
 from nlpo_toolkit.immutable_collections import freeze_mapping
-
-
-TFrequencyTable = TypeVar("TFrequencyTable")
-TComparisonSpec = TypeVar("TComparisonSpec")
+from .config import ComparisonSpec
+from .models import FrequencyTable
 
 
 @dataclass(frozen=True)
@@ -27,9 +24,9 @@ class PairwiseComparisonRow:
 
 
 @dataclass(frozen=True)
-class PairwiseComparisonResult(Generic[TFrequencyTable]):
-    table_a: TFrequencyTable
-    table_b: TFrequencyTable
+class PairwiseComparisonResult:
+    table_a: FrequencyTable
+    table_b: FrequencyTable
     scale: float
     vocabulary_union_size: int
     rows_before_filter: int
@@ -57,8 +54,8 @@ class MultiComparisonRow:
 
 
 @dataclass(frozen=True)
-class MultiComparisonResult(Generic[TFrequencyTable]):
-    tables: tuple[TFrequencyTable, ...]
+class MultiComparisonResult:
+    tables: tuple[FrequencyTable, ...]
     scale: float
     vocabulary_union_size: int
     rows_before_filter: int
@@ -70,10 +67,10 @@ class MultiComparisonResult(Generic[TFrequencyTable]):
 
 
 @dataclass(frozen=True)
-class ConfiguredComparisonResult(Generic[TComparisonSpec, TFrequencyTable]):
-    spec: TComparisonSpec
+class ConfiguredComparisonResult:
+    spec: ComparisonSpec
     analysis_unit: str
-    comparison: PairwiseComparisonResult[TFrequencyTable]
+    comparison: PairwiseComparisonResult
 
     @property
     def rows(self) -> tuple[PairwiseComparisonRow, ...]:
@@ -81,11 +78,11 @@ class ConfiguredComparisonResult(Generic[TComparisonSpec, TFrequencyTable]):
 
     @property
     def group_a_tokens(self) -> float:
-        return self.comparison.table_a.total  # type: ignore[attr-defined]
+        return self.comparison.table_a.total
 
     @property
     def group_b_tokens(self) -> float:
-        return self.comparison.table_b.total  # type: ignore[attr-defined]
+        return self.comparison.table_b.total
 
     @property
     def vocabulary_union_size(self) -> int:
@@ -101,8 +98,8 @@ class ConfiguredComparisonResult(Generic[TComparisonSpec, TFrequencyTable]):
 
 
 @dataclass(frozen=True)
-class CsvPairComparisonResult(Generic[TFrequencyTable]):
-    comparison: PairwiseComparisonResult[TFrequencyTable]
+class CsvPairComparisonResult:
+    comparison: PairwiseComparisonResult
 
     @property
     def rows(self) -> tuple[PairwiseComparisonRow, ...]:
@@ -110,8 +107,8 @@ class CsvPairComparisonResult(Generic[TFrequencyTable]):
 
 
 @dataclass(frozen=True)
-class CsvMultiComparisonResult(Generic[TFrequencyTable]):
-    comparison: MultiComparisonResult[TFrequencyTable]
+class CsvMultiComparisonResult:
+    comparison: MultiComparisonResult
 
     @property
     def rows(self) -> tuple[MultiComparisonRow, ...]:

@@ -12,6 +12,7 @@ from .support.rules import DependencyRule, format_violations
 from .support.source_checks import (
     find_cross_module_private_imports,
     find_forbidden_identifiers,
+    find_generic_class_bases,
     find_mutable_fields_in_frozen_models,
 )
 from .support.module_roles import (
@@ -165,6 +166,22 @@ def old_function():
     assert {item.qualified_name for item in violations} == {
         "old_import", "old_field", "old_function", "old_attribute"
     }
+
+
+def test_generic_class_base_check_is_limited_to_selected_classes(tmp_path: Path) -> None:
+    source = tmp_path / "results.py"
+    _write(
+        source,
+        """from typing import Generic, TypeVar
+T = TypeVar("T")
+class Selected(Generic[T]):
+    pass
+class Unrelated(Generic[T]):
+    pass
+""",
+    )
+    violations = find_generic_class_bases((source,), class_names={"Selected"})
+    assert [item.qualified_name for item in violations] == ["Selected"]
 
 
 def test_module_role_exact_and_recursive_matching_is_segment_aware() -> None:

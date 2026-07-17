@@ -5,7 +5,6 @@ import math
 import pytest
 
 from nlpo_toolkit.comparison.engine import (
-    FrequencyTable,
     PairwiseComparisonOptions,
     ZeroHandling,
     ZeroHandlingMode,
@@ -14,6 +13,7 @@ from nlpo_toolkit.comparison.engine import (
 )
 from nlpo_toolkit.comparison.errors import ComparisonEngineError
 from nlpo_toolkit.comparison.metrics import normalized_rate
+from nlpo_toolkit.comparison.models import FrequencyTable
 
 
 def test_frequency_table_validates_counts_and_freezes_input() -> None:

@@ -3,7 +3,7 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from nlpo_toolkit.comparison.config import ComparisonSpec
-from nlpo_toolkit.comparison.engine import FrequencyTable
+from nlpo_toolkit.comparison.models import FrequencyTable
 from nlpo_toolkit.comparison.results import (
     ConfiguredComparisonResult, PairwiseComparisonResult, PairwiseComparisonRow,
 )
@@ -18,8 +18,13 @@ def test_configured_result_derives_values_without_copying_rows():
         ComparisonSpec(name="c", group_a="a", group_b="b"),
         "lemma", engine_result,
     )
+    assert isinstance(engine_result.table_a, FrequencyTable)
+    assert isinstance(engine_result.table_b, FrequencyTable)
+    assert isinstance(result.spec, ComparisonSpec)
+    assert isinstance(result.comparison, PairwiseComparisonResult)
     assert result.rows is engine_result.rows
     assert result.group_a_tokens == 2
+    assert result.group_b_tokens == 1
     assert result.rows_before_filter == result.rows_after_filter == 1
     with pytest.raises(FrozenInstanceError):
         result.analysis_unit = "token"
