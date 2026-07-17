@@ -114,8 +114,11 @@ Execution commands compose these stages through two typed sessions.
 `CorpusExecutionSession` owns the resolved plan and prepared corpora shared by
 Count, Features, and config-input N-gram. `NLPExecutionSession` adds the built
 backend, extraction policy, and Roman-numeral exceptions shared by Count and
-Features. Count then adds its sentence splitter and output/analysis pipeline;
-config-input N-gram uses only the corpus session and starts no NLP backend.
+Features. Both pass each prepared corpus string unchanged to the common chunked
+analysis-record extraction path. Sentence splitting is the responsibility of the
+selected main NLP backend and that shared extraction path; Count has no dedicated
+pre-tokenization backend. Config-input N-gram uses only the corpus session and
+starts no NLP backend.
 
 Features keeps application orchestration separate from calculation:
 `features.service` connects the execution sessions to `features.engine`, while

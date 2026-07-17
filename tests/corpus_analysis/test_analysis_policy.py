@@ -69,7 +69,7 @@ def test_policy_builds_flat_fingerprint_and_invalidates_cache_key() -> None:
 
     assert key(default_fingerprint) == key(same_fingerprint)
     assert key(default_fingerprint) == (
-        "8a0de47df8bcb3234e0ce8d4fddf5dd5335d2d4061d01dd6e3cbed840e5ea4df"
+        "50841412dcf22c28668539ccd1f9f7b32b50f86ab6424dcd82d57f4a1a4946eb"
     )
     assert key(default_fingerprint) != key(size_fingerprint)
     assert key(default_fingerprint) != key(processor_fingerprint)

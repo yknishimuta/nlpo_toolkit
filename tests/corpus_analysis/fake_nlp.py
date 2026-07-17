@@ -22,7 +22,6 @@ from nlpo_toolkit.corpus_analysis.ports import (
     CorpusExecutionDependencies,
     CorpusPlanningDependencies,
     CorpusPreparationDependencies,
-    CountRuntimeDependencies,
     CountCommandDependencies,
     NLPExecutionDependencies,
     RunnerDependencies,
@@ -143,7 +142,6 @@ def runner_dependencies(
             backend_factory=backend_factory,
             extraction_policy=extraction_policy,
         ),
-        count=CountRuntimeDependencies(),
     )
 
 

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
-from nlpo_toolkit.nlp.contracts import BuiltNLPBackend, NLPBackend
+from nlpo_toolkit.nlp.contracts import BuiltNLPBackend
 from nlpo_toolkit.cleaner_contracts import (
     CleanerApplicationService,
     CleanerConfigInspection,
@@ -25,7 +25,6 @@ if TYPE_CHECKING:
 ConfigLoader = Callable[[Path], AppConfig]
 CleanerConfigInspector = Callable[[Path], CleanerConfigInspection]
 BackendFactory = Callable[[NLPConfig], BuiltNLPBackend]
-SentenceSplitterFactory = Callable[[NLPConfig], NLPBackend]
 
 
 class ArchiveCreator(Protocol):
@@ -70,15 +69,9 @@ class NLPExecutionDependencies:
 
 
 @dataclass(frozen=True)
-class CountRuntimeDependencies:
-    sentence_splitter_factory: SentenceSplitterFactory | None = None
-
-
-@dataclass(frozen=True)
 class RunnerDependencies:
     corpus: CorpusExecutionDependencies
     nlp: NLPExecutionDependencies
-    count: CountRuntimeDependencies
 
 
 @dataclass(frozen=True)

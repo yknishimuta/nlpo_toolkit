@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -32,6 +33,19 @@ def test_writer_publishes_complete_valid_object(tmp_path: Path) -> None:
     assert repository.has_candidate("abcdef")
     repository.validate(paths)
     assert list(repository.read(paths)) == [record()]
+
+
+def test_metadata_from_previous_analysis_behavior_is_rejected(tmp_path: Path) -> None:
+    repository = AnalysisCacheRepository(tmp_path)
+    paths, writer = _writer(repository)
+    with writer as opened:
+        opened.write(record())
+    metadata = json.loads(paths.metadata.read_text(encoding="utf-8"))
+    metadata["behavior_version"] = 1
+    paths.metadata.write_text(json.dumps(metadata), encoding="utf-8")
+
+    with pytest.raises(AnalysisCacheError, match="behavior version"):
+        read_cache_metadata(paths.metadata)
 
 
 def test_writer_exception_leaves_no_metadata_or_temporary_payload(tmp_path: Path) -> None:

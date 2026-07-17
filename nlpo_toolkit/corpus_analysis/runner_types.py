@@ -4,8 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
-from nlpo_toolkit.nlp.contracts import NLPBackend
-
 from .session_models import NLPExecutionSession
 from .config_references import ConfigFileReference
 from .planning.models import ResolvedAnalysisPlan
@@ -19,7 +17,6 @@ from nlpo_toolkit.comparison.results import ConfiguredComparisonResult
 @dataclass(frozen=True)
 class RunContext:
     session: NLPExecutionSession
-    sentence_splitter: NLPBackend | None
     artifact_plan: ArtifactPlan
 
 

@@ -16,17 +16,6 @@ from .postprocessing.service import (
 __all__ = ["analyze_corpora"]
 
 
-def _prepare_counting_text(context: RunContext, corpus: PreparedCorpus) -> str:
-    if context.sentence_splitter is None:
-        return corpus.prepared_text
-    doc = context.sentence_splitter(corpus.prepared_text)
-    joined = "\n".join(
-        sentence.text or " ".join(token.text for token in sentence.tokens)
-        for sentence in doc.sentences
-    )
-    return joined if joined.strip() else corpus.prepared_text
-
-
 def _analyze_one_corpus(
     *,
     context: RunContext,
@@ -42,7 +31,7 @@ def _analyze_one_corpus(
     record_result = analysis_execution.execute_record_analysis(
         context=context,
         corpus=corpus,
-        text=_prepare_counting_text(context, corpus),
+        text=corpus.prepared_text,
         token_artifact_path=token.path if token else None,
         token_artifact_metadata_path=token_meta.path if token_meta else None,
         trace_path=trace.path if trace else None,

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 from nlpo_toolkit.backends import create_nlp_backend
-from nlpo_toolkit.backends.stanza_backend import StanzaBackend
 from nlpo_toolkit.cleaner_contracts import (
     CleanerConfigInspection,
     CleanerExecutionRequest,
@@ -12,7 +11,6 @@ from nlpo_toolkit.cleaner_contracts import (
 )
 from nlpo_toolkit.nlp.contracts import (
     BuiltNLPBackend,
-    NLPBackend,
     NLPBackendSpec,
 )
 
@@ -28,7 +26,6 @@ from .ports import (
     CorpusExecutionDependencies,
     CorpusPlanningDependencies,
     CorpusPreparationDependencies,
-    CountRuntimeDependencies,
     CountCommandDependencies,
     FeatureCommandDependencies,
     NLPExecutionDependencies,
@@ -57,15 +54,6 @@ def _to_backend_spec(config: NLPConfig) -> NLPBackendSpec:
         stanza_package=config.stanza_package,
         model_name=config.model_name,
         use_gpu=not config.cpu_only,
-    )
-
-
-def _create_sentence_splitter(config: NLPConfig) -> NLPBackend:
-    return StanzaBackend(
-        lang=config.language,
-        package=config.stanza_package or "perseus",
-        use_gpu=not config.cpu_only,
-        processors="tokenize",
     )
 
 
@@ -109,15 +97,10 @@ def default_nlp_execution_dependencies(
     )
 
 
-def default_count_runtime_dependencies() -> CountRuntimeDependencies:
-    return CountRuntimeDependencies(sentence_splitter_factory=_create_sentence_splitter)
-
-
 def default_runner_dependencies() -> RunnerDependencies:
     return RunnerDependencies(
         corpus=default_corpus_execution_dependencies(),
         nlp=default_nlp_execution_dependencies(),
-        count=default_count_runtime_dependencies(),
     )
 
 

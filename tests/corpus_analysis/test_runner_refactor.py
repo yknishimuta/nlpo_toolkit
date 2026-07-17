@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tests.corpus_analysis.fake_nlp import corpus_request
+from tests.corpus_analysis.fake_nlp import FakeNLPBackend, corpus_request
 
 from collections import Counter
 from dataclasses import replace
@@ -169,6 +169,44 @@ def test_analyze_corpora_writes_expected_outputs_from_record_pipeline(tmp_path: 
         "frequency_group_a.unknown.csv",
         "ref_tags_group_a.csv",
     ]
+
+
+def test_count_passes_prepared_text_unchanged_to_its_only_nlp_backend(
+    tmp_path: Path,
+) -> None:
+    text = "Rosa amat.\n\n  Marcus venit."
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input" / "a.txt").write_text(text, encoding="utf-8")
+    config_path = tmp_path / "config.yml"
+    config_path.write_text("dummy", encoding="utf-8")
+    backend = FakeNLPBackend()
+    factory_calls = []
+
+    def load_config(_path: Path):
+        return ensure_app_config({
+            "out_dir": "output",
+            "groups": {"group_a": {"files": ["input/a.txt"]}},
+            "normalization": {"enabled": False},
+        })
+
+    def recording_factory(config):
+        factory_calls.append(config)
+        return BuiltNLPBackend(
+            backend=backend,
+            info=NLPBackendInfo(name="fake", language=config.language),
+        )
+
+    context = prepare_run_context(
+        corpus_request(tmp_path, config_path),
+        dependencies=runner_dependencies(load_config, recording_factory),
+    )
+    prepared_text = context.session.corpus.corpora[0].prepared_text
+
+    analyze_corpora(context)
+
+    assert prepared_text == text
+    assert backend.calls == [prepared_text]
+    assert len(factory_calls) == 1
 
 
 def test_summary_lines_and_metadata_include_existing_fields(tmp_path: Path) -> None:
