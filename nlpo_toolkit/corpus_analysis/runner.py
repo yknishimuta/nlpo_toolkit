@@ -5,7 +5,7 @@ from .analysis_orchestration import analyze_corpora
 from .ports import RunnerDependencies
 from .runner_types import RunResult
 from .requests import CorpusPreparationRequest
-from .reporting.service import write_run_report
+from .reporting.service import build_run_report
 from .result_builder import build_run_result
 
 
@@ -19,21 +19,24 @@ def run(
         request,
         dependencies=dependencies,
     )
-    analysis = analyze_corpora(context)
+    analysis = analyze_corpora(context, publication=dependencies.publication)
     partitions = post_analysis.execute_partition_validations(
         context=context,
         analysis=analysis,
+        publisher=dependencies.publication.partition_artifacts,
     )
     comparisons = post_analysis.execute_group_comparisons(
         context=context,
         analysis=analysis,
+        publisher=dependencies.publication.comparison_artifacts,
     )
-    write_run_report(
+    report = build_run_report(
         context=context,
         analysis=analysis,
         partitions=partitions,
         comparisons=comparisons,
     )
+    dependencies.publication.run_report(report)
     return build_run_result(
         context=context,
         analysis=analysis,

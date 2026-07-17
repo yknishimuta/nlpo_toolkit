@@ -13,8 +13,9 @@ class _WriterSpy:
     def write(self, record) -> None:
         self.records.append(record)
 
-    def consider(self, record) -> None:
-        self.records.append(record)
+    @property
+    def token_artifact_metadata(self):
+        return None
 
 
 def _record(token: str, upos: str, index: int) -> NLPAnalysisRecord:
@@ -43,8 +44,7 @@ def test_consume_records_iterates_once_and_writes_every_evaluated_record() -> No
         yield _record("rosa", "NOUN", 0)
         yield _record("et", "CCONJ", 1)
 
-    artifact = _WriterSpy()
-    trace = _WriterSpy()
+    sink = _WriterSpy()
     result = consume_analysis_records(
         records=records(),
         options=AnalysisOptions(
@@ -53,12 +53,10 @@ def test_consume_records_iterates_once_and_writes_every_evaluated_record() -> No
             use_lemma=True,
             upos_targets=frozenset({"NOUN"}),
         ),
-        artifact_writer=artifact,  # type: ignore[arg-type]
-        trace_writer=trace,  # type: ignore[arg-type]
+        record_sink=sink,  # type: ignore[arg-type]
     )
 
     assert iterations == 1
     assert result.counter == Counter({"rosa": 1})
     assert result.record_count == 2
-    assert len(artifact.records) == 2
-    assert len(trace.records) == 2
+    assert len(sink.records) == 2

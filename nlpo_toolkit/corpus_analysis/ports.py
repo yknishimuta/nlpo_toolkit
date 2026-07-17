@@ -15,6 +15,7 @@ from nlpo_toolkit.cleaner_contracts import (
 
 from .analysis_policy import AnalysisExtractionPolicy
 from .config import AppConfig, NLPConfig
+from .publication_ports import CountPublicationDependencies
 
 if TYPE_CHECKING:
     from .archive_types import RunArchiveRequest, RunArchiveResult
@@ -72,6 +73,7 @@ class NLPExecutionDependencies:
 class RunnerDependencies:
     corpus: CorpusExecutionDependencies
     nlp: NLPExecutionDependencies
+    publication: CountPublicationDependencies
 
 
 @dataclass(frozen=True)

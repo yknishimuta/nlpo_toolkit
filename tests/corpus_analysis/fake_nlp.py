@@ -29,6 +29,14 @@ from nlpo_toolkit.corpus_analysis.ports import (
 from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
 from nlpo_toolkit.corpus_analysis.archive.service import create_run_archive
 from nlpo_toolkit.latin.cleaners.config_loader import inspect_cleaner_config
+from nlpo_toolkit.corpus_analysis.artifacts.publication_adapters import (
+    open_record_artifact_session,
+    publish_comparison_artifacts,
+    publish_group_artifacts,
+    publish_partition_artifacts,
+)
+from nlpo_toolkit.corpus_analysis.reporting.publication_adapter import publish_run_report
+from nlpo_toolkit.corpus_analysis.publication_ports import CountPublicationDependencies
 
 
 TokenSpec = tuple[str, str | None, str]
@@ -141,6 +149,13 @@ def runner_dependencies(
         nlp=NLPExecutionDependencies(
             backend_factory=backend_factory,
             extraction_policy=extraction_policy,
+        ),
+        publication=CountPublicationDependencies(
+            group_artifacts=publish_group_artifacts,
+            partition_artifacts=publish_partition_artifacts,
+            comparison_artifacts=publish_comparison_artifacts,
+            run_report=publish_run_report,
+            record_artifacts=open_record_artifact_session,
         ),
     )
 

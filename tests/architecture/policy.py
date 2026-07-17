@@ -13,6 +13,7 @@ COMPOSITION = f"{CA}.composition"
 PORTS = f"{CA}.ports"
 
 APPLICATION_MODULES = (
+    f"{CA}.analysis_execution",
     f"{CA}.analysis_orchestration",
     f"{CA}.count_command",
     f"{CA}.dry_run",
@@ -23,7 +24,9 @@ APPLICATION_MODULES = (
     f"{CA}.planning.build",
     f"{CA}.planning.resolve",
     f"{CA}.preprocessing",
+    f"{CA}.post_analysis",
     f"{CA}.reporting.service",
+    f"{CA}.runner",
     "nlpo_toolkit.comparison.services",
     "nlpo_toolkit.latin.cleaners.service",
 )
@@ -58,6 +61,7 @@ INFRASTRUCTURE_MODULES = (
     f"{CA}.analysis_cache",
     f"{CA}.archive",
     f"{CA}.artifacts.publication",
+    f"{CA}.artifacts.publication_adapters",
     f"{CA}.artifacts.writers",
     f"{CA}.cache_storage",
     f"{CA}.token_artifact.reader",
@@ -84,6 +88,24 @@ DEPENDENCY_RULES = (
         APPLICATION_MODULES,
         (COMPOSITION,),
         explanation="Application services receive dependencies through ports; they do not assemble production implementations.",
+    ),
+    DependencyRule(
+        "count-application-no-concrete-publication",
+        (
+            f"{CA}.analysis_orchestration",
+            f"{CA}.analysis_execution",
+            f"{CA}.post_analysis",
+            f"{CA}.runner",
+            f"{CA}.reporting.service",
+        ),
+        (
+            f"{CA}.artifacts.writers",
+            f"{CA}.artifacts.publication_adapters",
+            f"{CA}.reporting.publication_adapter",
+            f"{CA}.token_artifact.writer",
+            f"{CA}.diagnostic_trace",
+        ),
+        explanation="Count application services depend on typed publication ports, not filesystem adapters or concrete writers.",
     ),
     DependencyRule(
         "composition-consumed-only-by-cli",

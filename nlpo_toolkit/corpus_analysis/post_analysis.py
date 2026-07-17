@@ -6,22 +6,16 @@ from .partition_validation import (
     validate_partitions,
 )
 from .analysis_results import AnalysisResults
-from .artifacts.models import ArtifactKind
+from .publication_models import (
+    ComparisonArtifactPublication,
+    PartitionArtifactPublication,
+)
+from .publication_ports import ComparisonArtifactPublisher, PartitionArtifactPublisher
 from .runner_types import (
     ComparisonRunResult,
     PartitionRunResult,
     PartitionRunMismatch,
     RunContext,
-)
-from .artifacts.writers.partition import (
-    render_partition_json,
-    write_partition_csv_artifact,
-    write_partition_json_artifact,
-)
-from .artifacts.writers.comparison import (
-    render_comparisons_json,
-    write_comparison_csv_artifact,
-    write_comparisons_json_artifact,
 )
 
 
@@ -33,21 +27,15 @@ def execute_partition_validations(
     *,
     context: RunContext,
     analysis: AnalysisResults,
+    publisher: PartitionArtifactPublisher,
 ) -> PartitionRunResult:
     plan = context.session.corpus.plan
     specs = plan.definition.config.validations.partitions
     partition_results = validate_partitions(specs, _group_counters(analysis))
     exit_code = 0
     mismatches: list[PartitionRunMismatch] = []
-    csv_names: dict[str, str] = {}
 
     for spec, result in zip(specs, partition_results):
-        artifact = context.artifact_plan.require(
-            ArtifactKind.PARTITION_VALIDATION_CSV, name=spec.name
-        )
-        csv_names[spec.name] = artifact.path.name
-        write_partition_csv_artifact(artifact, result=result)
-
         if not result.exact_match:
             level = "ERROR" if spec.on_mismatch == "error" else "WARN"
             mismatches.append(PartitionRunMismatch(
@@ -56,14 +44,13 @@ def execute_partition_validations(
             if spec.on_mismatch == "error":
                 exit_code = 1
 
-    if specs:
-        partition_json = context.artifact_plan.require(
-            ArtifactKind.PARTITION_VALIDATION_JSON
+    publisher(
+        PartitionArtifactPublication(
+            artifact_plan=context.artifact_plan,
+            specs=tuple(specs),
+            results=tuple(partition_results),
         )
-        write_partition_json_artifact(
-            partition_json,
-            data=render_partition_json(specs, partition_results, csv_names=csv_names),
-        )
+    )
 
     return PartitionRunResult(
         validations=tuple(partition_results),
@@ -76,6 +63,7 @@ def execute_group_comparisons(
     *,
     context: RunContext,
     analysis: AnalysisResults,
+    publisher: ComparisonArtifactPublisher,
 ) -> ComparisonRunResult:
     plan = context.session.corpus.plan
     definition = plan.definition
@@ -87,22 +75,12 @@ def execute_group_comparisons(
         )
         for spec in definition.config.comparisons
     ]
-    csv_names: dict[str, str] = {}
-    for result in comparison_results:
-        artifact = context.artifact_plan.require(
-            ArtifactKind.GROUP_COMPARISON_CSV, name=result.spec.name
+    publisher(
+        ComparisonArtifactPublication(
+            artifact_plan=context.artifact_plan,
+            results=tuple(comparison_results),
         )
-        csv_names[result.spec.name] = artifact.path.name
-        write_comparison_csv_artifact(artifact, result=result)
-
-    if comparison_results:
-        comparison_json = context.artifact_plan.require(
-            ArtifactKind.GROUP_COMPARISONS_JSON
-        )
-        write_comparisons_json_artifact(
-            comparison_json,
-            data=render_comparisons_json(comparison_results, csv_names=csv_names),
-        )
+    )
 
     return ComparisonRunResult(
         comparisons=tuple(comparison_results),

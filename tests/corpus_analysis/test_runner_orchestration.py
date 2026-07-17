@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from tests.corpus_analysis.fake_nlp import corpus_request
 
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -27,7 +28,7 @@ def test_run_orchestrates_steps_in_order(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(
         runner_mod,
         "analyze_corpora",
-        lambda ctx: calls.append("analyze") or analysis,
+        lambda ctx, **_kwargs: calls.append("analyze") or analysis,
     )
     monkeypatch.setattr(
         runner_mod.post_analysis,
@@ -41,8 +42,8 @@ def test_run_orchestrates_steps_in_order(monkeypatch, tmp_path: Path) -> None:
     )
     monkeypatch.setattr(
         runner_mod,
-        "write_run_report",
-        lambda **kwargs: calls.append("report"),
+        "build_run_report",
+        lambda **kwargs: calls.append("report") or SimpleNamespace(),
     )
     monkeypatch.setattr(
         runner_mod,
@@ -50,18 +51,28 @@ def test_run_orchestrates_steps_in_order(monkeypatch, tmp_path: Path) -> None:
         lambda **kwargs: SimpleNamespace(exit_code=partitions.exit_code),
     )
 
-    rc = runner_mod.run(
-        corpus_request(tmp_path, tmp_path / "config.yml"),
-        dependencies=runner_dependencies(
-            lambda _path: ensure_app_config(
-                {"groups": {"text": {"files": ["input/*.txt"]}}}
-            ),
-            lambda _config: BuiltNLPBackend(
-                backend=object(),
-                info=NLPBackendInfo(name="fake", language="la"),
-            ),
+    dependencies = runner_dependencies(
+        lambda _path: ensure_app_config(
+            {"groups": {"text": {"files": ["input/*.txt"]}}}
+        ),
+        lambda _config: BuiltNLPBackend(
+            backend=object(),
+            info=NLPBackendInfo(name="fake", language="la"),
         ),
     )
+    dependencies = replace(
+        dependencies,
+        publication=replace(
+            dependencies.publication,
+            run_report=lambda _request: calls.append("publish"),
+        ),
+    )
+    rc = runner_mod.run(
+        corpus_request(tmp_path, tmp_path / "config.yml"),
+        dependencies=dependencies,
+    )
 
-    assert calls == ["prepare", "analyze", "partitions", "comparisons", "report"]
+    assert calls == [
+        "prepare", "analyze", "partitions", "comparisons", "report", "publish"
+    ]
     assert rc.exit_code == 7

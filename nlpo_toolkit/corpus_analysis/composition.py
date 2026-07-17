@@ -19,6 +19,13 @@ from .analysis_policy import (
     DEFAULT_ANALYSIS_EXTRACTION_POLICY,
 )
 from .archive.service import create_run_archive
+from .artifacts.publication_adapters import (
+    open_record_artifact_session,
+    publish_comparison_artifacts,
+    publish_group_artifacts,
+    publish_partition_artifacts,
+)
+from .reporting.publication_adapter import publish_run_report
 from .config import NLPConfig, load_config
 from .ports import (
     BackendFactory,
@@ -32,6 +39,7 @@ from .ports import (
     RunnerDependencies,
 )
 from .runner import run
+from .publication_ports import CountPublicationDependencies
 
 
 def _inspect_cleaner_config(path: Path) -> CleanerConfigInspection:
@@ -97,10 +105,21 @@ def default_nlp_execution_dependencies(
     )
 
 
+def default_count_publication_dependencies() -> CountPublicationDependencies:
+    return CountPublicationDependencies(
+        group_artifacts=publish_group_artifacts,
+        partition_artifacts=publish_partition_artifacts,
+        comparison_artifacts=publish_comparison_artifacts,
+        run_report=publish_run_report,
+        record_artifacts=open_record_artifact_session,
+    )
+
+
 def default_runner_dependencies() -> RunnerDependencies:
     return RunnerDependencies(
         corpus=default_corpus_execution_dependencies(),
         nlp=default_nlp_execution_dependencies(),
+        publication=default_count_publication_dependencies(),
     )
 
 

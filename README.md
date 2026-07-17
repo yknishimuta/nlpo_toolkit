@@ -120,6 +120,14 @@ selected main NLP backend and that shared extraction path; Count has no dedicate
 pre-tokenization backend. Config-input N-gram uses only the corpus session and
 starts no NLP backend.
 
+Count application services depend only on typed publication ports and frozen
+publication requests. Production filesystem adapters implement the group,
+partition, comparison, run-report, token-artifact, and diagnostic-trace
+publication boundaries by delegating to the concrete serializers and writers.
+The production composition root injects all of these publication dependencies;
+application orchestration neither selects concrete writers nor serializes CSV,
+JSON, TSV, or text output.
+
 Features keeps application orchestration separate from calculation:
 `features.service` connects the execution sessions to `features.engine`, while
 the engine extracts analysis records once per prepared corpus and applies the

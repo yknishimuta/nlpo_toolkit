@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from contextlib import ExitStack, closing, contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Iterator, Literal
@@ -21,13 +21,14 @@ from .analysis_records import (
     iter_nlp_analysis_records_from_text,
 )
 from .corpus import PreparedCorpus
-from .diagnostic_trace import DiagnosticTraceWriter
+from .artifacts.models import ArtifactKind
+from .publication_models import RecordArtifactPublicationRequest
+from .publication_ports import RecordArtifactSession, RecordArtifactSessionFactory
 from .runner_types import RunContext
 from .token_artifact.schema import (
     TokenArtifactDescriptor, TokenArtifactFilterDescriptor,
     TokenArtifactMetadata, TokenArtifactNLPDescriptor,
 )
-from .token_artifact.writer import TokenArtifactWriter
 
 __all__ = [
     "RecordAnalysisResult",
@@ -160,18 +161,14 @@ def consume_analysis_records(
     *,
     records: Iterable[NLPAnalysisRecord],
     options: AnalysisOptions,
-    artifact_writer: TokenArtifactWriter | None,
-    trace_writer: DiagnosticTraceWriter | None,
+    record_sink: RecordArtifactSession,
 ) -> RecordConsumptionResult:
     counter: Counter[str] = Counter()
     record_count = 0
     for raw_record in records:
         record_count += 1
         record = evaluate_analysis_record(raw_record, options=options)
-        if artifact_writer is not None:
-            artifact_writer.write(record)
-        if trace_writer is not None:
-            trace_writer.consider(record)
+        record_sink.write(record)
         if record.included and record.analysis_key:
             counter[record.analysis_key] += 1
     return RecordConsumptionResult(counter=counter, record_count=record_count)
@@ -222,55 +219,39 @@ def execute_record_analysis(
     context: RunContext,
     corpus: PreparedCorpus,
     text: str,
-    token_artifact_path: Path | None,
-    token_artifact_metadata_path: Path | None,
-    trace_path: Path | None,
+    publication: RecordArtifactSessionFactory,
     cache_stats: AnalysisCacheRunStats,
 ) -> RecordAnalysisResult:
-    artifact_writer: TokenArtifactWriter | None = None
-    artifact_metadata: TokenArtifactMetadata | None = None
-    with ExitStack() as stack:
-        if token_artifact_path is not None:
-            artifact_writer = stack.enter_context(
-                TokenArtifactWriter(
-                    token_artifact_path,
-                    metadata_path=token_artifact_metadata_path,
-                    descriptor=_token_artifact_descriptor(
-                        context=context, corpus=corpus
-                    ),
-                )
+    artifacts = context.artifact_plan
+    trace_config = context.session.corpus.plan.definition.config.trace
+    request = RecordArtifactPublicationRequest(
+        token_artifact=artifacts.optional(ArtifactKind.TOKEN_ARTIFACT, group=corpus.label),
+        token_artifact_metadata=artifacts.optional(
+            ArtifactKind.TOKEN_ARTIFACT_METADATA, group=corpus.label
+        ),
+        diagnostic_trace=artifacts.optional(
+            ArtifactKind.DIAGNOSTIC_TRACE, group=corpus.label
+        ),
+        descriptor=_token_artifact_descriptor(context=context, corpus=corpus),
+        trace_max_rows=int(trace_config.max_rows or 0),
+        trace_only_keys=tuple(trace_config.only_keys),
+        trace_write_truncation_marker=trace_config.write_truncation_marker,
+    )
+    with publication(request) as record_session:
+        with obtain_analysis_records(context=context, text=text) as source:
+            consumed = consume_analysis_records(
+                records=source.records,
+                options=build_analysis_options(context=context, corpus=corpus),
+                record_sink=record_session,
             )
-        trace_writer: DiagnosticTraceWriter | None = None
-        if trace_path is not None:
-            trace_writer = stack.enter_context(
-                DiagnosticTraceWriter(
-                    trace_path,
-                    max_rows=int(context.session.corpus.plan.definition.config.trace.max_rows or 0),
-                    only_keys=context.session.corpus.plan.definition.config.trace.only_keys,
-                    write_truncation_marker=context.session.corpus.plan.definition.config.trace.write_truncation_marker,
-                )
+            _update_cache_stats(
+                stats=cache_stats,
+                corpus=corpus,
+                source=source,
+                record_count=consumed.record_count,
             )
-        source = stack.enter_context(obtain_analysis_records(context=context, text=text))
-        consumed = consume_analysis_records(
-            records=source.records,
-            options=build_analysis_options(context=context, corpus=corpus),
-            artifact_writer=artifact_writer,
-            trace_writer=trace_writer,
-        )
-        _update_cache_stats(
-            stats=cache_stats,
-            corpus=corpus,
-            source=source,
-            record_count=consumed.record_count,
-        )
-
-    if token_artifact_path is not None:
-        assert token_artifact_metadata_path is not None
-        final = artifact_writer.final_metadata if artifact_writer is not None else None
-        if final is not None:
-            artifact_metadata = final
     return RecordAnalysisResult(
         counter=consumed.counter,
         record_count=consumed.record_count,
-        token_artifact=artifact_metadata,
+        token_artifact=record_session.token_artifact_metadata,
     )

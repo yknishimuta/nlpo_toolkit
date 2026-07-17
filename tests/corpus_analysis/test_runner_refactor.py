@@ -5,6 +5,7 @@ from tests.corpus_analysis.fake_nlp import FakeNLPBackend, corpus_request
 from collections import Counter
 from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 from nlpo_toolkit.nlp.contracts import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.analysis_orchestration import analyze_corpora
@@ -24,6 +25,11 @@ from nlpo_toolkit.corpus_analysis.runner_types import (
 from nlpo_toolkit.corpus_analysis.runtime import prepare_run_context
 from nlpo_toolkit.nlp.contracts import NLPDocument, NLPSentence, NLPToken
 from tests.corpus_analysis.fake_nlp import runner_dependencies
+from tests.corpus_analysis.fake_publication import (
+    InMemoryRecordArtifactSessionFactory,
+    RecordingGroupArtifactPublisher,
+    recording_publication_dependencies,
+)
 
 
 class FakeBackend:
@@ -157,7 +163,8 @@ def test_analyze_corpora_writes_expected_outputs_from_record_pipeline(tmp_path: 
                 context.session,
                 corpus=replace(context.session.corpus, corpora=(corpus,)),
             ),
-        )
+        ),
+        publication=deps.publication,
     ).groups["group_a"]
 
     assert result.counter == Counter({"item_a": 2, "item_b": 1})
@@ -196,17 +203,38 @@ def test_count_passes_prepared_text_unchanged_to_its_only_nlp_backend(
             info=NLPBackendInfo(name="fake", language=config.language),
         )
 
+    publication = recording_publication_dependencies()
+    dependencies = replace(
+        runner_dependencies(load_config, recording_factory),
+        publication=publication,
+    )
     context = prepare_run_context(
         corpus_request(tmp_path, config_path),
-        dependencies=runner_dependencies(load_config, recording_factory),
+        dependencies=dependencies,
     )
     prepared_text = context.session.corpus.corpora[0].prepared_text
 
-    analyze_corpora(context)
+    analyze_corpora(context, publication=dependencies.publication)
 
     assert prepared_text == text
     assert backend.calls == [prepared_text]
     assert len(factory_calls) == 1
+    group_publisher = cast(
+        RecordingGroupArtifactPublisher, publication.group_artifacts
+    )
+    record_factory = cast(
+        InMemoryRecordArtifactSessionFactory, publication.record_artifacts
+    )
+    assert len(group_publisher.calls) == 1
+    assert len(record_factory.requests) == 1
+    assert record_factory.sessions[0].exited_normally is True
+    assert record_factory.sessions[0].exited_with_exception is False
+    assert [record.token for record in record_factory.sessions[0].records] == [
+        "Rosa",
+        "amat.",
+        "Marcus",
+        "venit.",
+    ]
 
 
 def test_summary_lines_and_metadata_include_existing_fields(tmp_path: Path) -> None:

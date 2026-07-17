@@ -5,8 +5,8 @@ from .analysis_cache.stats import AnalysisCacheRunStats
 from .analysis_results import AnalysisResults, GroupAnalysisResult
 from .corpus import PreparedCorpus
 from .runner_types import RunContext
-from .artifacts.models import ArtifactKind
-from .artifacts.writers.group import write_group_artifacts
+from .publication_models import GroupArtifactPublication
+from .publication_ports import CountPublicationDependencies
 from .postprocessing.service import (
     PostprocessingResources,
     load_postprocessing_resources,
@@ -22,19 +22,13 @@ def _analyze_one_corpus(
     corpus: PreparedCorpus,
     postprocessing: PostprocessingResources,
     cache_stats: AnalysisCacheRunStats,
+    publication: CountPublicationDependencies,
 ) -> tuple[str, GroupAnalysisResult]:
-    artifacts = context.artifact_plan
-    token = artifacts.optional(ArtifactKind.TOKEN_ARTIFACT, group=corpus.label)
-    token_meta = artifacts.optional(ArtifactKind.TOKEN_ARTIFACT_METADATA,
-                                    group=corpus.label)
-    trace = artifacts.optional(ArtifactKind.DIAGNOSTIC_TRACE, group=corpus.label)
     record_result = analysis_execution.execute_record_analysis(
         context=context,
         corpus=corpus,
         text=corpus.prepared_text,
-        token_artifact_path=token.path if token else None,
-        token_artifact_metadata_path=token_meta.path if token_meta else None,
-        trace_path=trace.path if trace else None,
+        publication=publication.record_artifacts,
         cache_stats=cache_stats,
     )
     definition = context.session.corpus.plan.definition
@@ -42,14 +36,16 @@ def _analyze_one_corpus(
         record_result.counter,
         resources=postprocessing,
     )
-    write_group_artifacts(
-        artifact_plan=context.artifact_plan,
-        group=corpus.label,
-        counter=processed.counter,
-        dictionary=processed.dictionary,
-        reference_tag_counts=corpus.ref_tag_counts,
-        csv_header=definition.analysis_mode.csv_header,
-        reference_tags_enabled=definition.config.ref_tags.enabled,
+    publication.group_artifacts(
+        GroupArtifactPublication(
+            artifact_plan=context.artifact_plan,
+            group=corpus.label,
+            counter=processed.counter,
+            dictionary=processed.dictionary,
+            reference_tag_counts=corpus.ref_tag_counts,
+            csv_header=definition.analysis_mode.csv_header,
+            reference_tags_enabled=definition.config.ref_tags.enabled,
+        )
     )
     return (
         corpus.label,
@@ -62,7 +58,9 @@ def _analyze_one_corpus(
     )
 
 
-def analyze_corpora(context: RunContext) -> AnalysisResults:
+def analyze_corpora(
+    context: RunContext, *, publication: CountPublicationDependencies
+) -> AnalysisResults:
     definition = context.session.corpus.plan.definition
     postprocessing = load_postprocessing_resources(definition)
     cache_stats = analysis_execution.create_analysis_cache_stats(context)
@@ -72,6 +70,7 @@ def analyze_corpora(context: RunContext) -> AnalysisResults:
             corpus=corpus,
             postprocessing=postprocessing,
             cache_stats=cache_stats,
+            publication=publication,
         )
         for corpus in context.session.corpus.corpora
     )
