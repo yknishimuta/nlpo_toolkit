@@ -6,11 +6,10 @@ from collections.abc import Mapping
 from nlpo_toolkit.immutable_collections import freeze_count_mapping, freeze_mapping
 
 import nlpo_toolkit.nlp.vocabulary as vocabulary
-
-from .. import dictcheck
 from ..planning.models import AnalysisPlan
 from .dictionary import DictionaryClassification, classify_dictionary_entries
 from .lemma_normalization import apply_lemma_normalization
+from .lemma_normalization_io import load_lemma_normalization_map
 
 
 @dataclass(frozen=True)
@@ -37,7 +36,7 @@ class PostprocessingResources:
 def load_postprocessing_resources(plan: AnalysisPlan) -> PostprocessingResources:
     normalization_path = plan.config_files.path("dictcheck.lemma_normalize")
     normalization_map = (
-        dictcheck.load_lemma_normalize_map(normalization_path)
+        load_lemma_normalization_map(normalization_path)
         if normalization_path is not None
         else None
     )

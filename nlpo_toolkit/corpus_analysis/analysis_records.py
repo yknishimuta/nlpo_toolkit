@@ -6,15 +6,13 @@ It must not depend on token artifact or diagnostic trace serialization.
 
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Collection, Iterable, Iterator, Sequence
+from typing import Iterator
 
 from nlpo_toolkit.nlp.contracts import NLPBackend, NLPDocument, NLPSentence
 from nlpo_toolkit.nlp.roman_numerals import (
     effective_roman_exceptions,
-    normalize_roman_exceptions,
     should_drop_roman_numeral,
 )
 from .analysis_policy import (
@@ -27,10 +25,8 @@ __all__ = [
     "AnalysisOptions",
     "NLPAnalysisRecord",
     "TokenRecord",
-    "counter_from_token_records",
     "evaluate_analysis_record",
     "iter_nlp_analysis_records_from_text",
-    "iter_token_records",
 ]
 
 
@@ -82,7 +78,6 @@ class AnalysisOptions:
     min_token_length: int = 0
     drop_roman_numerals: bool = False
     roman_exceptions: frozenset[str] = frozenset()
-    ref_tag_detector: Callable[[str], str] | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "source_files", tuple(self.source_files))
@@ -178,7 +173,6 @@ def evaluate_analysis_record(
         use_lemma=options.use_lemma,
         configured_exceptions=options.roman_exceptions,
     )
-    ref_tag = ""
     exclusion_reason: str | None = None
     if key is None:
         exclusion_reason = "missing_key"
@@ -192,10 +186,6 @@ def evaluate_analysis_record(
         effective_exceptions=effective_exceptions,
     ):
         exclusion_reason = "roman_numeral"
-    elif options.ref_tag_detector is not None:
-        ref_tag = options.ref_tag_detector(key)
-        if ref_tag:
-            exclusion_reason = "reference_tag"
 
     return TokenRecord(
         group=options.group,
@@ -216,49 +206,5 @@ def evaluate_analysis_record(
         analysis_key=key,
         included=exclusion_reason is None,
         exclusion_reason=exclusion_reason,
-        ref_tag=ref_tag or None,
+        ref_tag=None,
     )
-
-
-def iter_token_records(
-    *,
-    text: str,
-    nlp: NLPBackend,
-    group: str,
-    source_files: Sequence[Path],
-    use_lemma: bool,
-    upos_targets: Collection[str],
-    min_token_length: int = 0,
-    drop_roman_numerals: bool = False,
-    roman_exceptions: Collection[str] | None = None,
-    ref_tag_detector: Callable[[str], str] | None = None,
-    ref_tag_counter: Counter[str] | None = None,
-    extraction_policy: AnalysisExtractionPolicy = DEFAULT_ANALYSIS_EXTRACTION_POLICY,
-) -> Iterator[TokenRecord]:
-    options = AnalysisOptions(
-        group=group,
-        source_files=tuple(source_files),
-        use_lemma=use_lemma,
-        upos_targets=frozenset(upos_targets),
-        min_token_length=min_token_length,
-        drop_roman_numerals=drop_roman_numerals,
-        roman_exceptions=normalize_roman_exceptions(roman_exceptions or ()),
-        ref_tag_detector=ref_tag_detector,
-    )
-    for record in iter_nlp_analysis_records_from_text(
-        text=text,
-        nlp=nlp,
-        policy=extraction_policy,
-    ):
-        evaluated = evaluate_analysis_record(record, options=options)
-        if ref_tag_counter is not None and evaluated.ref_tag is not None:
-            ref_tag_counter[evaluated.ref_tag] += 1
-        yield evaluated
-
-
-def counter_from_token_records(records: Iterable[TokenRecord]) -> Counter[str]:
-    counter: Counter[str] = Counter()
-    for record in records:
-        if record.included and record.analysis_key:
-            counter[record.analysis_key] += 1
-    return counter

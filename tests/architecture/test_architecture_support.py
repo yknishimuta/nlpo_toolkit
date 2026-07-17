@@ -11,6 +11,7 @@ from .support.module_graph import (
 from .support.rules import DependencyRule, format_violations
 from .support.source_checks import (
     find_cross_module_private_imports,
+    find_forbidden_identifiers,
     find_mutable_fields_in_frozen_models,
 )
 from .support.module_roles import (
@@ -141,6 +142,29 @@ def build() -> list[str]:
     assert "class: FrozenValue" in violations[0].qualified_name
     assert "field: bad" in violations[0].qualified_name
     assert "annotation: list[str]" in violations[0].qualified_name
+
+
+def test_forbidden_identifier_check_finds_definitions_fields_imports_and_accesses(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "legacy.py"
+    _write(
+        source,
+        """from package import old_import
+__all__ = ["old_function"]
+class Model:
+    old_field: str
+def old_function():
+    return module.old_attribute
+""",
+    )
+    violations = find_forbidden_identifiers(
+        (source,),
+        names={"old_import", "old_field", "old_function", "old_attribute"},
+    )
+    assert {item.qualified_name for item in violations} == {
+        "old_import", "old_field", "old_function", "old_attribute"
+    }
 
 
 def test_module_role_exact_and_recursive_matching_is_segment_aware() -> None:

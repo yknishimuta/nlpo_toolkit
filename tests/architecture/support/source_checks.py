@@ -205,3 +205,56 @@ def find_mutable_fields_in_frozen_models(
                     )
                 )
     return tuple(sorted(violations, key=lambda item: (item.qualified_name, item.line_number)))
+
+
+def find_forbidden_identifiers(
+    paths: Iterable[Path], *, names: Collection[str]
+) -> tuple[SourceViolation, ...]:
+    violations: list[SourceViolation] = []
+    forbidden = set(names)
+    for path, tree in _trees(paths):
+        parents = {
+            child: parent
+            for parent in ast.walk(tree)
+            for child in ast.iter_child_nodes(parent)
+        }
+        for node in ast.walk(tree):
+            found: str | None = None
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                found = node.name if node.name in forbidden else None
+            elif isinstance(node, ast.Name) and node.id in forbidden:
+                parent = parents.get(node)
+                if not isinstance(parent, ast.Attribute) or parent.value is not node:
+                    found = node.id
+            elif isinstance(node, ast.Attribute) and node.attr in forbidden:
+                found = node.attr
+            elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                for alias in node.names:
+                    local_name = alias.asname or alias.name.rsplit(".", 1)[-1]
+                    if local_name in forbidden:
+                        violations.append(
+                            SourceViolation(
+                                "removed-legacy-api", path, node.lineno, local_name,
+                                "Removed legacy APIs must not be restored or referenced.",
+                            )
+                        )
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                parent = parents.get(node)
+                if node.value in forbidden and isinstance(parent, (ast.List, ast.Tuple, ast.Set)):
+                    for statement in tree.body:
+                        if (
+                            isinstance(statement, ast.Assign)
+                            and statement.value is parent
+                            and any(isinstance(target, ast.Name) and target.id == "__all__" for target in statement.targets)
+                        ):
+                            found = node.value
+                            break
+            if found is not None:
+                violations.append(
+                    SourceViolation(
+                        "removed-legacy-api", path, node.lineno, found,
+                        "Removed legacy APIs must not be restored or referenced.",
+                    )
+                )
+    unique = {(item.source_path, item.line_number, item.qualified_name): item for item in violations}
+    return tuple(sorted(unique.values(), key=lambda item: (str(item.source_path), item.line_number, item.qualified_name)))

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import shutil
 
-from ..archive_types import ArchivedFileCounts, RunArchiveRequest, RunArchiveResult
+from .contracts import ArchivedFileCounts, RunArchiveRequest, RunArchiveResult
 from ..count_result import CountRunResult
 from .copying import copy_archive_inventory
 from .errors import RunArchiveError

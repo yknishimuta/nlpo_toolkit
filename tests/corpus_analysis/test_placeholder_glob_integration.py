@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nlpo_toolkit.corpus_analysis import preprocess as local_mod
-from nlpo_toolkit.corpus_analysis.io_utils import expand_globs
+from nlpo_toolkit.corpus_analysis.config.models import GroupConfig
+from nlpo_toolkit.corpus_analysis.corpus import resolve_group_files
 
 
 def test_placeholder_expand_then_glob_finds_files(tmp_path: Path):
@@ -19,12 +19,13 @@ def test_placeholder_expand_then_glob_finds_files(tmp_path: Path):
     # not matched (suffix違い)
     (cleaned_dir / "c.md").write_text("c", encoding="utf-8")
 
-    patterns = ["{cleaned_dir}/*.txt"]
+    files = resolve_group_files(
+        groups={"g": GroupConfig(files=("{cleaned_dir}/*.txt",))},
+        project_root=tmp_path,
+        cleaned_dir=cleaned_dir,
+    )["g"]
 
-    expanded = local_mod.expand_cleaned_dir_placeholders(patterns, cleaned_dir)
-    files = expand_globs(expanded)
-
-    assert files == sorted([f1.resolve(), f2.resolve()])
+    assert files == tuple(sorted([f1.resolve(), f2.resolve()]))
 
 
 def test_placeholder_expand_then_glob_recursive(tmp_path: Path):
@@ -35,9 +36,10 @@ def test_placeholder_expand_then_glob_recursive(tmp_path: Path):
     f1 = cleaned_dir / "sub" / "x.txt"
     f1.write_text("x", encoding="utf-8")
 
-    patterns = ["{cleaned_dir}/**/*.txt"]
+    files = resolve_group_files(
+        groups={"g": GroupConfig(files=("{cleaned_dir}/**/*.txt",))},
+        project_root=tmp_path,
+        cleaned_dir=cleaned_dir,
+    )["g"]
 
-    expanded = local_mod.expand_cleaned_dir_placeholders(patterns, cleaned_dir)
-    files = expand_globs(expanded)
-
-    assert files == [f1.resolve()]
+    assert files == (f1.resolve(),)

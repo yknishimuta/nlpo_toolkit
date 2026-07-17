@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
 
 from nlpo_toolkit.corpus_analysis.analysis_records import (
     AnalysisOptions,
     NLPAnalysisRecord,
-    TokenRecord,
-    counter_from_token_records,
     evaluate_analysis_record,
     iter_nlp_analysis_records_from_text,
 )
@@ -44,36 +41,9 @@ def _options(**overrides) -> AnalysisOptions:
         "min_token_length": 0,
         "drop_roman_numerals": False,
         "roman_exceptions": frozenset(),
-        "ref_tag_detector": None,
     }
     data.update(overrides)
     return AnalysisOptions(**data)
-
-
-def _token_record(**overrides) -> TokenRecord:
-    data = {
-        "group": "text",
-        "source_file": "input/text.txt",
-        "section": None,
-        "chunk_index": 0,
-        "sentence_index": 0,
-        "token_index": 0,
-        "global_token_index": 0,
-        "char_start_in_chunk": 0,
-        "char_end_in_chunk": 4,
-        "char_start_in_text": 0,
-        "char_end_in_text": 4,
-        "sentence": "Arma virumque.",
-        "token": "Arma",
-        "lemma": "arma",
-        "upos": "NOUN",
-        "analysis_key": "arma",
-        "included": True,
-        "exclusion_reason": None,
-        "ref_tag": None,
-    }
-    data.update(overrides)
-    return TokenRecord(**data)
 
 
 def test_nlp_analysis_record_fields_are_stable() -> None:
@@ -194,35 +164,6 @@ def test_evaluate_analysis_record_roman_numeral_filter_and_exceptions() -> None:
     assert configured_exception.included is True
     assert drop_disabled.included is True
     assert surface_builtin_exception.included is True
-
-
-def test_evaluate_analysis_record_ref_tag_excludes_without_mutable_options() -> None:
-    record = evaluate_analysis_record(
-        _analysis_record(token="Arma", lemma="arma"),
-        options=_options(
-            ref_tag_detector=lambda key: "REF" if key == "arma" else "",
-        ),
-    )
-
-    assert record.ref_tag == "REF"
-    assert record.included is False
-    assert record.exclusion_reason == "reference_tag"
-
-
-def test_counter_from_token_records_counts_only_included_analysis_keys() -> None:
-    records = [
-        _token_record(analysis_key="arma", included=True),
-        _token_record(analysis_key="arma", included=True, global_token_index=1),
-        _token_record(
-            analysis_key="amo",
-            included=False,
-            exclusion_reason="upos_not_targeted",
-            global_token_index=2,
-        ),
-        _token_record(analysis_key=None, included=True, global_token_index=3),
-    ]
-
-    assert counter_from_token_records(records) == Counter({"arma": 2})
 
 
 class _FakeBackend:

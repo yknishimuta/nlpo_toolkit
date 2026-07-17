@@ -134,6 +134,12 @@ the engine extracts analysis records once per prepared corpus and applies the
 eligibility filter once. Lexical, UPOS, and MFW modules then calculate their
 columns from that shared filtered record population.
 
+The canonical token-analysis path is
+`iter_nlp_analysis_records_from_text()` followed by
+`evaluate_analysis_record()`. Reference tags are removed and counted during
+corpus preparation before prepared text reaches NLP; token evaluation does not
+repeat reference-tag detection.
+
 Group analysis data has one canonical store: the immutable
 `AnalysisResults.groups` mapping. Generated-file inventory is separate and has
 one canonical store of its own: Count builds an immutable `ArtifactPlan` after
@@ -144,8 +150,10 @@ artifact and metadata, partition validation, group comparison, summary, and run
 metadata outputs. Every planned path is checked together for collisions before
 any output is written.
 
-Count postprocessing is I/O-free: it applies lemma normalization and dictionary
-classification to `Counter` values and returns typed results. Artifact writers
+Count postprocessing applies lemma normalization and dictionary classification
+to immutable count mappings and returns typed results. The lemma-normalization
+TSV loader is an infrastructure boundary owned by the postprocessing package.
+Artifact writers
 receive a `PlannedArtifact`, validate its `ArtifactKind`, and publish UTF-8
 output through a same-directory temporary file; writers never reconstruct
 filenames. Reporting is split into typed report models, a pure summary renderer,
@@ -155,6 +163,10 @@ publishes `summary.txt` before `run_meta.json`, and metadata
 `run_meta.json` itself. Analysis, partition, and comparison results do not carry
 generated-path inventories; `CountRunResult` exposes only read-only views derived
 from its single `artifact_plan` field.
+
+Archive request/result contracts are owned by `corpus_analysis.archive`; Count
+and archive adapters depend on that package-level contract rather than a generic
+top-level types module.
 
 Count execution state is owned by `count_context`, and the final Count result is
 owned by `count_result`. Partition-validation and configured-comparison run-level

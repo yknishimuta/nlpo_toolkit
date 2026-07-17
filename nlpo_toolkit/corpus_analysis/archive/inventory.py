@@ -5,7 +5,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from ..archive_types import RunArchiveRequest
+from .contracts import RunArchiveRequest
 from ..config_references import ConfigArchivePolicy
 from ..count_result import CountRunResult
 from .errors import RunArchiveError

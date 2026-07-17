@@ -1,4 +1,4 @@
-"""Data contracts shared by archive ports and the archive implementation."""
+"""Request and result contracts owned by the archive package."""
 
 from __future__ import annotations
 
@@ -16,10 +16,10 @@ class RunArchiveRequest:
     command_line: tuple[str, ...] = ()
     created_at: datetime | None = None
 
-
     def __post_init__(self) -> None:
         if not isinstance(self.archive_root, Path):
             raise TypeError("archive_root must be a Path")
+        object.__setattr__(self, "command_line", tuple(self.command_line))
 
 
 @dataclass(frozen=True)
@@ -31,7 +31,14 @@ class ArchivedFileCounts:
     config_snapshots: int = 0
 
     def __post_init__(self) -> None:
-        if any(value < 0 for value in (self.outputs, self.traces, self.inputs, self.cleaned, self.config_snapshots)):
+        values = (
+            self.outputs,
+            self.traces,
+            self.inputs,
+            self.cleaned,
+            self.config_snapshots,
+        )
+        if any(value < 0 for value in values):
             raise ValueError("Archived file counts must be non-negative")
 
 

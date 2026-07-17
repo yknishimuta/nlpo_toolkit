@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .archive.errors import RunArchiveError
-from .archive_types import RunArchiveRequest, RunArchiveResult
+from .archive.contracts import RunArchiveRequest, RunArchiveResult
 from .config_references import ConfigReferenceError
 from .corpus_errors import CorpusPreparationError
 from .ports import CountCommandDependencies

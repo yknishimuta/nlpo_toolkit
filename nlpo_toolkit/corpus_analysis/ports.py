@@ -18,7 +18,7 @@ from .config import AppConfig, NLPConfig
 from .publication_ports import CountPublicationDependencies
 
 if TYPE_CHECKING:
-    from .archive_types import RunArchiveRequest, RunArchiveResult
+    from .archive.contracts import RunArchiveRequest, RunArchiveResult
     from .requests import CorpusPreparationRequest
     from .count_result import CountRunResult
 

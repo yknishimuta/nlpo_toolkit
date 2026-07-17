@@ -13,12 +13,21 @@ from .config_references import ResolvedConfigFiles
 from .corpus_errors import CorpusPreparationError
 from .io_utils import expand_globs, read_concat
 from .normalizer import normalize_text
-from .preprocess import expand_cleaned_dir_placeholders
 from .ref_tags import RefTagPattern, load_ref_tag_patterns, strip_and_count_ref_tags
 
 
 _LABEL_SAFE_RE = re.compile(r"[^0-9A-Za-z]+")
 _IGNORED_CLEANED_NAMES = {".DS_Store", ".gitkeep"}
+
+
+def _expand_cleaned_dir_placeholders(
+    patterns: Sequence[str], cleaned_dir: Path | None
+) -> tuple[str, ...]:
+    if cleaned_dir is None:
+        return tuple(patterns)
+    return tuple(
+        pattern.replace("{cleaned_dir}", str(cleaned_dir)) for pattern in patterns
+    )
 
 
 @dataclass(frozen=True)
@@ -92,7 +101,7 @@ def resolve_group_files(
             else str(p)
             for p in group_def.files
         ]
-        patterns = expand_cleaned_dir_placeholders(patterns, cleaned_dir)
+        patterns = _expand_cleaned_dir_placeholders(patterns, cleaned_dir)
         resolved[group_name] = tuple(expand_globs(patterns))
     return MappingProxyType(resolved)
 

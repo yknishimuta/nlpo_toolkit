@@ -9,7 +9,7 @@ from nlpo_toolkit.corpus_analysis.archive.errors import RunArchiveError
 from nlpo_toolkit.corpus_analysis.archive.file_metadata import file_sha256
 from nlpo_toolkit.corpus_analysis.archive.models import ArchivedFile
 from nlpo_toolkit.corpus_analysis.archive.service import create_run_archive
-from nlpo_toolkit.corpus_analysis.archive_types import (
+from nlpo_toolkit.corpus_analysis.archive.contracts import (
     ArchivedFileCounts,
     RunArchiveRequest,
 )
