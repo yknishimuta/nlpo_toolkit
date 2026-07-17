@@ -4,7 +4,7 @@ from . import analysis_execution
 from .analysis_cache.stats import AnalysisCacheRunStats
 from .analysis_results import AnalysisResults, GroupAnalysisResult
 from .corpus import PreparedCorpus
-from .runner_types import RunContext
+from .count_context import CountRunContext
 from .publication_models import GroupArtifactPublication
 from .publication_ports import CountPublicationDependencies
 from .postprocessing.service import (
@@ -18,7 +18,7 @@ __all__ = ["analyze_corpora"]
 
 def _analyze_one_corpus(
     *,
-    context: RunContext,
+    context: CountRunContext,
     corpus: PreparedCorpus,
     postprocessing: PostprocessingResources,
     cache_stats: AnalysisCacheRunStats,
@@ -59,7 +59,7 @@ def _analyze_one_corpus(
 
 
 def analyze_corpora(
-    context: RunContext, *, publication: CountPublicationDependencies
+    context: CountRunContext, *, publication: CountPublicationDependencies
 ) -> AnalysisResults:
     definition = context.session.corpus.plan.definition
     postprocessing = load_postprocessing_resources(definition)

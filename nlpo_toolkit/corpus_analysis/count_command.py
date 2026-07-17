@@ -8,7 +8,7 @@ from .archive_types import RunArchiveRequest, RunArchiveResult
 from .config_references import ConfigReferenceError
 from .corpus_errors import CorpusPreparationError
 from .ports import CountCommandDependencies
-from .runner_types import RunResult
+from .count_result import CountRunResult
 from .requests import CorpusPreparationRequest
 
 
@@ -29,7 +29,7 @@ class CountRequest:
 
 @dataclass(frozen=True)
 class CountCommandResult:
-    run: RunResult
+    run: CountRunResult
     archive: RunArchiveResult | None
 
     @property

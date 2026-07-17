@@ -26,7 +26,7 @@ from nlpo_toolkit.corpus_analysis.ports import CountCommandDependencies
 from nlpo_toolkit.corpus_analysis.planning.models import (
     AnalysisMode, AnalysisPlan, ResolvedAnalysisPlan,
 )
-from nlpo_toolkit.corpus_analysis.runner_types import RunResult
+from nlpo_toolkit.corpus_analysis.count_result import CountRunResult
 from nlpo_toolkit.corpus_analysis.artifacts.models import (
     ArtifactKind, ArtifactPlan, PlannedArtifact,
 )
@@ -40,7 +40,7 @@ def make_run_result(
     input_files: tuple[Path, ...] = (),
     cleaned_files: tuple[Path, ...] = (),
     config_references: tuple[ConfigFileReference, ...] = (),
-) -> RunResult:
+) -> CountRunResult:
     config_path = tmp_path / "config.yml"
     config_path.write_text("groups: {g: {files: []}}\n", encoding="utf-8")
     config = ensure_app_config({"groups": {"g": {"files": []}}})
@@ -73,7 +73,7 @@ def make_run_result(
         PlannedArtifact(ArtifactKind.DIAGNOSTIC_TRACE, path, group=f"trace-{index}")
         for index, path in enumerate(trace_files)
     )
-    return RunResult(
+    return CountRunResult(
         exit_code=0,
         plan=plan,
         groups_files={"g": tuple(input_files or cleaned_files)},

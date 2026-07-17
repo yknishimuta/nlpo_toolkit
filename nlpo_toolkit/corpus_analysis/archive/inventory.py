@@ -7,7 +7,7 @@ from pathlib import Path
 
 from ..archive_types import RunArchiveRequest
 from ..config_references import ConfigArchivePolicy
-from ..runner_types import RunResult
+from ..count_result import CountRunResult
 from .errors import RunArchiveError
 from .models import ArchiveCopySource, ArchiveInventory
 from ..artifacts.models import ArtifactKind
@@ -39,7 +39,7 @@ def _copy_sources(paths: tuple[Path, ...]) -> tuple[ArchiveCopySource, ...]:
 
 
 def collect_archive_inventory(
-    *, run_result: RunResult, request: RunArchiveRequest
+    *, run_result: CountRunResult, request: RunArchiveRequest
 ) -> ArchiveInventory:
     definition = run_result.plan.definition
     project_root = definition.project_root

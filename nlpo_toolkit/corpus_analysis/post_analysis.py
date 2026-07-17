@@ -11,11 +11,11 @@ from .publication_models import (
     PartitionArtifactPublication,
 )
 from .publication_ports import ComparisonArtifactPublisher, PartitionArtifactPublisher
-from .runner_types import (
-    ComparisonRunResult,
-    PartitionRunResult,
-    PartitionRunMismatch,
-    RunContext,
+from .comparison_run_results import ConfiguredComparisonsRunResult
+from .count_context import CountRunContext
+from .partition_run_results import (
+    PartitionMismatchSummary,
+    PartitionValidationRunResult,
 )
 
 
@@ -25,20 +25,20 @@ def _group_counters(analysis: AnalysisResults) -> dict[str, Counter[str]]:
 
 def execute_partition_validations(
     *,
-    context: RunContext,
+    context: CountRunContext,
     analysis: AnalysisResults,
     publisher: PartitionArtifactPublisher,
-) -> PartitionRunResult:
+) -> PartitionValidationRunResult:
     plan = context.session.corpus.plan
     specs = plan.definition.config.validations.partitions
     partition_results = validate_partitions(specs, _group_counters(analysis))
     exit_code = 0
-    mismatches: list[PartitionRunMismatch] = []
+    mismatches: list[PartitionMismatchSummary] = []
 
     for spec, result in zip(specs, partition_results):
         if not result.exact_match:
             level = "ERROR" if spec.on_mismatch == "error" else "WARN"
-            mismatches.append(PartitionRunMismatch(
+            mismatches.append(PartitionMismatchSummary(
                 spec.name, level, result.token_delta, result.mismatched_items
             ))
             if spec.on_mismatch == "error":
@@ -52,7 +52,7 @@ def execute_partition_validations(
         )
     )
 
-    return PartitionRunResult(
+    return PartitionValidationRunResult(
         validations=tuple(partition_results),
         exit_code=exit_code,
         mismatches=tuple(mismatches),
@@ -61,10 +61,10 @@ def execute_partition_validations(
 
 def execute_group_comparisons(
     *,
-    context: RunContext,
+    context: CountRunContext,
     analysis: AnalysisResults,
     publisher: ComparisonArtifactPublisher,
-) -> ComparisonRunResult:
+) -> ConfiguredComparisonsRunResult:
     plan = context.session.corpus.plan
     definition = plan.definition
     counters = _group_counters(analysis)
@@ -82,6 +82,6 @@ def execute_group_comparisons(
         )
     )
 
-    return ComparisonRunResult(
+    return ConfiguredComparisonsRunResult(
         comparisons=tuple(comparison_results),
     )

@@ -7,7 +7,7 @@ from .execution_session import (
 from .io_utils import ensure_out_dir
 from .ports import RunnerDependencies
 from .requests import CorpusPreparationRequest
-from .runner_types import RunContext
+from .count_context import CountRunContext
 from .artifacts.planning import build_count_artifact_plan
 
 
@@ -15,7 +15,7 @@ def prepare_run_context(
     request: CorpusPreparationRequest,
     *,
     dependencies: RunnerDependencies,
-) -> RunContext:
+) -> CountRunContext:
     corpus_session = prepare_count_corpus_session(
         request,
         dependencies=dependencies.corpus,
@@ -28,7 +28,7 @@ def prepare_run_context(
         dependencies=dependencies.nlp,
     )
     ensure_out_dir(corpus_session.plan.definition.out_dir)
-    return RunContext(
+    return CountRunContext(
         session=nlp_session,
         artifact_plan=artifact_plan,
     )

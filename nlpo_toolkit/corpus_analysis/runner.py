@@ -3,17 +3,17 @@ from __future__ import annotations
 from . import post_analysis, runtime
 from .analysis_orchestration import analyze_corpora
 from .ports import RunnerDependencies
-from .runner_types import RunResult
+from .count_result import CountRunResult
 from .requests import CorpusPreparationRequest
 from .reporting.service import build_run_report
-from .result_builder import build_run_result
+from .count_result_builder import build_count_run_result
 
 
 def run(
     request: CorpusPreparationRequest,
     *,
     dependencies: RunnerDependencies,
-) -> RunResult:
+) -> CountRunResult:
     """Core runner. Dependencies are injectable for CLI and tests."""
     context = runtime.prepare_run_context(
         request,
@@ -37,7 +37,7 @@ def run(
         comparisons=comparisons,
     )
     dependencies.publication.run_report(report)
-    return build_run_result(
+    return build_count_run_result(
         context=context,
         analysis=analysis,
         partitions=partitions,

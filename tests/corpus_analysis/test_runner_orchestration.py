@@ -47,7 +47,7 @@ def test_run_orchestrates_steps_in_order(monkeypatch, tmp_path: Path) -> None:
     )
     monkeypatch.setattr(
         runner_mod,
-        "build_run_result",
+        "build_count_run_result",
         lambda **kwargs: SimpleNamespace(exit_code=partitions.exit_code),
     )
 

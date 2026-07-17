@@ -153,8 +153,14 @@ a pure run-metadata builder/serializer, and a publication service. The service
 publishes `summary.txt` before `run_meta.json`, and metadata
 `generated_outputs` comes directly from `ArtifactPlan`, including
 `run_meta.json` itself. Analysis, partition, and comparison results do not carry
-generated-path inventories; `RunResult` exposes only read-only views derived
+generated-path inventories; `CountRunResult` exposes only read-only views derived
 from its single `artifact_plan` field.
+
+Count execution state is owned by `count_context`, and the final Count result is
+owned by `count_result`. Partition-validation and configured-comparison run-level
+results live in their own application-result modules, independently of the
+services that construct them. Archive consumes `CountRunResult` but does not own
+or redefine it.
 
 To validate the config without running preprocessing or NLP, use `--dry-run`:
 
@@ -857,7 +863,7 @@ trace artifacts by their typed kind and treats every other planned artifact as
 an output. It does not infer kinds from filenames or rescan the output directory.
 
 Internally, archive inventory validates and classifies the `ArtifactPlan` held
-by `RunResult`, copying executes only the resulting copy plan, and manifest generation
+by `CountRunResult`, copying executes only the resulting copy plan, and manifest generation
 converts typed file and Git metadata into the existing schema. A thin archive
 service orchestrates those stages and removes only the directory it created if
 any stage fails.

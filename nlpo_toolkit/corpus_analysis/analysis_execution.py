@@ -24,7 +24,7 @@ from .corpus import PreparedCorpus
 from .artifacts.models import ArtifactKind
 from .publication_models import RecordArtifactPublicationRequest
 from .publication_ports import RecordArtifactSession, RecordArtifactSessionFactory
-from .runner_types import RunContext
+from .count_context import CountRunContext
 from .token_artifact.schema import (
     TokenArtifactDescriptor, TokenArtifactFilterDescriptor,
     TokenArtifactMetadata, TokenArtifactNLPDescriptor,
@@ -63,7 +63,7 @@ class AnalysisRecordSource:
     cache_key: str
 
 
-def _analysis_cache_dir(context: RunContext) -> Path:
+def _analysis_cache_dir(context: CountRunContext) -> Path:
     definition = context.session.corpus.plan.definition
     directory = Path(definition.config.analysis_cache.directory)
     if not directory.is_absolute():
@@ -71,7 +71,7 @@ def _analysis_cache_dir(context: RunContext) -> Path:
     return directory.resolve()
 
 
-def create_analysis_cache_stats(context: RunContext) -> AnalysisCacheRunStats:
+def create_analysis_cache_stats(context: CountRunContext) -> AnalysisCacheRunStats:
     return AnalysisCacheRunStats(
         enabled=context.session.corpus.plan.definition.config.analysis_cache.enabled,
         directory=str(_analysis_cache_dir(context)),
@@ -97,7 +97,7 @@ def build_analysis_fingerprint(
 
 def build_analysis_options(
     *,
-    context: RunContext,
+    context: CountRunContext,
     corpus: PreparedCorpus,
 ) -> AnalysisOptions:
     definition = context.session.corpus.plan.definition
@@ -116,7 +116,7 @@ def build_analysis_options(
 @contextmanager
 def obtain_analysis_records(
     *,
-    context: RunContext,
+    context: CountRunContext,
     text: str,
 ) -> Iterator[AnalysisRecordSource]:
     session = context.session
@@ -175,7 +175,7 @@ def consume_analysis_records(
 
 
 def _token_artifact_descriptor(
-    *, context: RunContext, corpus: PreparedCorpus
+    *, context: CountRunContext, corpus: PreparedCorpus
 ) -> TokenArtifactDescriptor:
     definition = context.session.corpus.plan.definition
     return TokenArtifactDescriptor(
@@ -216,7 +216,7 @@ def _update_cache_stats(
 
 def execute_record_analysis(
     *,
-    context: RunContext,
+    context: CountRunContext,
     corpus: PreparedCorpus,
     text: str,
     publication: RecordArtifactSessionFactory,

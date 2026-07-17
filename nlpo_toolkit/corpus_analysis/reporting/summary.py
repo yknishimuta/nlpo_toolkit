@@ -3,7 +3,9 @@ from __future__ import annotations
 from nlpo_toolkit.nlp.contracts import NLPBackendInfo
 
 from ..analysis_results import AnalysisResults
-from ..runner_types import ComparisonRunResult, PartitionRunResult, RunContext
+from ..comparison_run_results import ConfiguredComparisonsRunResult
+from ..count_context import CountRunContext
+from ..partition_run_results import PartitionValidationRunResult
 
 
 def render_backend_info(info: NLPBackendInfo) -> list[str]:
@@ -27,7 +29,7 @@ def _format_normalization(normalization: object) -> str:
     return " ".join(f"{key}={values[key]}" for key in keys)
 
 
-def render_run_summary(*, context: RunContext, analysis: AnalysisResults, partitions: PartitionRunResult, comparisons: ComparisonRunResult) -> str:
+def render_run_summary(*, context: CountRunContext, analysis: AnalysisResults, partitions: PartitionValidationRunResult, comparisons: ConfiguredComparisonsRunResult) -> str:
     definition = context.session.corpus.plan.definition
     lines = ["# Summary", "", f"language: {definition.config.nlp.language}", f"stanza_package: {definition.config.nlp.stanza_package}", f"nlp_backend: {context.session.backend.info.name}", f"analysis_unit: {definition.analysis_mode.unit}", f"normalization: {_format_normalization(definition.config.normalization)}", ""]
     lines.extend(render_backend_info(context.session.backend.info))

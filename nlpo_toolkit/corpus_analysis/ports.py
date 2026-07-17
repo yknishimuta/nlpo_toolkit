@@ -20,7 +20,7 @@ from .publication_ports import CountPublicationDependencies
 if TYPE_CHECKING:
     from .archive_types import RunArchiveRequest, RunArchiveResult
     from .requests import CorpusPreparationRequest
-    from .runner_types import RunResult
+    from .count_result import CountRunResult
 
 
 ConfigLoader = Callable[[Path], AppConfig]
@@ -32,7 +32,7 @@ class ArchiveCreator(Protocol):
     def __call__(
         self,
         *,
-        run_result: RunResult,
+        run_result: CountRunResult,
         request: RunArchiveRequest,
     ) -> RunArchiveResult: ...
 
@@ -43,7 +43,7 @@ class CountRunner(Protocol):
         request: CorpusPreparationRequest,
         *,
         dependencies: RunnerDependencies,
-    ) -> RunResult: ...
+    ) -> CountRunResult: ...
 
 
 @dataclass(frozen=True)

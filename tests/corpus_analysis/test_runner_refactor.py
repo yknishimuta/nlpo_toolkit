@@ -18,9 +18,11 @@ from nlpo_toolkit.corpus_analysis.config import ensure_app_config
 from nlpo_toolkit.corpus_analysis.reporting.environment import collect_runtime_environment
 from nlpo_toolkit.corpus_analysis.reporting.metadata import build_run_metadata, run_metadata_to_json_value
 from nlpo_toolkit.corpus_analysis.reporting.summary import render_run_summary
-from nlpo_toolkit.corpus_analysis.runner_types import (
-    ComparisonRunResult,
-    PartitionRunResult,
+from nlpo_toolkit.corpus_analysis.comparison_run_results import (
+    ConfiguredComparisonsRunResult,
+)
+from nlpo_toolkit.corpus_analysis.partition_run_results import (
+    PartitionValidationRunResult,
 )
 from nlpo_toolkit.corpus_analysis.runtime import prepare_run_context
 from nlpo_toolkit.nlp.contracts import NLPDocument, NLPSentence, NLPToken
@@ -262,8 +264,8 @@ def test_summary_lines_and_metadata_include_existing_fields(tmp_path: Path) -> N
         )),),
         cache_stats=AnalysisCacheRunStats(enabled=False, directory=""),
     )
-    partitions = PartitionRunResult((), 0)
-    comparisons = ComparisonRunResult(())
+    partitions = PartitionValidationRunResult((), 0)
+    comparisons = ConfiguredComparisonsRunResult(())
 
     lines = render_run_summary(
         context=context,

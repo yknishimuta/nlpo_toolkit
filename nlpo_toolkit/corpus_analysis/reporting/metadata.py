@@ -7,7 +7,9 @@ from nlpo_toolkit.serialization.types import JsonObject, JsonValue
 
 from ..analysis_results import AnalysisResults
 from ..artifacts.models import ArtifactKind
-from ..runner_types import ComparisonRunResult, PartitionRunResult, RunContext
+from ..comparison_run_results import ConfiguredComparisonsRunResult
+from ..count_context import CountRunContext
+from ..partition_run_results import PartitionValidationRunResult
 from .models import (
     AnalysisCacheGroupReport,
     AnalysisCacheReport,
@@ -22,7 +24,7 @@ from .models import (
 )
 
 
-def build_run_metadata(*, context: RunContext, analysis: AnalysisResults, partitions: PartitionRunResult, comparisons: ComparisonRunResult, environment: RuntimeEnvironmentReport) -> RunMetadata:
+def build_run_metadata(*, context: CountRunContext, analysis: AnalysisResults, partitions: PartitionValidationRunResult, comparisons: ConfiguredComparisonsRunResult, environment: RuntimeEnvironmentReport) -> RunMetadata:
     definition = context.session.corpus.plan.definition
     normalization = definition.config.normalization
     canonical = json.dumps(normalization.model_dump(mode="json"), ensure_ascii=False, sort_keys=True)

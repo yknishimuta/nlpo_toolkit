@@ -3,7 +3,7 @@ from __future__ import annotations
 import shutil
 
 from ..archive_types import ArchivedFileCounts, RunArchiveRequest, RunArchiveResult
-from ..runner_types import RunResult
+from ..count_result import CountRunResult
 from .copying import copy_archive_inventory
 from .errors import RunArchiveError
 from .file_metadata import read_external_reference_metadata, read_source_files_metadata
@@ -16,7 +16,7 @@ from .manifest import (
 
 
 def create_run_archive(
-    *, run_result: RunResult, request: RunArchiveRequest
+    *, run_result: CountRunResult, request: RunArchiveRequest
 ) -> RunArchiveResult:
     inventory = collect_archive_inventory(run_result=run_result, request=request)
     archive_created = False
