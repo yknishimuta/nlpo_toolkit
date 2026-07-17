@@ -25,7 +25,7 @@ from nlpo_toolkit.nlp.contracts import (
     NLPSentence,
     NLPToken,
 )
-from nlpo_toolkit.backends.factory import render_backend_info
+from nlpo_toolkit.corpus_analysis.reporting.summary import render_backend_info
 from nlpo_toolkit.backends.stanza_backend import (
     convert_stanza_document_to_common_model,
 )

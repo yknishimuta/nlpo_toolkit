@@ -12,8 +12,6 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from nlpo_toolkit.serialization.types import JsonObject
-
 from nlpo_toolkit.comparison.config import ComparisonSpec
 from nlpo_toolkit.config_model import (
     ConfigModel,
@@ -198,11 +196,3 @@ class AppConfig(ConfigModel):
                 "validations.partitions cannot be used with grouping.mode=per_file"
             )
         return self
-
-    def to_external_dict(self) -> JsonObject:
-        data = self.model_dump(mode="json", by_alias=True)
-        if self.preprocess.kind is None:
-            data.pop("preprocess", None)
-        if self.csv_header is None:
-            data.pop("csv_header", None)
-        return data

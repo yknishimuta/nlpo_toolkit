@@ -2,32 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-from nlpo_toolkit.nlp.contracts import BuiltNLPBackend
 from nlpo_toolkit.nlp.roman_numerals import load_roman_exceptions
 
-from .analysis_policy import AnalysisExtractionPolicy
-from .corpus import PreparedCorpus, prepare_corpora
+from .corpus import prepare_corpora
 from .ports import CorpusExecutionDependencies, NLPExecutionDependencies
 from .planning.build import build_analysis_plan, build_count_plan
 from .planning.models import ResolvedAnalysisPlan
 from .planning.resolve import prepare_analysis_plan, prepare_count_plan
 from .requests import CorpusPreparationRequest
-
-
-@dataclass(frozen=True)
-class CorpusExecutionSession:
-    plan: ResolvedAnalysisPlan
-    corpora: tuple[PreparedCorpus, ...]
-
-
-@dataclass(frozen=True)
-class NLPExecutionSession:
-    corpus: CorpusExecutionSession
-    backend: BuiltNLPBackend
-    extraction_policy: AnalysisExtractionPolicy
-    roman_exceptions: frozenset[str]
+from .session_models import CorpusExecutionSession, NLPExecutionSession
 
 
 def _build_corpus_execution_session(

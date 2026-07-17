@@ -6,7 +6,7 @@ from typing import Mapping
 
 from nlpo_toolkit.nlp.contracts import NLPBackend
 
-from .execution_session import NLPExecutionSession
+from .session_models import NLPExecutionSession
 from .config_references import ConfigFileReference
 from .planning.models import ResolvedAnalysisPlan
 from .artifacts.models import ArtifactKind, ArtifactPlan

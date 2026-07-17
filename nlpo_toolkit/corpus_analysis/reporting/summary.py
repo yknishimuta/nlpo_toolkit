@@ -1,9 +1,22 @@
 from __future__ import annotations
 
-from nlpo_toolkit.backends import render_backend_info
+from nlpo_toolkit.nlp.contracts import NLPBackendInfo
 
 from ..analysis_results import AnalysisResults
 from ..runner_types import ComparisonRunResult, PartitionRunResult, RunContext
+
+
+def render_backend_info(info: NLPBackendInfo) -> list[str]:
+    lines = [
+        f"backend={info.name}",
+        f"language={info.language}",
+        f"device={info.device}",
+    ]
+    if info.package is not None:
+        lines.append(f"package={info.package}")
+    if info.model is not None:
+        lines.append(f"model={info.model}")
+    return lines
 
 
 def _format_normalization(normalization: object) -> str:

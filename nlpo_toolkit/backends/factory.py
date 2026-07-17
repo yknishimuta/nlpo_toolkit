@@ -55,16 +55,3 @@ def create_nlp_backend(
         )
 
     raise NLPBackendConfigError("nlp.backend must be one of: stanza, transformers")
-
-
-def render_backend_info(info: NLPBackendInfo) -> list[str]:
-    lines = [
-        f"backend={info.name}",
-        f"language={info.language}",
-        f"device={info.device}",
-    ]
-    if info.package is not None:
-        lines.append(f"package={info.package}")
-    if info.model is not None:
-        lines.append(f"model={info.model}")
-    return lines
