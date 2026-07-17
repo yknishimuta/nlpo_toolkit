@@ -10,6 +10,14 @@ from .support.module_graph import (
 )
 from .support.rules import DependencyRule, format_violations
 from .support.source_checks import find_cross_module_private_imports
+from .support.module_roles import (
+    ModuleRole,
+    ModuleRolePolicy,
+    find_module_role_issues,
+    find_stale_role_selectors,
+    roles_for_module,
+    validate_role_policies,
+)
 
 
 def _write(path: Path, source: str) -> None:
@@ -104,3 +112,58 @@ def test_private_import_check_is_project_scoped(tmp_path: Path) -> None:
     violations = find_cross_module_private_imports((source,), project_prefix="sample")
     assert {item.qualified_name for item in violations} == {"sample.module._secret", "sample.module._other"}
 
+
+def test_module_role_exact_and_recursive_matching_is_segment_aware() -> None:
+    policies = (
+        ModuleRolePolicy(ModuleRole.DOMAIN, exact_modules=("sample.domain",)),
+        ModuleRolePolicy(ModuleRole.INFRASTRUCTURE, recursive_packages=("sample.adapters",)),
+    )
+    assert roles_for_module("sample.domain", policies) == {ModuleRole.DOMAIN}
+    assert roles_for_module("sample.domain_extra", policies) == set()
+    for module in ("sample.adapters", "sample.adapters.file", "sample.adapters.nested.writer"):
+        assert roles_for_module(module, policies) == {ModuleRole.INFRASTRUCTURE}
+    assert roles_for_module("sample.adapters_extra", policies) == set()
+
+
+def test_module_role_issues_report_missing_overlap_and_stable_order() -> None:
+    policies = (
+        ModuleRolePolicy(ModuleRole.APPLICATION, exact_modules=("sample.overlap",)),
+        ModuleRolePolicy(ModuleRole.INFRASTRUCTURE, exact_modules=("sample.overlap",)),
+    )
+    issues = find_module_role_issues(("sample.z_missing", "sample.overlap", "sample.a_missing"), policies)
+    assert [issue.module for issue in issues] == ["sample.a_missing", "sample.overlap", "sample.z_missing"]
+    assert [issue.kind for issue in issues] == ["unclassified-module", "multiply-classified-module", "unclassified-module"]
+    assert issues[1].matched_roles == (ModuleRole.APPLICATION, ModuleRole.INFRASTRUCTURE)
+
+
+def test_stale_role_selectors_detect_exact_and_recursive() -> None:
+    policies = (
+        ModuleRolePolicy(ModuleRole.DOMAIN, exact_modules=("sample.present", "sample.removed")),
+        ModuleRolePolicy(ModuleRole.INFRASTRUCTURE, recursive_packages=("sample.adapters", "sample.old_adapters")),
+    )
+    stale = find_stale_role_selectors(("sample.present", "sample.adapters.file"), policies)
+    assert [(item.selector_kind, item.selector) for item in stale] == [
+        ("exact", "sample.removed"),
+        ("recursive", "sample.old_adapters"),
+    ]
+
+
+def test_role_policy_validation_rejects_bad_selectors() -> None:
+    policies = (
+        ModuleRolePolicy(
+            ModuleRole.SHARED,
+            exact_modules=("", "outside.project", "sample.duplicate", "sample.duplicate"),
+            recursive_packages=("nlpo_toolkit", "nlpo_toolkit.bad.*", "nlpo_toolkit/bad"),
+        ),
+        ModuleRolePolicy(
+            ModuleRole.DOMAIN,
+            exact_modules=("sample.duplicate",),
+        ),
+    )
+    messages = "\n".join(str(problem) for problem in validate_role_policies(policies))
+    assert "duplicate exact selector" in messages
+    assert "empty exact selector" in messages
+    assert "must start with nlpo_toolkit" in messages
+    assert "catch-all" in messages
+    assert "invalid recursive selector syntax" in messages
+    assert "multiple roles" in messages

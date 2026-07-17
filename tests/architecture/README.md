@@ -28,3 +28,16 @@ symbol blacklist. Add an allowlist entry only when the dependency is intentional
 narrowly scoped, cannot be expressed by the normal direction, and has a durable
 reason; migration-only exceptions are not accepted.
 
+Every production module, including package `__init__.py` modules, must have exactly
+one primary role: `SHARED`, `DOMAIN`, `APPLICATION`, `INFRASTRUCTURE`, or `BOUNDARY`.
+Primary roles are an exhaustive classification axis, not dependency permissions;
+the dependency rules above remain the source of truth for allowed imports. An exact
+selector classifies only one module. A recursive package selector classifies the
+package module and all descendants using segment-aware matching.
+
+When adding a module, add the narrowest correct selector to `MODULE_ROLE_POLICIES`.
+Do not use broad recursive selectors for heterogeneous packages such as
+`corpus_analysis`, `comparison`, `artifacts`, or `latin.cleaners`, and never add a
+catch-all classification. Unclassified modules, modules matched by different roles,
+empty or malformed selectors, and selectors left behind after a rename or deletion
+are architecture violations.
