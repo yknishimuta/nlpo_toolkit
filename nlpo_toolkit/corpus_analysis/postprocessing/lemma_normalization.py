@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Mapping
+from collections.abc import Mapping
 
 
 def apply_lemma_normalization(
-    counter: Counter[str],
+    counter: Mapping[str, int],
     normalization_map: Mapping[str, str] | None,
 ) -> Counter[str]:
     if normalization_map is None:

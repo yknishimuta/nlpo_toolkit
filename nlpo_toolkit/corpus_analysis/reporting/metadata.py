@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from nlpo_toolkit.serialization.types import JsonObject, JsonValue
 
@@ -97,7 +98,7 @@ def run_metadata_to_json_value(metadata: RunMetadata) -> JsonObject:
         "groups_files": {group: [str(path) for path in paths] for group, paths in metadata.groups_files.items()},
         "analysis_unit": metadata.analysis_unit,
         "nlp": {"backend": metadata.nlp.name, "language": metadata.nlp.language,
-                "package": metadata.nlp.package, "model": metadata.nlp.model,
+                "package": (dict(metadata.nlp.package) if isinstance(metadata.nlp.package, Mapping) else metadata.nlp.package), "model": metadata.nlp.model,
                 "device": metadata.nlp.device},
         "grouping": ({"mode": metadata.grouping.mode, "auto_group_name": metadata.grouping.auto_group_name} if metadata.grouping.auto_group_name is not None else {"mode": metadata.grouping.mode}),
         "environment": {"python_version": environment.python_version, "platform": environment.platform, "executable": str(environment.executable), "project_root": str(environment.project_root), "git_commit": environment.git_commit, "git_status": environment.git_status},

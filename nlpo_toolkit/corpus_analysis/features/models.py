@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
-from types import MappingProxyType
 from typing import Literal
 
 from ..analysis_records import NLPAnalysisRecord
 from ..corpus import PreparedCorpus
 from ..requests import CorpusPreparationRequest
 from .errors import FeatureError
+from nlpo_toolkit.immutable_collections import freeze_mapping
 
 
 FeatureField = Literal["lemma", "token"]
@@ -73,13 +73,16 @@ class AnalyzedFeatureCorpus:
     sentence_count: int
     records: tuple[NLPAnalysisRecord, ...]
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "records", tuple(self.records))
+
 
 @dataclass(frozen=True)
 class FeatureRow(Mapping[str, FeatureScalar]):
     values: Mapping[str, FeatureScalar]
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "values", MappingProxyType(dict(self.values)))
+        object.__setattr__(self, "values", freeze_mapping(self.values))
 
     @classmethod
     def from_mapping(cls, values: Mapping[str, FeatureScalar]) -> FeatureRow:
@@ -98,3 +101,6 @@ class FeatureRow(Mapping[str, FeatureScalar]):
 @dataclass(frozen=True)
 class FeatureCommandResult:
     rows: tuple[FeatureRow, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "rows", tuple(self.rows))

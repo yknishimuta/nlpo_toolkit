@@ -42,7 +42,7 @@ def render_run_summary(*, context: CountRunContext, analysis: AnalysisResults, p
         lines.extend(["", "# Token artifacts", ""])
         for metadata in token_metadata:
             lines.append(f"- token_artifact={metadata.group} path={metadata.artifact_path} rows={metadata.row_count} included={metadata.included_row_count} schema={metadata.schema_version}")
-    cache = analysis.cache_stats.snapshot()
+    cache = analysis.cache_stats
     if cache.enabled:
         lines.extend(["", "# Analysis cache", ""])
         lines.append(f"analysis_cache enabled={cache.enabled} hits={cache.hits} misses={cache.misses} records_read={cache.records_read} records_written={cache.records_written}")

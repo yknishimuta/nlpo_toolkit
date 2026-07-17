@@ -3,17 +3,20 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from types import TracebackType
 from typing import TextIO
 
 from ..analysis_records import NLPAnalysisRecord
-from .codec import encode_record, sha256_file
+from .codec import analysis_cache_metadata_to_json_value, encode_record, sha256_file
 from .constants import ANALYSIS_BEHAVIOR_VERSION, ANALYSIS_CACHE_FORMAT, ANALYSIS_CACHE_SCHEMA_VERSION
 from .errors import AnalysisCacheError
-from .models import AnalysisCacheMetadata, AnalysisFingerprint, CacheObjectPaths
+from .models import (
+    AnalysisCacheMetadata,
+    AnalysisFingerprint,
+    CacheObjectPaths,
+)
 
 
 def _atomic_write_text(path: Path, text: str) -> None:
@@ -96,7 +99,12 @@ class AnalysisCacheWriter:
             )
             _atomic_write_text(
                 self.paths.metadata,
-                json.dumps(asdict(metadata), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+                json.dumps(
+                    analysis_cache_metadata_to_json_value(metadata),
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                ) + "\n",
             )
         except BaseException:
             self._cleanup()

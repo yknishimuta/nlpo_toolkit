@@ -4,8 +4,9 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from types import MappingProxyType
-from typing import Mapping
+from collections.abc import Mapping
+
+from nlpo_toolkit.immutable_collections import freeze_tuple_mapping
 
 from ..config_references import ConfigFileReference
 
@@ -78,9 +79,14 @@ class ArchiveInventory:
     metadata_only_references: tuple[ConfigFileReference, ...]
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "groups_files", MappingProxyType({
-            name: tuple(files) for name, files in self.groups_files.items()
-        }))
+        object.__setattr__(self, "command_line", tuple(self.command_line))
+        object.__setattr__(self, "groups_files", freeze_tuple_mapping(self.groups_files))
+        for field_name in (
+            "output_sources", "trace_sources", "config_snapshot_sources",
+            "input_sources", "cleaned_sources", "input_files", "cleaned_files",
+            "metadata_only_references",
+        ):
+            object.__setattr__(self, field_name, tuple(getattr(self, field_name)))
 
 
 @dataclass(frozen=True)
@@ -90,6 +96,10 @@ class ArchiveCopyResult:
     config_snapshots: tuple[ArchivedFile, ...] = ()
     inputs: tuple[ArchivedFile, ...] = ()
     cleaned: tuple[ArchivedFile, ...] = ()
+
+    def __post_init__(self) -> None:
+        for field_name in ("outputs", "traces", "config_snapshots", "inputs", "cleaned"):
+            object.__setattr__(self, field_name, tuple(getattr(self, field_name)))
 
 
 @dataclass(frozen=True)
@@ -127,3 +137,13 @@ class ArchiveManifest:
     external_references: tuple[ExternalReferenceManifestEntry, ...]
     copied_input_files: tuple[ArchivedFile, ...]
     copied_cleaned_files: tuple[ArchivedFile, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "command_line", tuple(self.command_line))
+        object.__setattr__(self, "groups_files", freeze_tuple_mapping(self.groups_files))
+        for field_name in (
+            "input_files", "cleaned_files", "generated_outputs", "copied_outputs",
+            "trace_files", "config_snapshot_files", "external_references",
+            "copied_input_files", "copied_cleaned_files",
+        ):
+            object.__setattr__(self, field_name, tuple(getattr(self, field_name)))

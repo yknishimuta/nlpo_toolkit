@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import Counter
+from collections.abc import Mapping
 
 from ...postprocessing.dictionary import DictionaryClassification
 from ..models import ArtifactKind, ArtifactPlan
@@ -16,9 +16,9 @@ def write_group_artifacts(
     *,
     artifact_plan: ArtifactPlan,
     group: str,
-    counter: Counter[str],
+    counter: Mapping[str, int],
     dictionary: DictionaryClassification | None,
-    reference_tag_counts: Counter[str],
+    reference_tag_counts: Mapping[str, int],
     csv_header: tuple[str, str],
     reference_tags_enabled: bool,
 ) -> None:

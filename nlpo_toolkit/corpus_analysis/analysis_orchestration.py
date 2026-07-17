@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from . import analysis_execution
-from .analysis_cache.stats import AnalysisCacheRunStats
+from .analysis_cache.stats import AnalysisCacheStatsCollector
 from .analysis_results import AnalysisResults, GroupAnalysisResult
 from .corpus import PreparedCorpus
 from .count_context import CountRunContext
@@ -21,7 +21,7 @@ def _analyze_one_corpus(
     context: CountRunContext,
     corpus: PreparedCorpus,
     postprocessing: PostprocessingResources,
-    cache_stats: AnalysisCacheRunStats,
+    cache_stats: AnalysisCacheStatsCollector,
     publication: CountPublicationDependencies,
 ) -> tuple[str, GroupAnalysisResult]:
     record_result = analysis_execution.execute_record_analysis(
@@ -64,7 +64,7 @@ def analyze_corpora(
     definition = context.session.corpus.plan.definition
     postprocessing = load_postprocessing_resources(definition)
     cache_stats = analysis_execution.create_analysis_cache_stats(context)
-    groups = (
+    groups = tuple(
         _analyze_one_corpus(
             context=context,
             corpus=corpus,
@@ -76,5 +76,5 @@ def analyze_corpora(
     )
     return AnalysisResults.from_groups(
         groups,
-        cache_stats=cache_stats,
+        cache_stats=cache_stats.snapshot(),
     )

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Generic, Mapping, TypeVar
+from collections.abc import Mapping
+from typing import Generic, TypeVar
+
+from nlpo_toolkit.immutable_collections import freeze_mapping
 
 
 TFrequencyTable = TypeVar("TFrequencyTable")
@@ -32,6 +35,9 @@ class PairwiseComparisonResult(Generic[TFrequencyTable]):
     rows_before_filter: int
     rows: tuple[PairwiseComparisonRow, ...]
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "rows", tuple(self.rows))
+
 
 @dataclass(frozen=True)
 class MultiComparisonRow:
@@ -45,6 +51,10 @@ class MultiComparisonRow:
     min_rate: float
     range_relative: float
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "counts", freeze_mapping(self.counts))
+        object.__setattr__(self, "rates", freeze_mapping(self.rates))
+
 
 @dataclass(frozen=True)
 class MultiComparisonResult(Generic[TFrequencyTable]):
@@ -53,6 +63,10 @@ class MultiComparisonResult(Generic[TFrequencyTable]):
     vocabulary_union_size: int
     rows_before_filter: int
     rows: tuple[MultiComparisonRow, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "tables", tuple(self.tables))
+        object.__setattr__(self, "rows", tuple(self.rows))
 
 
 @dataclass(frozen=True)

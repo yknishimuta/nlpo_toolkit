@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Iterator, Literal
 
 from nlpo_toolkit.nlp.contracts import NLPBackendInfo
+from nlpo_toolkit.immutable_collections import freeze_count_mapping
 
 from .analysis_cache.keys import build_analysis_cache_key, prepared_text_sha256
 from .analysis_cache.models import AnalysisFingerprint
 from .analysis_cache.repository import AnalysisCacheRepository
 from .analysis_cache.service import open_or_compute_analysis_records
-from .analysis_cache.stats import AnalysisCacheRunStats
+from .analysis_cache.stats import AnalysisCacheStatsCollector
 from .analysis_policy import AnalysisExtractionPolicy
 from .analysis_records import (
     AnalysisOptions,
@@ -45,15 +47,21 @@ __all__ = [
 
 @dataclass(frozen=True)
 class RecordConsumptionResult:
-    counter: Counter[str]
+    counter: Mapping[str, int]
     record_count: int
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "counter", freeze_count_mapping(self.counter))
 
 
 @dataclass(frozen=True)
 class RecordAnalysisResult:
-    counter: Counter[str]
+    counter: Mapping[str, int]
     record_count: int
     token_artifact: TokenArtifactMetadata | None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "counter", freeze_count_mapping(self.counter))
 
 
 @dataclass(frozen=True)
@@ -71,8 +79,8 @@ def _analysis_cache_dir(context: CountRunContext) -> Path:
     return directory.resolve()
 
 
-def create_analysis_cache_stats(context: CountRunContext) -> AnalysisCacheRunStats:
-    return AnalysisCacheRunStats(
+def create_analysis_cache_stats(context: CountRunContext) -> AnalysisCacheStatsCollector:
+    return AnalysisCacheStatsCollector(
         enabled=context.session.corpus.plan.definition.config.analysis_cache.enabled,
         directory=str(_analysis_cache_dir(context)),
     )
@@ -201,7 +209,7 @@ def _token_artifact_descriptor(
 
 def _update_cache_stats(
     *,
-    stats: AnalysisCacheRunStats,
+    stats: AnalysisCacheStatsCollector,
     corpus: PreparedCorpus,
     source: AnalysisRecordSource,
     record_count: int,
@@ -220,7 +228,7 @@ def execute_record_analysis(
     corpus: PreparedCorpus,
     text: str,
     publication: RecordArtifactSessionFactory,
-    cache_stats: AnalysisCacheRunStats,
+    cache_stats: AnalysisCacheStatsCollector,
 ) -> RecordAnalysisResult:
     artifacts = context.artifact_plan
     trace_config = context.session.corpus.plan.definition.config.trace

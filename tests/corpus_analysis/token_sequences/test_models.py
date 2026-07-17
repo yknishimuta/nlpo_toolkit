@@ -17,8 +17,7 @@ def test_sequence_id_is_frozen_hashable_and_preserves_identity():
 
 def test_sequence_validates_tuple_empty_identity_and_location(item_type):
     identity = TokenSequenceId("g", "a.txt", "s", 0, 0)
-    with pytest.raises(ValueError, match="tuple"):
-        TokenSequence(identity, [item_type()])
+    assert isinstance(TokenSequence(identity, [item_type()]).items, tuple)
     with pytest.raises(ValueError, match="empty"):
         TokenSequence(identity, ())
     with pytest.raises(ValueError, match="mismatch"):

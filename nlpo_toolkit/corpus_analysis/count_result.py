@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from nlpo_toolkit.immutable_collections import freeze_tuple_mapping
 
 from .artifacts.models import ArtifactKind, ArtifactPlan
 from .config_references import ConfigFileReference
@@ -20,6 +21,13 @@ class CountRunResult:
     artifact_plan: ArtifactPlan
     config_references: tuple[ConfigFileReference, ...]
     partition_mismatches: tuple[PartitionMismatchSummary, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "groups_files", freeze_tuple_mapping(self.groups_files))
+        object.__setattr__(self, "input_files", tuple(self.input_files))
+        object.__setattr__(self, "cleaned_files", tuple(self.cleaned_files))
+        object.__setattr__(self, "config_references", tuple(self.config_references))
+        object.__setattr__(self, "partition_mismatches", tuple(self.partition_mismatches))
 
     @property
     def generated_outputs(self) -> tuple[Path, ...]:
@@ -49,4 +57,3 @@ class CountRunResult:
     @property
     def metadata_path(self) -> Path:
         return self.artifact_plan.require(ArtifactKind.RUN_METADATA).path
-

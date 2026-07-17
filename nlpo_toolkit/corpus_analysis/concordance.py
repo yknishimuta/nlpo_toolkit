@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Mapping
+
+from nlpo_toolkit.immutable_collections import freeze_mapping
 from pathlib import Path
 
 from .token_artifact.errors import TokenArtifactError
@@ -23,11 +26,18 @@ class ConcordanceRequest:
     field: TokenField
     window: int
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "keys", tuple(self.keys))
+
 
 @dataclass(frozen=True)
 class ConcordanceCommandResult:
     columns: tuple[str, ...]
-    rows: tuple[dict[str, str], ...]
+    rows: tuple[Mapping[str, str], ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "columns", tuple(self.columns))
+        object.__setattr__(self, "rows", tuple(freeze_mapping(row) for row in self.rows))
 
 
 def build_concordance_rows(

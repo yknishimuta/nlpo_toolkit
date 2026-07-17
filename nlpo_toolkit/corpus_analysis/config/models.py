@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Annotated, Literal
 
 from pydantic import (
@@ -13,6 +14,7 @@ from pydantic import (
     model_validator,
 )
 from nlpo_toolkit.comparison.config import ComparisonSpec
+from nlpo_toolkit.immutable_collections import freeze_mapping
 from nlpo_toolkit.config_model import (
     ConfigModel,
     NonBlankStr,
@@ -60,7 +62,7 @@ class GroupingConfig(ConfigModel):
 class NLPConfig(ConfigModel):
     backend: NLPBackendName = "stanza"
     language: NonBlankStr = "la"
-    stanza_package: NonBlankStr | dict[StrictStr, StrictStr] | None = "perseus"
+    stanza_package: NonBlankStr | Mapping[StrictStr, StrictStr] | None = "perseus"
     model_name: NonBlankStr | None = None
     cpu_only: StrictBool = True
 
@@ -73,7 +75,15 @@ class NLPConfig(ConfigModel):
     def validate_backend(self) -> NLPConfig:
         if self.backend == "transformers" and self.model_name is None:
             raise ValueError("model_name is required when backend=transformers")
+        if isinstance(self.stanza_package, Mapping):
+            object.__setattr__(self, "stanza_package", freeze_mapping(self.stanza_package))
         return self
+
+    @field_serializer("stanza_package")
+    def serialize_stanza_package(
+        self, value: str | Mapping[str, str] | None
+    ) -> str | dict[str, str] | None:
+        return dict(value) if isinstance(value, Mapping) else value
 
 
 class FilterConfig(ConfigModel):
@@ -157,7 +167,7 @@ class ValidationsConfig(ConfigModel):
 
 
 class AppConfig(ConfigModel):
-    groups: dict[NonBlankStr, GroupConfig]
+    groups: Mapping[NonBlankStr, GroupConfig]
     preprocess: PreprocessConfig = Field(default_factory=PreprocessConfig)
     grouping: GroupingConfig = Field(default_factory=GroupingConfig)
     nlp: NLPConfig = Field(default_factory=NLPConfig)
@@ -195,4 +205,11 @@ class AppConfig(ConfigModel):
             raise ValueError(
                 "validations.partitions cannot be used with grouping.mode=per_file"
             )
+        object.__setattr__(self, "groups", freeze_mapping(self.groups))
         return self
+
+    @field_serializer("groups")
+    def serialize_groups(
+        self, value: Mapping[str, GroupConfig]
+    ) -> dict[str, GroupConfig]:
+        return dict(value)

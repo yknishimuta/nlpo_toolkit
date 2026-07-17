@@ -35,7 +35,10 @@ from nlpo_toolkit.configuration.yaml_loader import load_yaml_mapping
 class InputsCfg:
     conllu_dir: Path
     latin_text_dir: Path
-    extra_wordlists: list[Path]
+    extra_wordlists: tuple[Path, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "extra_wordlists", tuple(self.extra_wordlists))
 
 @dataclass(frozen=True)
 class OutputCfg:

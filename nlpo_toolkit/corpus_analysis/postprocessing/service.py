@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import dataclass
-from typing import Mapping
+from collections.abc import Mapping
+
+from nlpo_toolkit.immutable_collections import freeze_count_mapping, freeze_mapping
 
 import nlpo_toolkit.nlp.vocabulary as vocabulary
 
@@ -14,14 +15,23 @@ from .lemma_normalization import apply_lemma_normalization
 
 @dataclass(frozen=True)
 class GroupPostprocessingResult:
-    counter: Counter[str]
+    counter: Mapping[str, int]
     dictionary: DictionaryClassification | None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "counter", freeze_count_mapping(self.counter))
 
 
 @dataclass(frozen=True)
 class PostprocessingResources:
     normalization_map: Mapping[str, str] | None
     known_words: frozenset[str] | None
+
+    def __post_init__(self) -> None:
+        if self.normalization_map is not None:
+            object.__setattr__(self, "normalization_map", freeze_mapping(self.normalization_map))
+        if self.known_words is not None:
+            object.__setattr__(self, "known_words", frozenset(self.known_words))
 
 
 def load_postprocessing_resources(plan: AnalysisPlan) -> PostprocessingResources:
@@ -46,7 +56,7 @@ def load_postprocessing_resources(plan: AnalysisPlan) -> PostprocessingResources
 
 
 def postprocess_group_counter(
-    counter: Counter[str],
+    counter: Mapping[str, int],
     *,
     resources: PostprocessingResources,
 ) -> GroupPostprocessingResult:

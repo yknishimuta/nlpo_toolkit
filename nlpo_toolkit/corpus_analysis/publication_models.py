@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from nlpo_toolkit.comparison.config import ComparisonSpec
 from nlpo_toolkit.comparison.engine import FrequencyTable
 from nlpo_toolkit.comparison.results import ConfiguredComparisonResult
+from nlpo_toolkit.immutable_collections import freeze_count_mapping
 
 from .artifacts.models import ArtifactPlan, PlannedArtifact
 from .partition_models import PartitionSpec
@@ -24,24 +25,15 @@ ConfiguredResult = ConfiguredComparisonResult[ComparisonSpec, FrequencyTable]
 class GroupArtifactPublication:
     artifact_plan: ArtifactPlan
     group: str
-    counter: Counter[str]
+    counter: Mapping[str, int]
     dictionary: DictionaryClassification | None
-    reference_tag_counts: Counter[str]
+    reference_tag_counts: Mapping[str, int]
     csv_header: tuple[str, str]
     reference_tags_enabled: bool
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "counter", self.counter.copy())
-        object.__setattr__(self, "reference_tag_counts", self.reference_tag_counts.copy())
-        if self.dictionary is not None:
-            object.__setattr__(
-                self,
-                "dictionary",
-                DictionaryClassification(
-                    known=self.dictionary.known.copy(),
-                    unknown=self.dictionary.unknown.copy(),
-                ),
-            )
+        object.__setattr__(self, "counter", freeze_count_mapping(self.counter))
+        object.__setattr__(self, "reference_tag_counts", freeze_count_mapping(self.reference_tag_counts))
 
 
 @dataclass(frozen=True)
@@ -50,11 +42,18 @@ class PartitionArtifactPublication:
     specs: tuple[PartitionSpec, ...]
     results: tuple[PartitionResult, ...]
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "specs", tuple(self.specs))
+        object.__setattr__(self, "results", tuple(self.results))
+
 
 @dataclass(frozen=True)
 class ComparisonArtifactPublication:
     artifact_plan: ArtifactPlan
     results: tuple[ConfiguredResult, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "results", tuple(self.results))
 
 
 @dataclass(frozen=True)
@@ -73,3 +72,6 @@ class RecordArtifactPublicationRequest:
     trace_max_rows: int
     trace_only_keys: tuple[str, ...]
     trace_write_truncation_marker: bool
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "trace_only_keys", tuple(self.trace_only_keys))

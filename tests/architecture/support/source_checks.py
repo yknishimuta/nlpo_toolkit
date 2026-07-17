@@ -128,3 +128,80 @@ def find_cross_module_private_imports(
             if isinstance(node, ast.Attribute) and node.attr.startswith("_") and isinstance(node.value, ast.Name) and node.value.id in module_aliases:
                 violations.append(SourceViolation("cross-module-private-access", path, node.lineno, f"{module_aliases[node.value.id]}.{node.attr}"))
     return tuple(sorted(violations, key=lambda item: (str(item.source_path), item.line_number, item.qualified_name)))
+
+
+def _is_frozen_dataclass(node: ast.ClassDef) -> bool:
+    for decorator in node.decorator_list:
+        if not isinstance(decorator, ast.Call):
+            continue
+        name = _qualified(decorator.func, {})
+        if name not in {"dataclass", "dataclasses.dataclass"}:
+            continue
+        return any(
+            keyword.arg == "frozen"
+            and isinstance(keyword.value, ast.Constant)
+            and keyword.value.value is True
+            for keyword in decorator.keywords
+        )
+    return False
+
+
+def _is_frozen_config_model(node: ast.ClassDef) -> bool:
+    if any(_qualified(base, {}) in {"ConfigModel"} for base in node.bases):
+        return True
+    for statement in node.body:
+        if not isinstance(statement, ast.Assign):
+            continue
+        if not any(isinstance(target, ast.Name) and target.id == "model_config" for target in statement.targets):
+            continue
+        if isinstance(statement.value, ast.Call) and _qualified(statement.value.func, {}) == "ConfigDict":
+            return any(
+                keyword.arg == "frozen"
+                and isinstance(keyword.value, ast.Constant)
+                and keyword.value.value is True
+                for keyword in statement.value.keywords
+            )
+    return False
+
+
+def _mutable_annotation_name(annotation: ast.expr) -> str | None:
+    for node in ast.walk(annotation):
+        if not isinstance(node, ast.Subscript):
+            continue
+        name = _qualified(node.value, {})
+        if name in {"list", "dict", "set", "Counter", "collections.Counter"}:
+            return ast.unparse(annotation)
+    return None
+
+
+def find_mutable_fields_in_frozen_models(
+    paths: Iterable[Path], *, package_root: Path, package_name: str
+) -> tuple[SourceViolation, ...]:
+    violations: list[SourceViolation] = []
+    for path, tree in _trees(paths):
+        relative = path.resolve().relative_to(package_root.resolve())
+        parts = list(relative.with_suffix("").parts)
+        if parts[-1] == "__init__":
+            parts.pop()
+        module = ".".join((package_name, *parts))
+        for node in tree.body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+            if not (_is_frozen_dataclass(node) or _is_frozen_config_model(node)):
+                continue
+            for statement in node.body:
+                if not isinstance(statement, ast.AnnAssign) or not isinstance(statement.target, ast.Name):
+                    continue
+                annotation = _mutable_annotation_name(statement.annotation)
+                if annotation is None:
+                    continue
+                violations.append(
+                    SourceViolation(
+                        "mutable-field-in-frozen-model",
+                        path,
+                        statement.lineno,
+                        f"module: {module}\nclass: {node.name}\nfield: {statement.target.id}\nannotation: {annotation}",
+                        "Frozen value models must use immutable collection field types.",
+                    )
+                )
+    return tuple(sorted(violations, key=lambda item: (item.qualified_name, item.line_number)))

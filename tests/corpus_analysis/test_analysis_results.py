@@ -5,15 +5,15 @@ from dataclasses import fields
 
 import pytest
 
-from nlpo_toolkit.corpus_analysis.analysis_cache.stats import AnalysisCacheRunStats
+from nlpo_toolkit.corpus_analysis.analysis_cache.stats import AnalysisCacheStatsCollector
 from nlpo_toolkit.corpus_analysis.analysis_results import (
     AnalysisResults,
     GroupAnalysisResult,
 )
 
 
-def _stats() -> AnalysisCacheRunStats:
-    return AnalysisCacheRunStats(enabled=False, directory="")
+def _stats():
+    return AnalysisCacheStatsCollector(enabled=False, directory="").snapshot()
 
 
 def _group(
@@ -53,17 +53,9 @@ def test_results_do_not_duplicate_token_artifact_inventory() -> None:
     assert {field.name for field in fields(results)} == {"groups", "cache_stats"}
 
 
-def test_results_construction_does_not_serialize_cache_stats(monkeypatch) -> None:
+def test_results_hold_an_immutable_cache_snapshot() -> None:
     stats = _stats()
-    calls = 0
-
-    def record_snapshot():
-        nonlocal calls
-        calls += 1
-        return {"enabled": False}
-
-    monkeypatch.setattr(stats, "snapshot", record_snapshot)
     results = AnalysisResults.from_groups((), cache_stats=stats)
 
     assert results.cache_stats is stats
-    assert calls == 0
+    assert not hasattr(results.cache_stats, "record_group")

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping, Protocol
+from collections.abc import Mapping
+from typing import Protocol
+
+from nlpo_toolkit.immutable_collections import freeze_mapping
 
 __all__ = [
     "BuiltNLPBackend",
@@ -52,6 +55,10 @@ class NLPBackendInfo:
     model: str | None = None
     package: str | Mapping[str, str] | None = None
     use_gpu: bool = False
+
+    def __post_init__(self) -> None:
+        if isinstance(self.package, Mapping):
+            object.__setattr__(self, "package", freeze_mapping(self.package))
 
     @property
     def device(self) -> str:

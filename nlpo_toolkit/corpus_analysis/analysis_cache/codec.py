@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Iterator, TypedDict
+
+from nlpo_toolkit.serialization.types import JsonObject
 
 from ..analysis_records import NLPAnalysisRecord
 from .constants import (
@@ -13,6 +16,42 @@ from .constants import (
 )
 from .errors import AnalysisCacheError
 from .models import AnalysisCacheMetadata, AnalysisFingerprint, CacheObjectPaths
+
+
+def analysis_fingerprint_to_json_value(
+    fingerprint: AnalysisFingerprint,
+) -> JsonObject:
+    return {
+        "backend": fingerprint.backend,
+        "language": fingerprint.language,
+        "processors": list(fingerprint.processors),
+        "chunk_size": fingerprint.chunk_size,
+        "chunk_strategy": fingerprint.chunk_strategy,
+        "model": fingerprint.model,
+        "package": dict(fingerprint.package) if isinstance(fingerprint.package, Mapping) else fingerprint.package,
+        "model_revision": fingerprint.model_revision,
+        "backend_version": fingerprint.backend_version,
+        "adapter_version": fingerprint.adapter_version,
+        "device": fingerprint.device,
+    }
+
+
+def analysis_cache_metadata_to_json_value(metadata: AnalysisCacheMetadata) -> JsonObject:
+    return {
+        "format": metadata.format,
+        "schema_version": metadata.schema_version,
+        "behavior_version": metadata.behavior_version,
+        "complete": metadata.complete,
+        "cache_key": metadata.cache_key,
+        "created_at": metadata.created_at,
+        "prepared_text_sha256": metadata.prepared_text_sha256,
+        "prepared_text_length": metadata.prepared_text_length,
+        "record_count": metadata.record_count,
+        "payload_path": metadata.payload_path,
+        "payload_sha256": metadata.payload_sha256,
+        "payload_size_bytes": metadata.payload_size_bytes,
+        "fingerprint": analysis_fingerprint_to_json_value(metadata.fingerprint),
+    }
 
 
 class AnalysisRecordPayload(TypedDict):

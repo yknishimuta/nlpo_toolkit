@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 from typing import Iterable, Mapping, Sequence
+from nlpo_toolkit.immutable_collections import freeze_count_mapping, freeze_tuple_mapping
 
 from .config import AppConfig, GroupConfig, GroupingMode
 from .config_references import ResolvedConfigFiles
@@ -32,7 +33,11 @@ class PreparedCorpus:
     files: tuple[Path, ...]
     raw_text: str
     prepared_text: str
-    ref_tag_counts: Counter[str]
+    ref_tag_counts: Mapping[str, int]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "files", tuple(self.files))
+        object.__setattr__(self, "ref_tag_counts", freeze_count_mapping(self.ref_tag_counts))
 
 
 @dataclass(frozen=True)
@@ -41,6 +46,10 @@ class ResolvedCorpora:
     group_files: Mapping[str, tuple[Path, ...]]
     work_items: tuple[CorpusWorkItem, ...]
     mode: GroupingMode
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "group_files", freeze_tuple_mapping(self.group_files))
+        object.__setattr__(self, "work_items", tuple(self.work_items))
 
 
 def resolve_project_path(project_root: Path, raw: object) -> Path:

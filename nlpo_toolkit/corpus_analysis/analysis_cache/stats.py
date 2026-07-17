@@ -25,9 +25,12 @@ class AnalysisCacheStatsSnapshot:
     records_written: int
     groups: tuple[AnalysisCacheGroupResult, ...]
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "groups", tuple(self.groups))
+
 
 @dataclass
-class AnalysisCacheRunStats:
+class AnalysisCacheStatsCollector:
     enabled: bool
     directory: str
     hits: int = 0

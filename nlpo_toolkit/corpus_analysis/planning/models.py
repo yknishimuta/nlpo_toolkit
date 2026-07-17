@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from types import MappingProxyType
-from typing import Mapping
+from collections.abc import Mapping
+from nlpo_toolkit.immutable_collections import freeze_tuple_mapping
 
 from nlpo_toolkit.cleaner_contracts import CleanerConfigInspection
 
@@ -72,10 +72,4 @@ class ResolvedAnalysisPlan:
         if self.cleaned_dir is not None:
             object.__setattr__(self, "cleaned_dir", self.cleaned_dir.resolve())
         object.__setattr__(self, "work_items", tuple(self.work_items))
-        object.__setattr__(
-            self,
-            "group_files",
-            MappingProxyType(
-                {name: tuple(files) for name, files in self.group_files.items()}
-            ),
-        )
+        object.__setattr__(self, "group_files", freeze_tuple_mapping(self.group_files))

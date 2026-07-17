@@ -7,6 +7,7 @@ from re import Pattern
 from typing import Literal
 
 from nlpo_toolkit.cleaner_contracts import CleanerKind
+from nlpo_toolkit.immutable_collections import freeze_mapping
 
 
 RuleAction = Literal["drop_line", "substitute"]
@@ -40,6 +41,10 @@ class RuleSet:
     remove_lines: tuple[LineRemoveRule, ...] = ()
     substitutions: tuple[SubstituteRule, ...] = ()
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "remove_lines", tuple(self.remove_lines))
+        object.__setattr__(self, "substitutions", tuple(self.substitutions))
+
 
 @dataclass(frozen=True)
 class RefEvent:
@@ -58,11 +63,18 @@ class RuleApplicationResult:
     lines: tuple[str, ...]
     events: tuple[RefEvent, ...]
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "lines", tuple(self.lines))
+        object.__setattr__(self, "events", tuple(self.events))
+
 
 @dataclass(frozen=True)
 class CleaningResult:
     text: str
     events: tuple[RefEvent, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "events", tuple(self.events))
 
 
 @dataclass(frozen=True)
@@ -79,3 +91,6 @@ class CleanerProgram:
     rules: RuleSet
     lexicon_map: Mapping[str, str]
     snippet_chars: int = 200
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "lexicon_map", freeze_mapping(self.lexicon_map))

@@ -45,7 +45,6 @@ def _options(**overrides) -> AnalysisOptions:
         "drop_roman_numerals": False,
         "roman_exceptions": frozenset(),
         "ref_tag_detector": None,
-        "ref_tag_counter": None,
     }
     data.update(overrides)
     return AnalysisOptions(**data)
@@ -197,21 +196,17 @@ def test_evaluate_analysis_record_roman_numeral_filter_and_exceptions() -> None:
     assert surface_builtin_exception.included is True
 
 
-def test_evaluate_analysis_record_ref_tag_updates_counter_and_excludes() -> None:
-    ref_counts: Counter[str] = Counter()
-
+def test_evaluate_analysis_record_ref_tag_excludes_without_mutable_options() -> None:
     record = evaluate_analysis_record(
         _analysis_record(token="Arma", lemma="arma"),
         options=_options(
             ref_tag_detector=lambda key: "REF" if key == "arma" else "",
-            ref_tag_counter=ref_counts,
         ),
     )
 
     assert record.ref_tag == "REF"
     assert record.included is False
     assert record.exclusion_reason == "reference_tag"
-    assert ref_counts == Counter({"REF": 1})
 
 
 def test_counter_from_token_records_counts_only_included_analysis_keys() -> None:

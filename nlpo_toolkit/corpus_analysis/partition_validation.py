@@ -3,7 +3,9 @@ from __future__ import annotations
 import re
 from collections import Counter
 from dataclasses import dataclass
-from typing import Mapping, Sequence
+from collections.abc import Mapping, Sequence
+
+from nlpo_toolkit.immutable_collections import freeze_count_mapping
 
 
 from .partition_models import PartitionSpec
@@ -14,17 +16,20 @@ _SAFE_NAME_RE = re.compile(r"[^0-9A-Za-z]+")
 class PartitionMismatch:
     item: str
     whole_count: int
-    part_counts: dict[str, int]
+    part_counts: Mapping[str, int]
     parts_sum: int
     delta: int
     status: str
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "part_counts", freeze_count_mapping(self.part_counts))
 
-@dataclass
+
+@dataclass(frozen=True)
 class PartitionResult:
     name: str
     whole: str
-    parts: list[str]
+    parts: tuple[str, ...]
     exact_match: bool
     whole_target_tokens: int
     parts_target_tokens: int
@@ -33,7 +38,11 @@ class PartitionResult:
     parts_union_types: int
     mismatched_items: int
     matched_items: int
-    mismatches: list[PartitionMismatch]
+    mismatches: tuple[PartitionMismatch, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "parts", tuple(self.parts))
+        object.__setattr__(self, "mismatches", tuple(self.mismatches))
 
 
 def sanitize_partition_name(name: str) -> str:
@@ -43,10 +52,12 @@ def sanitize_partition_name(name: str) -> str:
 
 def validate_partition(
     spec: PartitionSpec,
-    counters: Mapping[str, Counter],
+    counters: Mapping[str, Mapping[str, int]],
 ) -> PartitionResult:
-    whole_counter = counters[spec.whole]
-    parts_total = sum((counters[name] for name in spec.parts), Counter())
+    whole_counter = Counter(counters[spec.whole])
+    parts_total: Counter[str] = Counter()
+    for name in spec.parts:
+        parts_total.update(counters[name])
     all_items = set(whole_counter) | set(parts_total)
 
     rows: list[PartitionMismatch] = []
@@ -88,7 +99,7 @@ def validate_partition(
     return PartitionResult(
         name=spec.name,
         whole=spec.whole,
-        parts=list(spec.parts),
+        parts=tuple(spec.parts),
         exact_match=whole_counter == parts_total,
         whole_target_tokens=whole_target_tokens,
         parts_target_tokens=parts_target_tokens,
@@ -97,13 +108,12 @@ def validate_partition(
         parts_union_types=len(parts_total),
         mismatched_items=mismatched_items,
         matched_items=matched_items,
-        mismatches=rows,
+        mismatches=tuple(rows),
     )
 
 
 def validate_partitions(
     specs: Sequence[PartitionSpec],
-    counters: Mapping[str, Counter],
-) -> list[PartitionResult]:
-    return [validate_partition(spec, counters) for spec in specs]
-
+    counters: Mapping[str, Mapping[str, int]],
+) -> tuple[PartitionResult, ...]:
+    return tuple(validate_partition(spec, counters) for spec in specs)

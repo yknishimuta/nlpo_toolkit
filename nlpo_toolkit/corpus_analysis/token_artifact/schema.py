@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from collections.abc import Mapping
 from typing import Literal
 
 from pydantic import (
@@ -14,8 +15,11 @@ from pydantic import (
     StrictStr,
     ValidationError,
     field_validator,
+    field_serializer,
     model_validator,
 )
+
+from nlpo_toolkit.immutable_collections import freeze_mapping
 
 from .errors import TokenArtifactMetadataError
 
@@ -39,8 +43,20 @@ class TokenArtifactNLPDescriptor(BaseModel):
     backend: StrictStr = ""
     language: StrictStr = ""
     model: StrictStr | None = None
-    package: StrictStr | dict[StrictStr, StrictStr] | None = None
+    package: StrictStr | Mapping[StrictStr, StrictStr] | None = None
     device: StrictStr = "cpu"
+
+    @model_validator(mode="after")
+    def _freeze_package(self) -> TokenArtifactNLPDescriptor:
+        if isinstance(self.package, Mapping):
+            object.__setattr__(self, "package", freeze_mapping(self.package))
+        return self
+
+    @field_serializer("package")
+    def _serialize_package(
+        self, value: str | Mapping[str, str] | None
+    ) -> str | dict[str, str] | None:
+        return dict(value) if isinstance(value, Mapping) else value
 
 
 class TokenArtifactFilterDescriptor(BaseModel):

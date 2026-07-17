@@ -13,3 +13,5 @@ class ConfiguredComparisonsRunResult:
         ConfiguredComparisonResult[ComparisonSpec, FrequencyTable], ...
     ] = ()
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "comparisons", tuple(self.comparisons))

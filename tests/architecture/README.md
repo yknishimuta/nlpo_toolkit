@@ -41,3 +41,12 @@ Do not use broad recursive selectors for heterogeneous packages such as
 catch-all classification. Unclassified modules, modules matched by different roles,
 empty or malformed selectors, and selectors left behind after a rename or deletion
 are architecture violations.
+
+Frozen value and result models own deeply read-only collections. Ordered values are
+normalized to tuples, set-valued fields to frozensets, and mappings to defensive
+read-only copies. `Counter` is an execution-time accumulator only; result boundaries
+expose immutable count mappings. Mutable analysis-cache collectors are converted to
+snapshots before entering final results. Serializers alone convert these collections
+back to ordinary dictionaries and lists. This guarantee applies to owned configuration,
+DTO, domain, result, and metadata values—not to opaque injected backends, callables,
+repositories, or context managers.

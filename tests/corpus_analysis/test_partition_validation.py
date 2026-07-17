@@ -38,7 +38,7 @@ def test_validate_partition_exact_match() -> None:
     assert result.parts_target_tokens == 5
     assert result.mismatched_items == 0
     assert result.matched_items == 2
-    assert result.mismatches == []
+    assert result.mismatches == ()
 
 
 def test_validate_partition_whole_side_is_larger() -> None:

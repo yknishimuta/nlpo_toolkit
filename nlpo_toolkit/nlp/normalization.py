@@ -3,13 +3,14 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections.abc import Mapping
+from types import MappingProxyType
 
-DEFAULT_LIGATURE_MAP: Mapping[str, str] = {
+DEFAULT_LIGATURE_MAP: Mapping[str, str] = MappingProxyType({
     "æ": "ae",
     "Æ": "ae",
     "œ": "oe",
     "Œ": "oe",
-}
+})
 _COMBINING_DIACRITICS_RE = re.compile(r"[\u0300-\u036f]")
 
 __all__ = ["DEFAULT_LIGATURE_MAP", "normalize_token"]

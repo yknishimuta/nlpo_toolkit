@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from types import MappingProxyType
-from typing import Generic, Mapping, Protocol, TypeVar
+from collections.abc import Mapping
+from typing import Generic, Protocol, TypeVar
+
+from nlpo_toolkit.immutable_collections import freeze_mapping
 
 
 class SequenceItem(Protocol):
@@ -48,8 +50,7 @@ class TokenSequence(Generic[TSequenceItem]):
     items: tuple[TSequenceItem, ...]
 
     def __post_init__(self) -> None:
-        if not isinstance(self.items, tuple):
-            raise ValueError("TokenSequence items must be a tuple.")
+        object.__setattr__(self, "items", tuple(self.items))
         if not self.items:
             raise ValueError(f"Token sequence must not be empty: {self.id!r}.")
         previous: tuple[int, int] | None = None
@@ -104,12 +105,11 @@ class TokenSequenceCollection(Generic[TSequenceItem]):
     locations_by_global_index: Mapping[int, TokenLocation[TSequenceItem]]
 
     def __post_init__(self) -> None:
-        if not isinstance(self.sequences, tuple):
-            raise ValueError("TokenSequenceCollection sequences must be a tuple.")
+        object.__setattr__(self, "sequences", tuple(self.sequences))
         object.__setattr__(
             self,
             "locations_by_global_index",
-            MappingProxyType(dict(self.locations_by_global_index)),
+            freeze_mapping(self.locations_by_global_index),
         )
 
     def require_location(self, global_token_index: int) -> TokenLocation[TSequenceItem]:

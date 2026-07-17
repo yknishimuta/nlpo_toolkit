@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Mapping
+from collections.abc import Mapping
+from nlpo_toolkit.immutable_collections import freeze_tuple_mapping
 
 from nlpo_toolkit.nlp.contracts import NLPBackendInfo
 
@@ -67,6 +68,9 @@ class PartitionReport:
     mismatched_items: int
     on_mismatch: str
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "parts", tuple(self.parts))
+
 
 @dataclass(frozen=True)
 class ComparisonReport:
@@ -103,6 +107,9 @@ class AnalysisCacheReport:
     records_written: int
     groups: tuple[AnalysisCacheGroupReport, ...]
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "groups", tuple(self.groups))
+
 
 @dataclass(frozen=True)
 class RunMetadata:
@@ -120,6 +127,14 @@ class RunMetadata:
     token_artifacts: tuple[TokenArtifactReport, ...]
     analysis_cache: AnalysisCacheReport
     generated_artifacts: tuple[GeneratedArtifactReport, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "groups_files", freeze_tuple_mapping(self.groups_files))
+        for field_name in (
+            "partition_validations", "group_comparisons", "traces",
+            "token_artifacts", "generated_artifacts",
+        ):
+            object.__setattr__(self, field_name, tuple(getattr(self, field_name)))
 
     @property
     def generated_outputs(self) -> tuple[Path, ...]:

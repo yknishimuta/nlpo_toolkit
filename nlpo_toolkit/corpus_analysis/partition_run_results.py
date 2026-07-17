@@ -19,3 +19,6 @@ class PartitionValidationRunResult:
     exit_code: int
     mismatches: tuple[PartitionMismatchSummary, ...] = ()
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "validations", tuple(self.validations))
+        object.__setattr__(self, "mismatches", tuple(self.mismatches))

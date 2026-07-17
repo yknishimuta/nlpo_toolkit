@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, Literal, Mapping
+from collections.abc import Mapping
+from typing import Iterator, Literal
+
+from nlpo_toolkit.immutable_collections import freeze_mapping
 
 from ..analysis_records import NLPAnalysisRecord
 from .constants import ANALYSIS_BEHAVIOR_VERSION
@@ -23,6 +26,11 @@ class AnalysisFingerprint:
     backend_version: str | None = None
     adapter_version: int = ANALYSIS_BEHAVIOR_VERSION
     device: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "processors", tuple(self.processors))
+        if isinstance(self.package, Mapping):
+            object.__setattr__(self, "package", freeze_mapping(self.package))
 
 
 @dataclass(frozen=True)

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict
 from pathlib import Path
 
 from .constants import ANALYSIS_BEHAVIOR_VERSION, ANALYSIS_CACHE_SCHEMA_VERSION
+from .codec import analysis_fingerprint_to_json_value
 from .models import AnalysisFingerprint, CacheObjectPaths
 
 
@@ -20,7 +20,7 @@ def build_analysis_cache_key(
         "prepared_text_sha256": prepared_text_sha256,
         "schema_version": ANALYSIS_CACHE_SCHEMA_VERSION,
         "behavior_version": ANALYSIS_BEHAVIOR_VERSION,
-        "fingerprint": asdict(fingerprint),
+        "fingerprint": analysis_fingerprint_to_json_value(fingerprint),
     }
     encoded = json.dumps(
         payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")

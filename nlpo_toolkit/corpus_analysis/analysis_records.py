@@ -83,7 +83,11 @@ class AnalysisOptions:
     drop_roman_numerals: bool = False
     roman_exceptions: frozenset[str] = frozenset()
     ref_tag_detector: Callable[[str], str] | None = None
-    ref_tag_counter: Counter[str] | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "source_files", tuple(self.source_files))
+        object.__setattr__(self, "upos_targets", frozenset(self.upos_targets))
+        object.__setattr__(self, "roman_exceptions", frozenset(self.roman_exceptions))
 
 
 def _sentence_text(sentence: NLPSentence) -> str:
@@ -191,8 +195,6 @@ def evaluate_analysis_record(
     elif options.ref_tag_detector is not None:
         ref_tag = options.ref_tag_detector(key)
         if ref_tag:
-            if options.ref_tag_counter is not None:
-                options.ref_tag_counter[ref_tag] += 1
             exclusion_reason = "reference_tag"
 
     return TokenRecord(
@@ -242,14 +244,16 @@ def iter_token_records(
         drop_roman_numerals=drop_roman_numerals,
         roman_exceptions=normalize_roman_exceptions(roman_exceptions or ()),
         ref_tag_detector=ref_tag_detector,
-        ref_tag_counter=ref_tag_counter,
     )
     for record in iter_nlp_analysis_records_from_text(
         text=text,
         nlp=nlp,
         policy=extraction_policy,
     ):
-        yield evaluate_analysis_record(record, options=options)
+        evaluated = evaluate_analysis_record(record, options=options)
+        if ref_tag_counter is not None and evaluated.ref_tag is not None:
+            ref_tag_counter[evaluated.ref_tag] += 1
+        yield evaluated
 
 
 def counter_from_token_records(records: Iterable[TokenRecord]) -> Counter[str]:

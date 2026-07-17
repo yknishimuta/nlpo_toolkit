@@ -9,7 +9,7 @@ from typing import cast
 
 from nlpo_toolkit.nlp.contracts import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.analysis_orchestration import analyze_corpora
-from nlpo_toolkit.corpus_analysis.analysis_cache.stats import AnalysisCacheRunStats
+from nlpo_toolkit.corpus_analysis.analysis_cache.stats import AnalysisCacheStatsCollector
 from nlpo_toolkit.corpus_analysis.analysis_results import AnalysisResults, GroupAnalysisResult
 from nlpo_toolkit.corpus_analysis.postprocessing.lemma_normalization import apply_lemma_normalization
 from nlpo_toolkit.corpus_analysis.postprocessing.dictionary import classify_dictionary_entries
@@ -262,7 +262,7 @@ def test_summary_lines_and_metadata_include_existing_fields(tmp_path: Path) -> N
             counter=Counter(),
             ref_tag_counts=Counter(),
         )),),
-        cache_stats=AnalysisCacheRunStats(enabled=False, directory=""),
+        cache_stats=AnalysisCacheStatsCollector(enabled=False, directory="").snapshot(),
     )
     partitions = PartitionValidationRunResult((), 0)
     comparisons = ConfiguredComparisonsRunResult(())

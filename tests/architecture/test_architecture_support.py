@@ -9,7 +9,10 @@ from .support.module_graph import (
     find_forbidden_dependencies,
 )
 from .support.rules import DependencyRule, format_violations
-from .support.source_checks import find_cross_module_private_imports
+from .support.source_checks import (
+    find_cross_module_private_imports,
+    find_mutable_fields_in_frozen_models,
+)
 from .support.module_roles import (
     ModuleRole,
     ModuleRolePolicy,
@@ -111,6 +114,33 @@ def test_private_import_check_is_project_scoped(tmp_path: Path) -> None:
     _write(source, "from sample.module import _secret\nimport sample.module as module\nmodule._other()\nfrom os import _exit\n")
     violations = find_cross_module_private_imports((source,), project_prefix="sample")
     assert {item.qualified_name for item in violations} == {"sample.module._secret", "sample.module._other"}
+
+
+def test_mutable_field_check_targets_only_frozen_value_model_fields(tmp_path: Path) -> None:
+    root = tmp_path / "sample"
+    source = root / "models.py"
+    _write(
+        source,
+        """from dataclasses import dataclass
+@dataclass(frozen=True)
+class FrozenValue:
+    bad: list[str]
+    good: tuple[str, ...]
+@dataclass
+class Builder:
+    allowed: list[str]
+def build() -> list[str]:
+    local: list[str] = []
+    return local
+""",
+    )
+    violations = find_mutable_fields_in_frozen_models(
+        (source,), package_root=root, package_name="sample"
+    )
+    assert len(violations) == 1
+    assert "class: FrozenValue" in violations[0].qualified_name
+    assert "field: bad" in violations[0].qualified_name
+    assert "annotation: list[str]" in violations[0].qualified_name
 
 
 def test_module_role_exact_and_recursive_matching_is_segment_aware() -> None:
