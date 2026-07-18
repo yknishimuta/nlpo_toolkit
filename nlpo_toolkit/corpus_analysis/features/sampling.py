@@ -44,6 +44,22 @@ def _sample_char_count(corpus: AnalyzedFeatureCorpus, raw_start: int, raw_end: i
     return sum(len(record.token) for record in raw_span)
 
 
+def _lexical_raw_indices(corpus: AnalyzedFeatureCorpus) -> tuple[int, ...]:
+    indices: list[int] = []
+    raw_offset = 0
+    for lexical_record in corpus.lexical_records:
+        while (
+            raw_offset < len(corpus.raw_records)
+            and corpus.raw_records[raw_offset] is not lexical_record
+        ):
+            raw_offset += 1
+        if raw_offset >= len(corpus.raw_records):
+            raise ValueError("lexical record is not present in raw record order")
+        indices.append(raw_offset)
+        raw_offset += 1
+    return tuple(indices)
+
+
 def sample_feature_corpus(
     corpus: AnalyzedFeatureCorpus,
     *,
@@ -57,28 +73,20 @@ def sample_feature_corpus(
             "use --group-by-file or grouping.mode: per_file"
         )
     samples: list[AnalyzedFeatureCorpus] = []
+    lexical_raw_indices = _lexical_raw_indices(corpus)
     for sample_index, (start, end, kind) in enumerate(
-        iter_feature_window_ranges(len(corpus.records), options=options), start=1
+        iter_feature_window_ranges(len(corpus.lexical_records), options=options),
+        start=1,
     ):
-        eligible_indices = corpus.eligible_raw_indices[start:end]
+        eligible_indices = lexical_raw_indices[start:end]
         raw_start = eligible_indices[0]
         raw_end = eligible_indices[-1] + 1
         raw_span = corpus.raw_records[raw_start:raw_end]
         samples.append(
             AnalyzedFeatureCorpus(
                 source=corpus.source,
-                raw_record_count=len(raw_span),
-                sentence_count=len(
-                    {
-                        (record.chunk_index, record.sentence_index)
-                        for record in raw_span
-                    }
-                ),
-                records=corpus.records[start:end],
                 raw_records=raw_span,
-                eligible_raw_indices=tuple(
-                    index - raw_start for index in eligible_indices
-                ),
+                lexical_records=corpus.lexical_records[start:end],
                 char_count=_sample_char_count(corpus, raw_start, raw_end),
                 sample=FeatureSampleMetadata(
                     source_file=str(corpus.source.files[0]),

@@ -56,11 +56,8 @@ def _analyzed(
 ) -> AnalyzedFeatureCorpus:
     return AnalyzedFeatureCorpus(
         source=PreparedCorpus("g", files, "raw", "prepared", Counter()),
-        raw_record_count=len(raw),
-        sentence_count=1,
-        records=tuple(raw[index] for index in eligible_indices),
         raw_records=raw,
-        eligible_raw_indices=eligible_indices,
+        lexical_records=tuple(raw[index] for index in eligible_indices),
     )
 
 
@@ -107,7 +104,7 @@ def test_sample_uses_raw_span_and_half_open_filtered_offsets() -> None:
         _analyzed(raw, (0, 2, 3)), options=FeatureSamplingOptions(2, 1)
     )
     first, second = samples
-    assert [record.token for record in first.records] == ["aa", "bb"]
+    assert [record.token for record in first.lexical_records] == ["aa", "bb"]
     assert first.raw_record_count == 3
     assert first.sentence_count == 2
     assert first.char_count == 6
@@ -118,7 +115,7 @@ def test_sample_uses_raw_span_and_half_open_filtered_offsets() -> None:
         2,
     )
     assert first.sample.kind == "full"
-    assert [record.token for record in second.records] == ["bb", "cc"]
+    assert [record.token for record in second.lexical_records] == ["bb", "cc"]
 
 
 def test_sampling_rejects_multi_file_corpus() -> None:

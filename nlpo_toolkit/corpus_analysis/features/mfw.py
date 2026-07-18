@@ -20,7 +20,7 @@ def select_mfw_terms(
     for corpus in corpora:
         frequencies.update(
             value
-            for record in corpus.records
+            for record in corpus.lexical_records
             if (value := feature_field_value(record, field))
         )
     return tuple(

@@ -8,7 +8,10 @@ import pytest
 
 from nlpo_toolkit.corpus_analysis.analysis_records import NLPAnalysisRecord
 from nlpo_toolkit.corpus_analysis.features.models import AnalyzedFeatureCorpus, FeatureFilterPolicy, FeatureOptions
-from nlpo_toolkit.corpus_analysis.features.engine import build_feature_matrix
+from nlpo_toolkit.corpus_analysis.features.engine import (
+    analyze_feature_corpus,
+    build_feature_matrix,
+)
 from nlpo_toolkit.corpus_analysis.features.filtering import filter_feature_records
 from nlpo_toolkit.corpus_analysis.features.lexical import compute_basic_features
 from nlpo_toolkit.corpus_analysis.features.mfw import compute_mfw_features, select_mfw_terms
@@ -18,9 +21,20 @@ from nlpo_toolkit.nlp.contracts import NLPDocument, NLPSentence, NLPToken
 from nlpo_toolkit.corpus_analysis.analysis_policy import AnalysisExtractionPolicy
 
 
-def _analyzed(records, text: str, *, raw: int, sentences: int, files: int = 1):
+def _analyzed(
+    lexical_records,
+    text: str,
+    *,
+    raw_records=None,
+    files: int = 1,
+):
     source = PreparedCorpus("g", tuple(Path(f"{index}.txt") for index in range(files)), text, text, Counter())
-    return AnalyzedFeatureCorpus(source, raw, sentences, tuple(records))
+    lexical = tuple(lexical_records)
+    return AnalyzedFeatureCorpus(
+        source=source,
+        raw_records=tuple(raw_records) if raw_records is not None else lexical,
+        lexical_records=lexical,
+    )
 
 
 def _record(
@@ -28,10 +42,12 @@ def _record(
     lemma: str | None = None,
     upos: str | None = "NOUN",
     index: int = 0,
+    sentence: int = 0,
+    chunk: int = 0,
 ) -> NLPAnalysisRecord:
     return NLPAnalysisRecord(
-        chunk_index=0,
-        sentence_index=0,
+        chunk_index=chunk,
+        sentence_index=sentence,
         token_index=index,
         global_token_index=index,
         char_start_in_chunk=None,
@@ -43,6 +59,39 @@ def _record(
         lemma=lemma,
         upos=upos,
     )
+
+
+def test_analyzed_corpus_owns_two_immutable_record_populations() -> None:
+    first = _record("rosa", index=0, sentence=0, chunk=0)
+    punctuation = _record(".", ".", "PUNCT", index=1, sentence=0, chunk=0)
+    second = _record("amat", "amo", "VERB", index=2, sentence=0, chunk=1)
+    raw = [first, punctuation, second]
+    lexical = [first, second]
+    analyzed = AnalyzedFeatureCorpus(
+        source=PreparedCorpus("g", (Path("a.txt"),), "", "", Counter()),
+        raw_records=raw,
+        lexical_records=lexical,
+    )
+
+    assert analyzed.raw_records == (first, punctuation, second)
+    assert analyzed.lexical_records == (first, second)
+    assert analyzed.raw_record_count == 3
+    assert analyzed.lexical_record_count == 2
+    assert analyzed.sentence_count == 2
+    assert isinstance(analyzed.raw_records, tuple)
+    assert isinstance(analyzed.lexical_records, tuple)
+    raw.clear()
+    lexical.clear()
+    assert analyzed.raw_record_count == 3
+    with pytest.raises(FrozenInstanceError):
+        analyzed.raw_records = ()  # type: ignore[misc]
+
+
+def test_analyzed_corpus_empty_raw_population_has_no_sentences() -> None:
+    analyzed = _analyzed((), "")
+    assert analyzed.raw_record_count == 0
+    assert analyzed.lexical_record_count == 0
+    assert analyzed.sentence_count == 0
 
 
 def test_filter_preserves_order_and_returns_tuple_without_mutating_input() -> None:
@@ -111,6 +160,53 @@ def test_filter_eligibility_uses_surface_regardless_of_lemma() -> None:
     ) == (lexical_surface,)
 
 
+def test_analysis_retains_raw_records_and_filters_one_lexical_population() -> None:
+    calls: list[str] = []
+
+    class NLP:
+        def __call__(self, text: str) -> NLPDocument:
+            calls.append(text)
+            return NLPDocument(
+                sentences=(
+                    NLPSentence(
+                        text=text,
+                        tokens=(
+                            NLPToken(".", ".", "PUNCT"),
+                            NLPToken("a", "a", "NOUN"),
+                            NLPToken("XV", "xv", "NUM"),
+                            NLPToken("XIV", "xiv", "NUM"),
+                            NLPToken("rosa", "rosa", None),
+                        ),
+                    ),
+                ),
+                text=text,
+            )
+
+    source = PreparedCorpus(
+        "g", (Path("a.txt"),), "ignored", "ignored", Counter()
+    )
+    analyzed = analyze_feature_corpus(
+        source,
+        nlp=NLP(),
+        extraction_policy=AnalysisExtractionPolicy(),
+        filter_policy=FeatureFilterPolicy(
+            min_token_length=2,
+            drop_roman_numerals=True,
+            roman_exceptions=frozenset({"xiv"}),
+        ),
+    )
+
+    assert calls == ["ignored"]
+    assert [record.token for record in analyzed.raw_records] == [
+        ".",
+        "a",
+        "XV",
+        "XIV",
+        "rosa",
+    ]
+    assert [record.token for record in analyzed.lexical_records] == ["XIV", "rosa"]
+
+
 def test_filter_policy_validates_and_is_frozen() -> None:
     with pytest.raises(ValueError):
         FeatureFilterPolicy(min_token_length=-1)
@@ -125,7 +221,13 @@ def test_filter_policy_validates_and_is_frozen() -> None:
 
 def test_basic_calculator_trusts_filtered_contract_and_structural_metadata() -> None:
     records = (_record(".", ".", "PUNCT"),)
-    row = compute_basic_features(_analyzed(records, ".", raw=7, sentences=2, files=2))
+    raw_records = records + tuple(
+        _record(f"raw{index}", sentence=index % 2, index=index + 1)
+        for index in range(6)
+    )
+    row = compute_basic_features(
+        _analyzed(records, ".", raw_records=raw_records, files=2)
+    )
     assert row["file_count"] == 2
     assert row["token_count"] == 7
     assert row["word_token_count"] == 1
@@ -134,7 +236,7 @@ def test_basic_calculator_trusts_filtered_contract_and_structural_metadata() -> 
 
 
 def test_empty_filtered_records_are_safe_for_all_calculators() -> None:
-    analyzed = _analyzed((), "xiv", raw=1, sentences=1)
+    analyzed = _analyzed((), "xiv", raw_records=(_record("xiv"),))
     basic = compute_basic_features(analyzed)
     upos = compute_upos_features(())
     assert basic["token_count"] == 1
@@ -161,7 +263,7 @@ def test_upos_and_mfw_denominators_use_the_same_filtered_records() -> None:
     assert upos["upos_NOUN_count"] == 1
     assert upos["upos_NOUN_ratio"] == 0.5
     assert upos["content_word_ratio"] == 0.5
-    analyzed = _analyzed(records, "rosa amat", raw=2, sentences=1)
+    analyzed = _analyzed(records, "rosa amat")
     assert select_mfw_terms([analyzed], count=2, field="lemma") == ("amo", "rosa")
     assert compute_mfw_features(records, terms=["amo", "rosa"], field="lemma") == {
         "mfw_amo": 0.5,
@@ -171,7 +273,7 @@ def test_upos_and_mfw_denominators_use_the_same_filtered_records() -> None:
 
 def test_mfw_tie_breaking_remains_deterministic() -> None:
     records = (_record("beta", "beta"), _record("alpha", "alpha"))
-    analyzed = _analyzed(records, "beta alpha", raw=2, sentences=1)
+    analyzed = _analyzed(records, "beta alpha")
     assert select_mfw_terms([analyzed], count=2, field="lemma") == ("alpha", "beta")
 
 

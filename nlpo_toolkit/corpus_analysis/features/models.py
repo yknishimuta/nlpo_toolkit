@@ -112,19 +112,30 @@ class FeatureSampleMetadata:
 @dataclass(frozen=True)
 class AnalyzedFeatureCorpus:
     source: PreparedCorpus
-    raw_record_count: int
-    sentence_count: int
-    records: tuple[NLPAnalysisRecord, ...]
-    raw_records: tuple[NLPAnalysisRecord, ...] = ()
-    eligible_raw_indices: tuple[int, ...] = ()
+    raw_records: tuple[NLPAnalysisRecord, ...]
+    lexical_records: tuple[NLPAnalysisRecord, ...]
     char_count: int | None = None
     sample: FeatureSampleMetadata | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "records", tuple(self.records))
         object.__setattr__(self, "raw_records", tuple(self.raw_records))
-        object.__setattr__(
-            self, "eligible_raw_indices", tuple(self.eligible_raw_indices)
+        object.__setattr__(self, "lexical_records", tuple(self.lexical_records))
+
+    @property
+    def raw_record_count(self) -> int:
+        return len(self.raw_records)
+
+    @property
+    def lexical_record_count(self) -> int:
+        return len(self.lexical_records)
+
+    @property
+    def sentence_count(self) -> int:
+        return len(
+            {
+                (record.chunk_index, record.sentence_index)
+                for record in self.raw_records
+            }
         )
 
 

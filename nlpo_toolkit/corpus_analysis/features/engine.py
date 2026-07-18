@@ -6,7 +6,7 @@ from ..analysis_policy import AnalysisExtractionPolicy
 from ..analysis_records import iter_nlp_analysis_records_from_text
 from ..corpus import PreparedCorpus
 from .errors import FeatureError
-from .filtering import filter_feature_records_with_indices
+from .filtering import filter_feature_records
 from .lexical import compute_basic_features
 from .mfw import compute_mfw_features, select_mfw_terms
 from .models import (
@@ -35,18 +35,11 @@ def analyze_feature_corpus(
             policy=extraction_policy,
         )
     )
-    filtered_records, eligible_raw_indices = filter_feature_records_with_indices(
-        raw_records, policy=filter_policy
-    )
+    lexical_records = filter_feature_records(raw_records, policy=filter_policy)
     return AnalyzedFeatureCorpus(
         source=corpus,
-        raw_record_count=len(raw_records),
-        sentence_count=len(
-            {(record.chunk_index, record.sentence_index) for record in raw_records}
-        ),
-        records=filtered_records,
         raw_records=raw_records,
-        eligible_raw_indices=eligible_raw_indices,
+        lexical_records=lexical_records,
     )
 
 
@@ -95,10 +88,12 @@ def build_feature_matrix(
         if options.include_basic:
             values.update(compute_basic_features(corpus))
         if options.include_upos:
-            values.update(compute_upos_features(corpus.records))
+            values.update(compute_upos_features(corpus.lexical_records))
         if terms:
             values.update(
-                compute_mfw_features(corpus.records, terms=terms, field=options.field)
+                compute_mfw_features(
+                    corpus.lexical_records, terms=terms, field=options.field
+                )
             )
         rows.append(FeatureRow.from_mapping(values))
     return tuple(rows)

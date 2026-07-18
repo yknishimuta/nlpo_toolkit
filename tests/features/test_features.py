@@ -78,9 +78,20 @@ def _prepared(group: str, path: Path, text: str) -> PreparedCorpus:
     return PreparedCorpus(group, (path,), text, text, Counter())
 
 
-def _analyzed(records, text: str, *, raw: int, sentences: int, files: int = 1):
+def _analyzed(
+    lexical_records,
+    text: str,
+    *,
+    raw_records=None,
+    files: int = 1,
+):
     source = PreparedCorpus("g", tuple(Path(f"{index}.txt") for index in range(files)), text, text, Counter())
-    return AnalyzedFeatureCorpus(source, raw, sentences, tuple(records))
+    lexical = tuple(lexical_records)
+    return AnalyzedFeatureCorpus(
+        source=source,
+        raw_records=tuple(raw_records) if raw_records is not None else lexical,
+        lexical_records=lexical,
+    )
 
 
 def _dependencies(cleaner=None) -> FeatureCommandDependencies:
@@ -172,7 +183,9 @@ def test_compute_basic_features_values() -> None:
     ]
 
     feature_records = filter_feature_records(records, policy=FeatureFilterPolicy())
-    row = compute_basic_features(_analyzed(feature_records, "Rosa amat. Rosa", raw=len(records), sentences=2))
+    row = compute_basic_features(
+        _analyzed(feature_records, "Rosa amat. Rosa", raw_records=records)
+    )
 
     assert row["sentence_count"] == 2
     assert row["token_count"] == 4
@@ -204,7 +217,7 @@ def test_compute_upos_features_values() -> None:
 def test_missing_lemma_falls_back_to_surface_for_basic_and_mfw() -> None:
     records = [_record("Rosa", None, "NOUN", 0)]
 
-    analyzed = _analyzed(records, "Rosa", raw=1, sentences=1)
+    analyzed = _analyzed(records, "Rosa")
     row = compute_basic_features(analyzed)
 
     assert row["lemma_type_count"] == 1
@@ -218,7 +231,7 @@ def test_sentence_count_uses_chunk_and_sentence_index() -> None:
         _record("b", "b", "NOUN", 0, chunk_index=1),
     ]
 
-    row = compute_basic_features(_analyzed(records, "a b", raw=2, sentences=2))
+    row = compute_basic_features(_analyzed(records, "a b"))
 
     assert row["sentence_count"] == 2
 
@@ -230,7 +243,7 @@ def test_missing_upos_and_punctuation_preserve_feature_denominators() -> None:
     ]
 
     feature_records = filter_feature_records(records, policy=FeatureFilterPolicy())
-    analyzed = _analyzed(feature_records, "Rosa.", raw=2, sentences=1)
+    analyzed = _analyzed(feature_records, "Rosa.", raw_records=records)
     basic = compute_basic_features(analyzed)
     upos = compute_upos_features(feature_records)
 
@@ -255,7 +268,7 @@ def test_feature_filter_is_shared_by_basic_upos_and_mfw() -> None:
             drop_roman_numerals=True,
         ),
     )
-    analyzed = _analyzed(feature_records, "xiv a rosa", raw=4, sentences=1)
+    analyzed = _analyzed(feature_records, "xiv a rosa", raw_records=records)
     basic = compute_basic_features(analyzed)
     upos = compute_upos_features(feature_records)
     terms = select_mfw_terms([analyzed], count=3, field="token")
@@ -545,7 +558,7 @@ def test_feature_command_applies_one_shared_filter_and_loads_roman_exceptions_on
     load_calls: list[Path] = []
     filter_calls: list[tuple[NLPAnalysisRecord, ...]] = []
     real_loader = session_mod.load_roman_exceptions
-    real_filter = features_mod.filter_feature_records_with_indices
+    real_filter = features_mod.filter_feature_records
 
     def recording_loader(path: Path) -> frozenset[str]:
         load_calls.append(path)
@@ -557,9 +570,7 @@ def test_feature_command_applies_one_shared_filter_and_loads_roman_exceptions_on
         return real_filter(records, policy=policy)
 
     monkeypatch.setattr(session_mod, "load_roman_exceptions", recording_loader)
-    monkeypatch.setattr(
-        features_mod, "filter_feature_records_with_indices", recording_filter
-    )
+    monkeypatch.setattr(features_mod, "filter_feature_records", recording_filter)
 
     dependencies = _dependencies()
     dependencies = FeatureCommandDependencies(
