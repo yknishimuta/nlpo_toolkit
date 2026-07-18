@@ -673,6 +673,38 @@ nlpo features \
   --out output/features_by_file.csv
 ```
 
+For authorship and clustering experiments, split each file into fixed windows
+of eligible word tokens:
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --group-by-file \
+  --window-tokens 1000 \
+  --mfw 500 \
+  --field lemma \
+  --out output/features_windows.csv
+```
+
+Use `--step-tokens 500` with `--window-tokens 1000` for overlapping windows,
+or add `--include-partial-window` to retain at most one shorter trailing
+window. Window size is measured after the shared Features eligibility filter,
+so punctuation, empty or too-short tokens, and excluded Roman numerals do not
+consume window positions. Windows never cross source-file boundaries; use
+`--group-by-file` or `grouping.mode: per_file` when a configured group resolves
+to multiple files.
+
+Sample rows include `source_file`, a deterministic `sample_id`, a one-based
+`sample_index`, `sample_kind`, and filtered-token offsets.
+`sample_start_token` is inclusive and `sample_end_token` is exclusive. Raw
+`token_count`, sentence count, and character count describe the span between
+the sample's first and last eligible records, including filtered records inside
+that span. Global MFW terms are selected once from each unsampled filtered
+corpus before windows are created, so overlap does not bias the MFW vocabulary.
+Without `--window-tokens`, the existing one-row-per-corpus schema and values are
+unchanged.
+
 When using `grouping.mode: auto_single_cleaned` or `--auto-single-cleaned`,
 features uses the same single-cleaned-file safety check as `count`:
 exactly one cleaned `.txt` file must be present, otherwise the command fails.

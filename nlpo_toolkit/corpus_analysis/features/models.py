@@ -16,6 +16,37 @@ FeatureScalar = str | int | float
 
 
 @dataclass(frozen=True)
+class FeatureSamplingOptions:
+    window_tokens: int | None = None
+    step_tokens: int | None = None
+    include_partial: bool = False
+
+    def __post_init__(self) -> None:
+        for name, value in (
+            ("window_tokens", self.window_tokens),
+            ("step_tokens", self.step_tokens),
+        ):
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, int) or value <= 0
+            ):
+                raise FeatureError(f"{name} must be a positive integer")
+        if self.window_tokens is None and self.step_tokens is not None:
+            raise FeatureError("step_tokens requires window_tokens")
+        if not isinstance(self.include_partial, bool):
+            raise FeatureError("include_partial must be a bool")
+
+    @property
+    def enabled(self) -> bool:
+        return self.window_tokens is not None
+
+    @property
+    def effective_step_tokens(self) -> int | None:
+        if self.window_tokens is None:
+            return None
+        return self.step_tokens or self.window_tokens
+
+
+@dataclass(frozen=True)
 class FeatureFilterPolicy:
     min_token_length: int = 0
     drop_roman_numerals: bool = False
@@ -48,6 +79,7 @@ class FeatureOptions:
     include_upos: bool = True
     include_basic: bool = True
     filter_policy: FeatureFilterPolicy = FeatureFilterPolicy()
+    sampling: FeatureSamplingOptions = FeatureSamplingOptions()
 
 
 def validate_feature_options(options: FeatureOptions) -> None:
@@ -64,6 +96,17 @@ class FeatureRequest:
     mfw: int = 0
     include_upos: bool = True
     include_basic: bool = True
+    sampling: FeatureSamplingOptions = FeatureSamplingOptions()
+
+
+@dataclass(frozen=True)
+class FeatureSampleMetadata:
+    source_file: str
+    sample_id: str
+    sample_index: int
+    start_token: int
+    end_token: int
+    kind: Literal["full", "partial"]
 
 
 @dataclass(frozen=True)
@@ -72,9 +115,17 @@ class AnalyzedFeatureCorpus:
     raw_record_count: int
     sentence_count: int
     records: tuple[NLPAnalysisRecord, ...]
+    raw_records: tuple[NLPAnalysisRecord, ...] = ()
+    eligible_raw_indices: tuple[int, ...] = ()
+    char_count: int | None = None
+    sample: FeatureSampleMetadata | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "records", tuple(self.records))
+        object.__setattr__(self, "raw_records", tuple(self.raw_records))
+        object.__setattr__(
+            self, "eligible_raw_indices", tuple(self.eligible_raw_indices)
+        )
 
 
 @dataclass(frozen=True)

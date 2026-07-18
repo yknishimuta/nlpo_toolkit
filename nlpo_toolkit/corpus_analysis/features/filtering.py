@@ -63,8 +63,19 @@ def filter_feature_records(
     *,
     policy: FeatureFilterPolicy,
 ) -> tuple[NLPAnalysisRecord, ...]:
-    return tuple(
-        record
-        for record in records
-        if is_feature_record_eligible(record, policy=policy)
-    )
+    eligible, _indices = filter_feature_records_with_indices(records, policy=policy)
+    return eligible
+
+
+def filter_feature_records_with_indices(
+    records: Iterable[NLPAnalysisRecord],
+    *,
+    policy: FeatureFilterPolicy,
+) -> tuple[tuple[NLPAnalysisRecord, ...], tuple[int, ...]]:
+    eligible_records: list[NLPAnalysisRecord] = []
+    raw_indices: list[int] = []
+    for index, record in enumerate(records):
+        if is_feature_record_eligible(record, policy=policy):
+            eligible_records.append(record)
+            raw_indices.append(index)
+    return tuple(eligible_records), tuple(raw_indices)

@@ -12,7 +12,7 @@ from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.features.errors import FeatureError
 from nlpo_toolkit.corpus_analysis.features.models import (
     AnalyzedFeatureCorpus, FeatureCommandResult, FeatureFilterPolicy,
-    FeatureOptions, FeatureRequest, FeatureRow,
+    FeatureOptions, FeatureRequest, FeatureRow, FeatureSamplingOptions,
 )
 from nlpo_toolkit.corpus_analysis.features.engine import build_feature_matrix
 from nlpo_toolkit.corpus_analysis.features.filtering import filter_feature_records, safe_feature_name
@@ -476,6 +476,25 @@ def test_run_features_two_groups_two_rows(tmp_path: Path) -> None:
     assert [row["group"] for row in rows] == ["a", "b"]
 
 
+def test_configured_per_file_grouping_supports_fixed_windows(tmp_path: Path) -> None:
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input" / "a.txt").write_text("Rosa amat", encoding="utf-8")
+    (tmp_path / "input" / "b.txt").write_text("puella currit", encoding="utf-8")
+    config_path = _write_config(
+        tmp_path,
+        extra="grouping:\n  mode: per_file",
+    )
+    result = execute_feature_command(
+        FeatureRequest(
+            corpus=CorpusPreparationRequest(tmp_path, config_path),
+            sampling=FeatureSamplingOptions(window_tokens=2),
+        ),
+        dependencies=_dependencies(),
+    )
+    assert [row["group"] for row in result.rows] == ["a", "b"]
+    assert all(row["word_token_count"] == 2 for row in result.rows)
+
+
 def test_feature_command_applies_one_shared_filter_and_loads_roman_exceptions_once(
     tmp_path: Path,
     monkeypatch,
@@ -526,7 +545,7 @@ def test_feature_command_applies_one_shared_filter_and_loads_roman_exceptions_on
     load_calls: list[Path] = []
     filter_calls: list[tuple[NLPAnalysisRecord, ...]] = []
     real_loader = session_mod.load_roman_exceptions
-    real_filter = features_mod.filter_feature_records
+    real_filter = features_mod.filter_feature_records_with_indices
 
     def recording_loader(path: Path) -> frozenset[str]:
         load_calls.append(path)
@@ -538,7 +557,9 @@ def test_feature_command_applies_one_shared_filter_and_loads_roman_exceptions_on
         return real_filter(records, policy=policy)
 
     monkeypatch.setattr(session_mod, "load_roman_exceptions", recording_loader)
-    monkeypatch.setattr(features_mod, "filter_feature_records", recording_filter)
+    monkeypatch.setattr(
+        features_mod, "filter_feature_records_with_indices", recording_filter
+    )
 
     dependencies = _dependencies()
     dependencies = FeatureCommandDependencies(
@@ -704,7 +725,51 @@ def test_safe_feature_name_replaces_punctuation() -> None:
     assert safe_feature_name("in-que!") == "in_que"
 
 
-def test_cli_features_help() -> None:
+def test_cli_features_help(capsys) -> None:
     with pytest.raises(SystemExit) as exc:
         cli.main(["features", "--help"])
     assert exc.value.code == 0
+    help_text = capsys.readouterr().out
+    assert "--window-tokens" in help_text
+    assert "--step-tokens" in help_text
+    assert "--include-partial-window" in help_text
+
+
+def test_cli_sampling_arguments_are_composed_into_request(monkeypatch) -> None:
+    import nlpo_toolkit.corpus_analysis.cli.features as feature_cli
+
+    requests: list[FeatureRequest] = []
+
+    def execute(request, *, dependencies):
+        requests.append(request)
+        return FeatureCommandResult(())
+
+    monkeypatch.setattr(feature_cli, "execute_feature_command", execute)
+    monkeypatch.setattr(
+        feature_cli, "default_feature_command_dependencies", lambda: object()
+    )
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    assert cli.main(
+        [
+            "features",
+            "--window-tokens",
+            "1000",
+            "--step-tokens",
+            "500",
+            "--include-partial-window",
+        ],
+        stdout=stdout,
+        stderr=stderr,
+    ) == 0
+    assert requests[0].sampling == FeatureSamplingOptions(1000, 500, True)
+
+
+def test_cli_invalid_sampling_value_returns_one() -> None:
+    stderr = io.StringIO()
+    assert cli.main(
+        ["features", "--window-tokens", "0"],
+        stdout=io.StringIO(),
+        stderr=stderr,
+    ) == 1
+    assert "window_tokens must be a positive integer" in stderr.getvalue()

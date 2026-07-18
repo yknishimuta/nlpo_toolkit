@@ -10,7 +10,6 @@ def compute_basic_features(
     corpus: AnalyzedFeatureCorpus,
 ) -> Mapping[str, FeatureScalar]:
     records = corpus.records
-    text = corpus.source.prepared_text
     word_token_count = len(records)
     lemmas = [(record.lemma or record.token).strip().lower() for record in records]
     tokens = [record.token.strip().lower() for record in records]
@@ -22,7 +21,11 @@ def compute_basic_features(
     return {
         "group": corpus.source.label,
         "file_count": len(corpus.source.files),
-        "char_count": len(text),
+        "char_count": (
+            corpus.char_count
+            if corpus.char_count is not None
+            else len(corpus.source.prepared_text)
+        ),
         "sentence_count": corpus.sentence_count,
         "token_count": corpus.raw_record_count,
         "word_token_count": word_token_count,

@@ -6,7 +6,7 @@ from pathlib import Path
 from ..composition import default_feature_command_dependencies
 from ..corpus_errors import CorpusPreparationError
 from ..features.errors import FeatureError
-from ..features.models import FeatureRequest
+from ..features.models import FeatureRequest, FeatureSamplingOptions
 from ..features.service import execute_feature_command
 from .common import (
     CLIContext,
@@ -51,6 +51,23 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         help="Add relative-frequency features for the top N most frequent words/lemmas.",
     )
     parser.add_argument(
+        "--window-tokens",
+        type=int,
+        default=None,
+        help="Emit one feature row per fixed-size window of eligible word tokens.",
+    )
+    parser.add_argument(
+        "--step-tokens",
+        type=int,
+        default=None,
+        help="Window start interval. Requires --window-tokens; defaults to its value.",
+    )
+    parser.add_argument(
+        "--include-partial-window",
+        action="store_true",
+        help="Include at most one trailing window shorter than --window-tokens.",
+    )
+    parser.add_argument(
         "--include-upos",
         dest="include_upos",
         action="store_true",
@@ -90,6 +107,11 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
                 mfw=args.mfw,
                 include_upos=bool(args.include_upos),
                 include_basic=bool(args.include_basic),
+                sampling=FeatureSamplingOptions(
+                    window_tokens=args.window_tokens,
+                    step_tokens=args.step_tokens,
+                    include_partial=args.include_partial_window,
+                ),
             ),
             dependencies=default_feature_command_dependencies(),
         )

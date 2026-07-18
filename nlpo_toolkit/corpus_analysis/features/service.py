@@ -40,6 +40,7 @@ def execute_feature_command(
             drop_roman_numerals=config.filters.drop_roman_numerals,
             roman_exceptions=nlp_session.roman_exceptions,
         ),
+        sampling=request.sampling,
     )
     return FeatureCommandResult(
         rows=build_feature_matrix(
