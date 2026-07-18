@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
+import math
 from typing import Literal
 
 from ..analysis_records import NLPAnalysisRecord
@@ -13,6 +14,30 @@ from nlpo_toolkit.immutable_collections import freeze_mapping
 
 FeatureField = Literal["lemma", "token"]
 FeatureScalar = str | int | float
+
+
+@dataclass(frozen=True)
+class LexicalDiversityOptions:
+    window_size: int = 100
+    mtld_threshold: float = 0.72
+    hdd_sample_size: int = 42
+
+    def __post_init__(self) -> None:
+        for name, value in (
+            ("window_size", self.window_size),
+            ("hdd_sample_size", self.hdd_sample_size),
+        ):
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise FeatureError(f"{name} must be a positive integer")
+        threshold = self.mtld_threshold
+        if (
+            isinstance(threshold, bool)
+            or not isinstance(threshold, (int, float))
+            or not math.isfinite(threshold)
+            or not 0.0 < threshold < 1.0
+        ):
+            raise FeatureError("mtld_threshold must be a finite number between 0 and 1")
+        object.__setattr__(self, "mtld_threshold", float(threshold))
 
 
 @dataclass(frozen=True)
@@ -80,6 +105,7 @@ class FeatureOptions:
     include_basic: bool = True
     filter_policy: FeatureFilterPolicy = FeatureFilterPolicy()
     sampling: FeatureSamplingOptions = FeatureSamplingOptions()
+    lexical_diversity: LexicalDiversityOptions | None = None
 
 
 def validate_feature_options(options: FeatureOptions) -> None:
@@ -97,6 +123,7 @@ class FeatureRequest:
     include_upos: bool = True
     include_basic: bool = True
     sampling: FeatureSamplingOptions = FeatureSamplingOptions()
+    lexical_diversity: LexicalDiversityOptions | None = None
 
 
 @dataclass(frozen=True)
@@ -132,10 +159,7 @@ class AnalyzedFeatureCorpus:
     @property
     def sentence_count(self) -> int:
         return len(
-            {
-                (record.chunk_index, record.sentence_index)
-                for record in self.raw_records
-            }
+            {(record.chunk_index, record.sentence_index) for record in self.raw_records}
         )
 
 

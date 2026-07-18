@@ -8,6 +8,7 @@ from ..corpus import PreparedCorpus
 from .errors import FeatureError
 from .filtering import filter_feature_records
 from .lexical import compute_basic_features
+from .lexical_diversity import compute_lexical_diversity_features
 from .mfw import compute_mfw_features, select_mfw_terms
 from .models import (
     AnalyzedFeatureCorpus,
@@ -87,6 +88,13 @@ def build_feature_matrix(
             )
         if options.include_basic:
             values.update(compute_basic_features(corpus))
+        if options.lexical_diversity is not None:
+            values.update(
+                compute_lexical_diversity_features(
+                    corpus.lexical_records,
+                    options=options.lexical_diversity,
+                )
+            )
         if options.include_upos:
             values.update(compute_upos_features(corpus.lexical_records))
         if terms:

@@ -663,6 +663,48 @@ nlpo features \
   --out output/features_mfw100.csv
 ```
 
+Add length-adjusted lexical-diversity features for both normalized surface
+tokens and lemmas:
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --lexical-diversity \
+  --out output/features_lexdiv.csv
+```
+
+The project defaults are a MATTR/MSTTR window of 100, an MTLD threshold of
+0.72, and an HD-D sample size of 42. They can be set explicitly with
+`--lexdiv-window`, `--mtld-threshold`, and `--hdd-sample-size`; specifying any
+one of these also enables lexical diversity. The output columns are, in order,
+`mattr_token`, `mattr_lemma`, `msttr_token`, `msttr_lemma`, `mtld_token`,
+`mtld_lemma`, `hdd_token`, and `hdd_lemma`. The existing `--field` option only
+selects the MFW field and never suppresses either lexical-diversity variant.
+
+All four metrics use the ordered records that pass the shared Features
+eligibility filter. MATTR averages overlapping moving-window TTRs; MSTTR
+averages non-overlapping full segments and ignores a trailing remainder when a
+full segment exists. MTLD averages forward and reverse factor calculations.
+HD-D uses an effective sample size of the smaller of the configured size and
+the available token count. For sequences shorter than the configured window,
+MATTR and MSTTR fall back to whole-sequence TTR; empty sequences produce `0.0`
+for every metric. With fixed-token sampling, every metric is calculated inside
+each sample and never crosses its boundary. Use identical window, threshold,
+and sample-size settings when comparing texts.
+
+Explicit parameter example:
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --lexdiv-window 100 \
+  --mtld-threshold 0.72 \
+  --hdd-sample-size 42 \
+  --out output/features_lexdiv.csv
+```
+
 One row per input file:
 
 ```bash

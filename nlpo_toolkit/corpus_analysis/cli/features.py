@@ -6,7 +6,11 @@ from pathlib import Path
 from ..composition import default_feature_command_dependencies
 from ..corpus_errors import CorpusPreparationError
 from ..features.errors import FeatureError
-from ..features.models import FeatureRequest, FeatureSamplingOptions
+from ..features.models import (
+    FeatureRequest,
+    FeatureSamplingOptions,
+    LexicalDiversityOptions,
+)
 from ..features.service import execute_feature_command
 from .common import (
     CLIContext,
@@ -93,6 +97,29 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         action="store_false",
         help="Disable basic text statistics.",
     )
+    parser.add_argument(
+        "--lexical-diversity",
+        action="store_true",
+        help="Include MATTR, MSTTR, MTLD, and HD-D for tokens and lemmas.",
+    )
+    parser.add_argument(
+        "--lexdiv-window",
+        type=int,
+        default=None,
+        help="MATTR/MSTTR window size. Implies --lexical-diversity; default: 100.",
+    )
+    parser.add_argument(
+        "--mtld-threshold",
+        type=float,
+        default=None,
+        help="MTLD factor threshold. Implies --lexical-diversity; default: 0.72.",
+    )
+    parser.add_argument(
+        "--hdd-sample-size",
+        type=int,
+        default=None,
+        help="HD-D sample size. Implies --lexical-diversity; default: 42.",
+    )
     add_grouping_override_arguments(parser)
     add_empty_group_argument(parser)
     set_handler(parser, execute)
@@ -100,6 +127,26 @@ def register(subparsers: argparse._SubParsersAction) -> None:
 
 def execute(args: argparse.Namespace, context: CLIContext) -> int:
     try:
+        lexical_diversity = None
+        if args.lexical_diversity or any(
+            value is not None
+            for value in (
+                args.lexdiv_window,
+                args.mtld_threshold,
+                args.hdd_sample_size,
+            )
+        ):
+            lexical_diversity = LexicalDiversityOptions(
+                window_size=(
+                    args.lexdiv_window if args.lexdiv_window is not None else 100
+                ),
+                mtld_threshold=(
+                    args.mtld_threshold if args.mtld_threshold is not None else 0.72
+                ),
+                hdd_sample_size=(
+                    args.hdd_sample_size if args.hdd_sample_size is not None else 42
+                ),
+            )
         result = execute_feature_command(
             FeatureRequest(
                 corpus=build_corpus_preparation_request(args),
@@ -112,6 +159,7 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
                     step_tokens=args.step_tokens,
                     include_partial=args.include_partial_window,
                 ),
+                lexical_diversity=lexical_diversity,
             ),
             dependencies=default_feature_command_dependencies(),
         )

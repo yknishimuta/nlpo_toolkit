@@ -11,13 +11,24 @@ from nlpo_toolkit.cleaner_contracts import CleanerExecutionResult
 from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.features.errors import FeatureError
 from nlpo_toolkit.corpus_analysis.features.models import (
-    AnalyzedFeatureCorpus, FeatureCommandResult, FeatureFilterPolicy,
-    FeatureOptions, FeatureRequest, FeatureRow, FeatureSamplingOptions,
+    AnalyzedFeatureCorpus,
+    FeatureCommandResult,
+    FeatureFilterPolicy,
+    FeatureOptions,
+    FeatureRequest,
+    FeatureRow,
+    FeatureSamplingOptions,
 )
 from nlpo_toolkit.corpus_analysis.features.engine import build_feature_matrix
-from nlpo_toolkit.corpus_analysis.features.filtering import filter_feature_records, safe_feature_name
+from nlpo_toolkit.corpus_analysis.features.filtering import (
+    filter_feature_records,
+    safe_feature_name,
+)
 from nlpo_toolkit.corpus_analysis.features.lexical import compute_basic_features
-from nlpo_toolkit.corpus_analysis.features.mfw import compute_mfw_features, select_mfw_terms
+from nlpo_toolkit.corpus_analysis.features.mfw import (
+    compute_mfw_features,
+    select_mfw_terms,
+)
 from nlpo_toolkit.corpus_analysis.features.upos import compute_upos_features
 from nlpo_toolkit.corpus_analysis.features.service import execute_feature_command
 from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
@@ -85,7 +96,13 @@ def _analyzed(
     raw_records=None,
     files: int = 1,
 ):
-    source = PreparedCorpus("g", tuple(Path(f"{index}.txt") for index in range(files)), text, text, Counter())
+    source = PreparedCorpus(
+        "g",
+        tuple(Path(f"{index}.txt") for index in range(files)),
+        text,
+        text,
+        Counter(),
+    )
     lexical = tuple(lexical_records)
     return AnalyzedFeatureCorpus(
         source=source,
@@ -150,7 +167,9 @@ def _record(
     )
 
 
-def _write_config(project_root: Path, *, group_files: str = "input/*.txt", extra: str = "") -> Path:
+def _write_config(
+    project_root: Path, *, group_files: str = "input/*.txt", extra: str = ""
+) -> Path:
     (project_root / "config").mkdir(exist_ok=True)
     config_path = project_root / "config" / "groups.config.yml"
     config_path.write_text(
@@ -222,7 +241,9 @@ def test_missing_lemma_falls_back_to_surface_for_basic_and_mfw() -> None:
 
     assert row["lemma_type_count"] == 1
     assert select_mfw_terms([analyzed], count=1, field="lemma") == ("rosa",)
-    assert compute_mfw_features(records, terms=["rosa"], field="lemma")["mfw_rosa"] == 1.0
+    assert (
+        compute_mfw_features(records, terms=["rosa"], field="lemma")["mfw_rosa"] == 1.0
+    )
 
 
 def test_sentence_count_uses_chunk_and_sentence_index() -> None:
@@ -287,10 +308,13 @@ def test_feature_filter_is_shared_by_basic_upos_and_mfw() -> None:
 def test_features_roman_policy_uses_shared_surface_exceptions() -> None:
     records = (_record("vi", "vi", "NUM", 0),)
 
-    assert filter_feature_records(
-        records,
-        policy=FeatureFilterPolicy(drop_roman_numerals=True),
-    ) == records
+    assert (
+        filter_feature_records(
+            records,
+            policy=FeatureFilterPolicy(drop_roman_numerals=True),
+        )
+        == records
+    )
 
 
 def test_build_feature_matrix_chunks_through_shared_extractor() -> None:
@@ -366,8 +390,18 @@ def test_build_feature_matrix_mfw_lemma_and_token() -> None:
         _prepared("g2", Path("b.txt"), "Rosa in villa currit."),
     )
 
-    lemma_rows = build_feature_matrix(corpora=corpora, nlp=DummyNLP(), extraction_policy=AnalysisExtractionPolicy(), options=FeatureOptions(mfw=2, field="lemma"))
-    token_rows = build_feature_matrix(corpora=corpora, nlp=DummyNLP(), extraction_policy=AnalysisExtractionPolicy(), options=FeatureOptions(mfw=2, field="token"))
+    lemma_rows = build_feature_matrix(
+        corpora=corpora,
+        nlp=DummyNLP(),
+        extraction_policy=AnalysisExtractionPolicy(),
+        options=FeatureOptions(mfw=2, field="lemma"),
+    )
+    token_rows = build_feature_matrix(
+        corpora=corpora,
+        nlp=DummyNLP(),
+        extraction_policy=AnalysisExtractionPolicy(),
+        options=FeatureOptions(mfw=2, field="token"),
+    )
 
     assert "mfw_rosa" in lemma_rows[0]
     assert "mfw_amo" in lemma_rows[0] or "mfw_curro" in lemma_rows[0]
@@ -376,7 +410,11 @@ def test_build_feature_matrix_mfw_lemma_and_token() -> None:
 
 
 def test_write_feature_matrix_csv_and_tsv() -> None:
-    rows = (FeatureRow.from_mapping({"group": "g", "token_count": 2, "mean_token_length": 4.5}),)
+    rows = (
+        FeatureRow.from_mapping(
+            {"group": "g", "token_count": 2, "mean_token_length": 4.5}
+        ),
+    )
     csv_out = io.StringIO()
     tsv_out = io.StringIO()
 
@@ -436,11 +474,11 @@ def test_run_features_accepts_backend_factory(tmp_path: Path) -> None:
         FeatureRequest(
             corpus=CorpusPreparationRequest(tmp_path, config_path),
         ),
-            dependencies=FeatureCommandDependencies(
-                corpus=base.corpus,
-                nlp=NLPExecutionDependencies(
-                    backend_factory=recording_factory,
-                    extraction_policy=base.nlp.extraction_policy,
+        dependencies=FeatureCommandDependencies(
+            corpus=base.corpus,
+            nlp=NLPExecutionDependencies(
+                backend_factory=recording_factory,
+                extraction_policy=base.nlp.extraction_policy,
             ),
         ),
     )
@@ -675,7 +713,7 @@ def test_run_features_auto_single_cleaned(tmp_path: Path) -> None:
         ),
     )
     (tmp_path / "config" / "cleaner.yml").write_text(
-            "kind: scholastic_text\ninput: ../cleaned\noutput: ../cleaned\n",
+        "kind: scholastic_text\ninput: ../cleaned\noutput: ../cleaned\n",
         encoding="utf-8",
     )
     out = tmp_path / "features.csv"
@@ -714,7 +752,7 @@ def test_run_features_auto_single_cleaned_errors_on_multiple(tmp_path: Path) -> 
         ),
     )
     (tmp_path / "config" / "cleaner.yml").write_text(
-            "kind: scholastic_text\ninput: ../cleaned\noutput: ../cleaned\n",
+        "kind: scholastic_text\ninput: ../cleaned\noutput: ../cleaned\n",
         encoding="utf-8",
     )
 
@@ -729,7 +767,12 @@ def test_run_features_auto_single_cleaned_errors_on_multiple(tmp_path: Path) -> 
 
 def test_mfw_negative_errors(tmp_path: Path) -> None:
     with pytest.raises(FeatureError, match="non-negative"):
-        build_feature_matrix(corpora=(), nlp=DummyNLP(), extraction_policy=AnalysisExtractionPolicy(), options=FeatureOptions(mfw=-1))
+        build_feature_matrix(
+            corpora=(),
+            nlp=DummyNLP(),
+            extraction_policy=AnalysisExtractionPolicy(),
+            options=FeatureOptions(mfw=-1),
+        )
 
 
 def test_safe_feature_name_replaces_punctuation() -> None:
@@ -744,6 +787,10 @@ def test_cli_features_help(capsys) -> None:
     assert "--window-tokens" in help_text
     assert "--step-tokens" in help_text
     assert "--include-partial-window" in help_text
+    assert "--lexical-diversity" in help_text
+    assert "--lexdiv-window" in help_text
+    assert "--mtld-threshold" in help_text
+    assert "--hdd-sample-size" in help_text
 
 
 def test_cli_sampling_arguments_are_composed_into_request(monkeypatch) -> None:
@@ -761,26 +808,32 @@ def test_cli_sampling_arguments_are_composed_into_request(monkeypatch) -> None:
     )
     stdout = io.StringIO()
     stderr = io.StringIO()
-    assert cli.main(
-        [
-            "features",
-            "--window-tokens",
-            "1000",
-            "--step-tokens",
-            "500",
-            "--include-partial-window",
-        ],
-        stdout=stdout,
-        stderr=stderr,
-    ) == 0
+    assert (
+        cli.main(
+            [
+                "features",
+                "--window-tokens",
+                "1000",
+                "--step-tokens",
+                "500",
+                "--include-partial-window",
+            ],
+            stdout=stdout,
+            stderr=stderr,
+        )
+        == 0
+    )
     assert requests[0].sampling == FeatureSamplingOptions(1000, 500, True)
 
 
 def test_cli_invalid_sampling_value_returns_one() -> None:
     stderr = io.StringIO()
-    assert cli.main(
-        ["features", "--window-tokens", "0"],
-        stdout=io.StringIO(),
-        stderr=stderr,
-    ) == 1
+    assert (
+        cli.main(
+            ["features", "--window-tokens", "0"],
+            stdout=io.StringIO(),
+            stderr=stderr,
+        )
+        == 1
+    )
     assert "window_tokens must be a positive integer" in stderr.getvalue()

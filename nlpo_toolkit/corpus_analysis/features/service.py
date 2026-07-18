@@ -10,7 +10,12 @@ from ..execution_session import (
 from ..ports import FeatureCommandDependencies
 from .engine import build_feature_matrix
 from .errors import FeatureError
-from .models import FeatureCommandResult, FeatureFilterPolicy, FeatureOptions, FeatureRequest
+from .models import (
+    FeatureCommandResult,
+    FeatureFilterPolicy,
+    FeatureOptions,
+    FeatureRequest,
+)
 
 
 def execute_feature_command(
@@ -41,6 +46,7 @@ def execute_feature_command(
             roman_exceptions=nlp_session.roman_exceptions,
         ),
         sampling=request.sampling,
+        lexical_diversity=request.lexical_diversity,
     )
     return FeatureCommandResult(
         rows=build_feature_matrix(
