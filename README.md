@@ -965,6 +965,16 @@ different responsibilities.
 | `filters` | Mechanically removes tokens from counting | Before frequency counting | Drop one-character tokens; drop Roman numerals |
 | `dictcheck.wordlist` | Classifies lemmas as known or unknown | After frequency tables are created | Check whether a lemma exists in the dictionary wordlist |
 
+The repository-provided `config/lemma_normalize.tsv` is intentionally empty by
+default. It is a project-specific correction map, so entries should be added
+only after an NLP lemma error has been verified against the configured backend
+and source corpus. Each mapping is one tab-separated pair: the left column is
+the lemma emitted by NLP and the right column is the canonical lemma used in
+frequency tables. Empty lines and `#` comments are ignored; do not add a header
+row. This map does not correct input text, and while it contains no mappings,
+lemma normalization is a no-op. The `omninus -> omnino` row above is an
+illustrative example, not a default mapping.
+
 ## Docker
 
 Docker is the recommended way to avoid repeated local Stanza setup.

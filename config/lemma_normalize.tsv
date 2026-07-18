@@ -1,24 +1,8 @@
-materium	materia
-processium	processus
-hypostas	hypostasis
-creasturus	creatura
-sprituuss	piritus
-visius	visio
-Daemones	Daemon
-Scripturis	Scriptura
-entes	ens
-ordum	ordo
-creasturus	creatura
-missium	missio
-materium	materia
-processium	processus
-hypostas	hypostasis
-creasturus	creatura
-sprituuss	piritus
-visius	visio
-Daemones	Daemon
-Scripturis	Scriptura
-entes	ens
-ordum	ordo
-creasturus	creatura
-campis	campus
+# Lemma normalization map.
+#
+# Each non-comment line must contain exactly two tab-separated columns:
+#
+# source_lemma<TAB>normalized_lemma
+#
+# This file is intentionally empty. Add only mappings that have been
+# verified against the configured NLP backend and the source corpus.
