@@ -12,6 +12,7 @@ from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.features.errors import FeatureError
 from nlpo_toolkit.corpus_analysis.features.models import (
     AnalyzedFeatureCorpus,
+    CharacterNgramOptions,
     FeatureCommandResult,
     FeatureFilterPolicy,
     FeatureOptions,
@@ -915,6 +916,59 @@ def test_cli_function_word_field_requires_file() -> None:
     assert "--function-word-field requires --function-words" in stderr.getvalue()
 
 
+def test_cli_character_ngram_arguments_build_one_options_model(monkeypatch) -> None:
+    import nlpo_toolkit.corpus_analysis.cli.features as feature_cli
+
+    requests: list[FeatureRequest] = []
+
+    def execute(request, *, dependencies):
+        requests.append(request)
+        return FeatureCommandResult(())
+
+    monkeypatch.setattr(feature_cli, "execute_feature_command", execute)
+    monkeypatch.setattr(
+        feature_cli, "default_feature_command_dependencies", lambda: object()
+    )
+    assert (
+        cli.main(
+            [
+                "features",
+                "--char-ngram-size",
+                "3",
+                "--char-ngram-size",
+                "5",
+            ],
+            stdout=io.StringIO(),
+            stderr=io.StringIO(),
+        )
+        == 0
+    )
+    assert requests[0].character_ngrams == CharacterNgramOptions((3, 5), 500)
+
+
+def test_cli_character_ngram_top_requires_size_and_duplicates_fail() -> None:
+    stderr = io.StringIO()
+    assert (
+        cli.main(
+            ["features", "--char-ngram-top", "10"],
+            stdout=io.StringIO(),
+            stderr=stderr,
+        )
+        == 1
+    )
+    assert "requires --char-ngram-size" in stderr.getvalue()
+    stderr = io.StringIO()
+    assert (
+        cli.main(
+            ["features", "--char-ngram-size", "3", "--char-ngram-size", "3"],
+            stdout=io.StringIO(),
+            stderr=stderr,
+        )
+        == 1
+    )
+    assert "duplicate character n-gram size: 3" in stderr.getvalue()
+
+
 def test_cli_function_word_validation_failure_does_not_create_output(
     tmp_path: Path,
 ) -> None:
@@ -1036,3 +1090,52 @@ def test_function_words_follow_upos_and_precede_mfw_in_each_sample() -> None:
     assert first["fw_non"] == 0.0
     assert rows[1]["fw_et"] == 0.5
     assert rows[-1]["fw_et"] == 1.0
+
+
+def test_character_ngrams_use_prepared_text_and_precede_mfw() -> None:
+    rows = build_feature_matrix(
+        corpora=(_prepared("g", Path("a.txt"), "Rosa, amat."),),
+        nlp=DummyNLP(),
+        extraction_policy=AnalysisExtractionPolicy(),
+        options=FeatureOptions(
+            mfw=1,
+            field="token",
+            character_ngrams=CharacterNgramOptions((3,), top=4),
+        ),
+    )
+    keys = tuple(rows[0])
+    character_columns = tuple(key for key in keys if key.startswith("char3_"))
+    assert len(character_columns) == 4
+    assert keys.index(character_columns[-1]) < keys.index("mfw_amat")
+    assert any("_u00002c_" in key for key in character_columns)
+
+
+def test_character_file_boundary_failure_precedes_backend_start(tmp_path: Path) -> None:
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input" / "a.txt").write_text("Rosa amat", encoding="utf-8")
+    (tmp_path / "input" / "b.txt").write_text("Puella currit", encoding="utf-8")
+    config_path = _write_config(tmp_path)
+    backend_calls = 0
+
+    def backend_factory(config: NLPConfig) -> BuiltNLPBackend:
+        nonlocal backend_calls
+        backend_calls += 1
+        return _backend_factory(config)
+
+    base = _dependencies()
+    with pytest.raises(FeatureError, match="one source file"):
+        execute_feature_command(
+            FeatureRequest(
+                corpus=CorpusPreparationRequest(tmp_path, config_path),
+                character_ngrams=CharacterNgramOptions((3,)),
+            ),
+            dependencies=FeatureCommandDependencies(
+                corpus=base.corpus,
+                nlp=NLPExecutionDependencies(
+                    backend_factory=backend_factory,
+                    extraction_policy=base.nlp.extraction_policy,
+                ),
+                load_function_words=base.load_function_words,
+            ),
+        )
+    assert backend_calls == 0

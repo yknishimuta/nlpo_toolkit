@@ -46,6 +46,23 @@ def _sample_char_count(
     return sum(len(record.token) for record in raw_span)
 
 
+def _sample_text(
+    corpus: AnalyzedFeatureCorpus, raw_start: int, raw_end: int
+) -> str | None:
+    raw_span = corpus.raw_records[raw_start:raw_end]
+    first_start = raw_span[0].char_start_in_text
+    last_end = raw_span[-1].char_end_in_text
+    if (
+        first_start is None
+        or last_end is None
+        or first_start < 0
+        or last_end < first_start
+        or last_end > len(corpus.source.prepared_text)
+    ):
+        return None
+    return corpus.source.prepared_text[first_start:last_end]
+
+
 def _lexical_raw_indices(corpus: AnalyzedFeatureCorpus) -> tuple[int, ...]:
     indices: list[int] = []
     raw_offset = 0
@@ -90,6 +107,7 @@ def sample_feature_corpus(
                 raw_records=raw_span,
                 lexical_records=corpus.lexical_records[start:end],
                 char_count=_sample_char_count(corpus, raw_start, raw_end),
+                text=_sample_text(corpus, raw_start, raw_end),
                 sample=FeatureSampleMetadata(
                     source_file=str(corpus.source.files[0]),
                     sample_id=f"{corpus.source.label}__sample_{sample_index:04d}",

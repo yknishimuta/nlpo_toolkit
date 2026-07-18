@@ -83,6 +83,7 @@ def test_command_requests_compose_corpus_without_duplicate_fields() -> None:
         "sampling",
         "lexical_diversity",
         "function_words",
+        "character_ngrams",
     }
     assert {field.name for field in fields(ConfigNgramRequest)} == {
         "corpus",

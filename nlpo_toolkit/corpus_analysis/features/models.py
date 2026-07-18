@@ -18,6 +18,25 @@ FeatureScalar = str | int | float
 
 
 @dataclass(frozen=True)
+class CharacterNgramOptions:
+    sizes: tuple[int, ...]
+    top: int = 500
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "sizes", tuple(self.sizes))
+        if not self.sizes:
+            raise FeatureError("--char-ngram-size must be specified")
+        for size in self.sizes:
+            if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
+                raise FeatureError("--char-ngram-size must be a positive integer")
+        if len(self.sizes) != len(set(self.sizes)):
+            duplicate = next(size for size in self.sizes if self.sizes.count(size) > 1)
+            raise FeatureError(f"duplicate character n-gram size: {duplicate}")
+        if isinstance(self.top, bool) or not isinstance(self.top, int) or self.top <= 0:
+            raise FeatureError("--char-ngram-top must be a positive integer")
+
+
+@dataclass(frozen=True)
 class LexicalDiversityOptions:
     window_size: int = 100
     mtld_threshold: float = 0.72
@@ -140,6 +159,7 @@ class FeatureOptions:
     sampling: FeatureSamplingOptions = FeatureSamplingOptions()
     lexical_diversity: LexicalDiversityOptions | None = None
     function_words: FunctionWordOptions | None = None
+    character_ngrams: CharacterNgramOptions | None = None
 
 
 def validate_feature_options(options: FeatureOptions) -> None:
@@ -159,6 +179,7 @@ class FeatureRequest:
     sampling: FeatureSamplingOptions = FeatureSamplingOptions()
     lexical_diversity: LexicalDiversityOptions | None = None
     function_words: FunctionWordSource | None = None
+    character_ngrams: CharacterNgramOptions | None = None
 
 
 @dataclass(frozen=True)
@@ -178,6 +199,7 @@ class AnalyzedFeatureCorpus:
     lexical_records: tuple[NLPAnalysisRecord, ...]
     char_count: int | None = None
     sample: FeatureSampleMetadata | None = None
+    text: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "raw_records", tuple(self.raw_records))

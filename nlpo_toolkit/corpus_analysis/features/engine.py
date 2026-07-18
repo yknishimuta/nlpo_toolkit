@@ -6,6 +6,12 @@ from ..analysis_policy import AnalysisExtractionPolicy
 from ..analysis_records import iter_nlp_analysis_records_from_text
 from ..corpus import PreparedCorpus
 from .errors import FeatureError
+from .character_ngrams import (
+    CharacterNgramVocabulary,
+    compute_character_ngram_features,
+    select_character_ngram_vocabulary,
+)
+from .character_text import feature_unit_character_text
 from .filtering import filter_feature_records
 from .function_words import compute_function_word_features
 from .lexical import compute_basic_features
@@ -17,6 +23,7 @@ from .models import (
     FeatureOptions,
     FeatureRow,
     FeatureScalar,
+    CharacterNgramOptions,
     validate_feature_options,
 )
 from .sampling import sample_feature_corpus
@@ -42,6 +49,25 @@ def analyze_feature_corpus(
         source=corpus,
         raw_records=raw_records,
         lexical_records=lexical_records,
+        text=corpus.prepared_text,
+    )
+
+
+def prepare_character_ngram_vocabulary(
+    corpora: tuple[PreparedCorpus, ...],
+    *,
+    options: CharacterNgramOptions | None,
+) -> CharacterNgramVocabulary | None:
+    if options is None:
+        return None
+    for corpus in corpora:
+        if len(corpus.files) != 1:
+            raise FeatureError(
+                "character n-gram features require one source file per prepared corpus; "
+                "use --group-by-file or grouping.mode: per_file"
+            )
+    return select_character_ngram_vocabulary(
+        tuple(corpus.prepared_text for corpus in corpora), options=options
     )
 
 
@@ -51,8 +77,13 @@ def build_feature_matrix(
     nlp: NLPBackend,
     extraction_policy: AnalysisExtractionPolicy,
     options: FeatureOptions,
+    character_vocabulary: CharacterNgramVocabulary | None = None,
 ) -> tuple[FeatureRow, ...]:
     validate_feature_options(options)
+    if options.character_ngrams is not None and character_vocabulary is None:
+        character_vocabulary = prepare_character_ngram_vocabulary(
+            corpora, options=options.character_ngrams
+        )
     analyzed = tuple(
         analyze_feature_corpus(
             corpus,
@@ -103,6 +134,13 @@ def build_feature_matrix(
                 compute_function_word_features(
                     corpus.lexical_records,
                     options=options.function_words,
+                )
+            )
+        if character_vocabulary is not None:
+            values.update(
+                compute_character_ngram_features(
+                    feature_unit_character_text(corpus),
+                    vocabulary=character_vocabulary,
                 )
             )
         if terms:

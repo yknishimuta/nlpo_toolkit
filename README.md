@@ -738,6 +738,66 @@ length excludes it. Matching is exact: attached enclitics such as `-que`,
 not supported. With fixed-token windows, frequencies and denominators are
 calculated independently inside each full, partial, or overlapping sample.
 
+Character n-gram relative-frequency features capture surface spelling,
+affixes, word boundaries, punctuation, and short formulaic fragments. Enable
+one size or repeat the option for several sizes:
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --group-by-file \
+  --char-ngram-size 3 \
+  --char-ngram-top 500 \
+  --out output/features_char3.csv
+
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --group-by-file \
+  --char-ngram-size 3 \
+  --char-ngram-size 4 \
+  --char-ngram-size 5 \
+  --char-ngram-top 300 \
+  --out output/features_char345.csv
+```
+
+`--char-ngram-top` is a per-size limit, so the second example can add up to
+900 columns. Vocabulary selection pools raw character n-gram counts from each
+unsampled source corpus, orders them by decreasing frequency and then lexical
+tie-break, and only then generates rows. Consequently overlap and window size
+do not change the selected columns, although longer works contribute more raw
+positions to selection.
+
+The input is the prepared text after Cleaner processing, text normalization,
+and reference-tag removal—not reconstructed NLP tokens. It is lowercased,
+Unicode whitespace runs are collapsed to one ASCII space, and outer whitespace
+is stripped. Spaces, punctuation, digits, and other Unicode characters remain;
+n-grams may cross word and sentence boundaries but never a Feature-unit or
+source-file boundary. Character features require exactly one source file per
+prepared corpus, so use per-file grouping.
+
+Each value is the occurrence count divided by all possible positions of that
+size in the row text. Fixed-token rows use the exact prepared-text slice from
+the first lexical token start through the final lexical token end, retaining
+intervening whitespace, punctuation, excluded tokens, and line breaks before
+whitespace normalization. Missing exact offsets are an error; token joining is
+not used as a fallback. Character features are independent of lemma choice,
+UPOS, minimum token length, Roman filtering, function words, and MFW.
+
+Columns use `char<size>_...`. ASCII letters and digits remain literal, spaces
+become `_sp_`, and every other code point becomes six-digit lowercase hex such
+as `_u00002c_`. Thus punctuation and whitespace remain unambiguous. Stylometry
+can select these columns with prefixes such as `char3_` or `char5_`.
+
+Punctuation patterns can reflect an editor or edition as well as an author, so
+all compared texts should use the same edition, cleaning, and normalization.
+The automatically selected vocabulary also creates upstream leakage when a
+Features table is later used for LOWO: held-out works may influence which
+character columns were selected. LOWO still prevents leakage in z-score fit
+and centroids, but strict evaluation needs a vocabulary fixed externally or
+selected inside each training fold in a future workflow.
+
 One row per input file:
 
 ```bash

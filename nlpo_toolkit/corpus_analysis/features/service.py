@@ -8,7 +8,7 @@ from ..execution_session import (
     start_nlp_execution_session,
 )
 from ..ports import FeatureCommandDependencies
-from .engine import build_feature_matrix
+from .engine import build_feature_matrix, prepare_character_ngram_vocabulary
 from .errors import FeatureError
 from .function_words import build_function_word_columns
 from .models import (
@@ -46,6 +46,10 @@ def execute_feature_command(
             request.corpus,
             dependencies=dependencies.corpus,
         )
+        character_vocabulary = prepare_character_ngram_vocabulary(
+            corpus_session.corpora,
+            options=request.character_ngrams,
+        )
         nlp_session = start_nlp_execution_session(
             corpus_session,
             dependencies=dependencies.nlp,
@@ -66,6 +70,7 @@ def execute_feature_command(
         sampling=request.sampling,
         lexical_diversity=request.lexical_diversity,
         function_words=function_words,
+        character_ngrams=request.character_ngrams,
     )
     return FeatureCommandResult(
         rows=build_feature_matrix(
@@ -73,5 +78,6 @@ def execute_feature_command(
             nlp=nlp_session.backend.backend,
             extraction_policy=nlp_session.extraction_policy,
             options=options,
+            character_vocabulary=character_vocabulary,
         )
     )

@@ -7,6 +7,7 @@ from ..composition import default_feature_command_dependencies
 from ..corpus_errors import CorpusPreparationError
 from ..features.errors import FeatureError
 from ..features.models import (
+    CharacterNgramOptions,
     FeatureRequest,
     FeatureSamplingOptions,
     FunctionWordSource,
@@ -133,6 +134,19 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         default=None,
         help="Field used for explicit function-word matching; default: lemma.",
     )
+    parser.add_argument(
+        "--char-ngram-size",
+        type=int,
+        action="append",
+        default=[],
+        help="Character n-gram size; repeat to enable multiple sizes.",
+    )
+    parser.add_argument(
+        "--char-ngram-top",
+        type=int,
+        default=None,
+        help="Maximum selected character n-grams per size; default: 500.",
+    )
     add_grouping_override_arguments(parser)
     add_empty_group_argument(parser)
     set_handler(parser, execute)
@@ -142,6 +156,8 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
     try:
         if args.function_word_field is not None and args.function_words is None:
             raise FeatureError("--function-word-field requires --function-words")
+        if args.char_ngram_top is not None and not args.char_ngram_size:
+            raise FeatureError("--char-ngram-top requires --char-ngram-size")
         lexical_diversity = None
         if args.lexical_diversity or any(
             value is not None
@@ -181,6 +197,16 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
                         field=args.function_word_field or "lemma",
                     )
                     if args.function_words is not None
+                    else None
+                ),
+                character_ngrams=(
+                    CharacterNgramOptions(
+                        sizes=tuple(args.char_ngram_size),
+                        top=args.char_ngram_top
+                        if args.char_ngram_top is not None
+                        else 500,
+                    )
+                    if args.char_ngram_size
                     else None
                 ),
             ),
