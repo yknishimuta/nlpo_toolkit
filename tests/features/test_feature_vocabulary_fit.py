@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 
 from nlpo_toolkit.corpus_analysis.analysis_records import NLPAnalysisRecord
@@ -16,9 +17,11 @@ from nlpo_toolkit.corpus_analysis.features.models import (
     FeatureOptions,
     UposNgramOptions,
     FeatureFilterPolicy,
+    MorphologyOptions,
 )
 from nlpo_toolkit.corpus_analysis.analysis_policy import AnalysisExtractionPolicy
 from nlpo_toolkit.nlp.contracts import NLPDocument, NLPSentence, NLPToken
+from nlpo_toolkit.nlp.contracts import UDMorphFeature
 
 
 def _record(token: str, upos: str, index: int) -> NLPAnalysisRecord:
@@ -73,6 +76,38 @@ def test_fitted_vocabulary_can_differ_by_held_out_work() -> None:
     without_a = fit_feature_vocabulary(corpora[1:], options=options)
     without_c = fit_feature_vocabulary(corpora[:2], options=options)
     assert without_a.mfw_terms != without_c.mfw_terms
+
+
+def test_training_only_morphology_vocabulary_routes_held_out_value_to_other() -> None:
+    training_corpus = _analyzed("train", "rosa", (("rosa", "NOUN"),))
+    held_corpus = _analyzed("held", "rosa", (("rosa", "NOUN"),))
+    training_record = replace(
+        training_corpus.lexical_records[0],
+        morphology=(UDMorphFeature("Case", "Nom"),),
+    )
+    held_record = replace(
+        held_corpus.lexical_records[0],
+        morphology=(UDMorphFeature("Case", "Voc"),),
+    )
+    training = replace(
+        training_corpus,
+        raw_records=(training_record,),
+        lexical_records=(training_record,),
+    )
+    held = replace(
+        held_corpus, raw_records=(held_record,), lexical_records=(held_record,)
+    )
+    options = FeatureOptions(
+        include_basic=False,
+        include_upos=False,
+        morphology=MorphologyOptions(True, ("Case",)),
+    )
+    vocabulary = fit_feature_vocabulary((training,), options=options)
+    assert vocabulary.morphology.values == (UDMorphFeature("Case", "Nom"),)
+    row = build_feature_rows((held,), options=options, vocabulary=vocabulary)[0]
+    assert "morph_value_Case_Voc" not in row
+    assert row["morph_other_Case"] == 1.0
+    assert row["morph_other_conditional_Case"] == 1.0
 
 
 def test_all_corpora_are_analyzed_once_before_fold_vocabulary_fit() -> None:

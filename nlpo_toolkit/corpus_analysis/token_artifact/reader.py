@@ -14,7 +14,8 @@ from .errors import (
 from .integrity import file_size, sha256_file
 from .paths import token_artifact_metadata_path
 from .schema import (
-    TOKEN_ARTIFACT_COLUMNS,
+    TOKEN_ARTIFACT_V1_COLUMNS,
+    TOKEN_ARTIFACT_V2_COLUMNS,
     TOKEN_ARTIFACT_DELIMITER,
     TOKEN_ARTIFACT_ENCODING,
     TokenArtifactMetadata,
@@ -57,9 +58,7 @@ def read_token_records(
     if not path.exists():
         raise TokenArtifactFormatError(f"Token artifact not found: {path}")
     if not path.is_file():
-        raise TokenArtifactFormatError(
-            f"Token artifact is not a regular file: {path}"
-        )
+        raise TokenArtifactFormatError(f"Token artifact is not a regular file: {path}")
     metadata = read_token_artifact_metadata(path)
     if require_complete and not metadata.complete:
         raise TokenArtifactIntegrityError(f"Token artifact is incomplete: {path}")
@@ -78,10 +77,15 @@ def read_token_records(
     try:
         reader = csv.DictReader(stream, delimiter=TOKEN_ARTIFACT_DELIMITER)
         header = tuple(reader.fieldnames or ())
-        if header != TOKEN_ARTIFACT_COLUMNS:
+        expected_columns = (
+            TOKEN_ARTIFACT_V1_COLUMNS
+            if metadata.schema_version == 1
+            else TOKEN_ARTIFACT_V2_COLUMNS
+        )
+        if header != expected_columns:
             raise TokenArtifactFormatError(
                 f"Token artifact header does not match schema: {path}; "
-                f"expected={TOKEN_ARTIFACT_COLUMNS}; actual={header}"
+                f"expected={expected_columns}; actual={header}"
             )
         for line_number, row in enumerate(reader, start=2):
             if None in row:
@@ -89,7 +93,10 @@ def read_token_records(
                     f"Malformed token artifact row at {path}:{line_number}"
                 )
             record = decode_token_record(
-                row, source_path=path, line_number=line_number
+                row,
+                source_path=path,
+                line_number=line_number,
+                schema_version=metadata.schema_version,
             )
             row_count += 1
             if record.included:

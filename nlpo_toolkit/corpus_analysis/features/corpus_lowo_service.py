@@ -160,6 +160,7 @@ def execute_corpus_lowo(
         function_words=function_words,
         character_ngrams=request.features.character_ngrams,
         upos_ngrams=request.features.upos_ngrams,
+        morphology=request.features.morphology,
     )
     analyzed = analyze_feature_corpora(
         session.corpora,
@@ -209,6 +210,7 @@ def execute_corpus_lowo(
             vocabulary.mfw_terms,
             vocabulary.character_ngrams.terms if vocabulary.character_ngrams else (),
             vocabulary.upos_ngrams.terms if vocabulary.upos_ngrams else (),
+            vocabulary.morphology,
         )
         folds.append(
             CorpusLowoFoldResult(evaluation, len(labeled.feature_names), audit)

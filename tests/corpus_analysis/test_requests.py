@@ -85,6 +85,7 @@ def test_command_requests_compose_corpus_without_duplicate_fields() -> None:
         "function_words",
         "character_ngrams",
         "upos_ngrams",
+        "morphology",
     }
     assert {field.name for field in fields(ConfigNgramRequest)} == {
         "corpus",

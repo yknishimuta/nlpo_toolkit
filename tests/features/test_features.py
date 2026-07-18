@@ -23,6 +23,7 @@ from nlpo_toolkit.corpus_analysis.features.models import (
     FunctionWordSource,
     FunctionWordVocabulary,
     UposNgramOptions,
+    MorphologyOptions,
 )
 from nlpo_toolkit.corpus_analysis.features.engine import build_feature_matrix
 from nlpo_toolkit.corpus_analysis.features.filtering import (
@@ -804,6 +805,9 @@ def test_cli_features_help(capsys) -> None:
     assert "--hdd-sample-size" in help_text
     assert "--function-words" in help_text
     assert "--function-word-field" in help_text
+    assert "--morphology" in help_text
+    assert "--morph-attribute" in help_text
+    assert "--morph-bundle-top" in help_text
 
 
 def test_cli_sampling_arguments_are_composed_into_request(monkeypatch) -> None:
@@ -1031,6 +1035,43 @@ def test_cli_upos_ngram_top_requires_size_and_duplicates_fail() -> None:
         == 1
     )
     assert "--upos-ngram-size must be 2 or 3" in stderr.getvalue()
+
+
+def test_cli_morphology_arguments_build_typed_options(monkeypatch) -> None:
+    import nlpo_toolkit.corpus_analysis.cli.features as feature_cli
+
+    requests: list[FeatureRequest] = []
+
+    def execute(request, *, dependencies):
+        requests.append(request)
+        return FeatureCommandResult(())
+
+    monkeypatch.setattr(feature_cli, "execute_feature_command", execute)
+    monkeypatch.setattr(
+        feature_cli, "default_feature_command_dependencies", lambda: object()
+    )
+    assert cli.main(
+        [
+            "features", "--morph-attribute", "Case", "--morph-attribute",
+            "Number", "--morph-bundle-top", "10",
+        ],
+        stdout=io.StringIO(), stderr=io.StringIO(),
+    ) == 0
+    assert requests[0].morphology == MorphologyOptions(
+        True, ("Case", "Number"), 10
+    )
+
+
+def test_cli_morphology_rejects_duplicate_attribute_and_invalid_top() -> None:
+    for arguments, message in (
+        (("--morph-attribute", "Case", "--morph-attribute", "Case"), "duplicate"),
+        (("--morph-bundle-top", "0"), "positive integer"),
+    ):
+        stderr = io.StringIO()
+        assert cli.main(
+            ["features", *arguments], stdout=io.StringIO(), stderr=stderr
+        ) == 1
+        assert message in stderr.getvalue()
 
 
 def test_cli_function_word_validation_failure_does_not_create_output(

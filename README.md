@@ -933,6 +933,64 @@ record count, while `word_token_count` is the count that passed the feature
 eligibility filter. Features do not require token artifacts or imply use of the
 analysis cache.
 
+### Latin morphological features
+
+Features can preserve and summarize the Universal Dependencies `feats`
+reported by Stanza's POS processor. These are UD morphological annotations,
+not treebank-specific XPOS tags or dependency relations.
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --group-by-file \
+  --window-tokens 1000 \
+  --morphology \
+  --morph-attribute Case \
+  --morph-attribute Number \
+  --morph-attribute Tense \
+  --morph-bundle-top 100 \
+  --out output/features_morphology.csv
+```
+
+For every selected attribute, `morph_coverage_*` is the fraction of eligible
+lexical tokens carrying that annotation. `morph_value_*` divides a value count
+by all eligible lexical tokens, while `morph_conditional_*` divides by tokens
+annotated for that attribute. Values absent from the fitted vocabulary are
+recorded in `morph_other_*` and `morph_other_conditional_*`; missing annotation
+reduces coverage and is not treated as an unknown value.
+
+With `--morph-bundle-top`, a bundle is the canonical combination of the target
+attributes on one token. Bundle vocabulary is selected by pooled occurrence
+frequency, with lexical tie-breaking, and can be sparse. Ordinary Features fits
+the vocabulary on all input corpora. Corpus-input LOWO fits values and bundles
+using training works only, so held-out-only values are represented by `other`.
+Fixed-window output calculates ratios independently inside each sample, while
+vocabulary fitting uses the unsampled lexical records.
+
+Morphology depends directly on the Stanza language package and model. Do not
+mix results from different models or preprocessing settings. Annotation errors
+can appear as apparent author differences, while real morphological variation
+may also reflect genre, verse versus prose, and historical period.
+
+Morphology columns are ordinary numeric Stylometry inputs:
+
+```bash
+nlpo stylometry delta \
+  --features output/features_morphology.csv \
+  --id-column sample_id \
+  --feature-prefix morph_value_ \
+  --out output/morphology_delta.csv
+
+nlpo stylometry evaluate-lowo \
+  --features output/features_morphology.csv \
+  --metadata config/authorship_metadata.csv \
+  --id-column sample_id \
+  --feature-prefix morph_conditional_ \
+  --out output/morphology_lowo.csv \
+  --summary-out output/morphology_lowo.json
+```
+
 ## Stylometry / Burrows's Delta
 
 `nlpo stylometry delta` reads an already-published Features CSV or TSV. It does

@@ -5,7 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from nlpo_toolkit.corpus_analysis.analysis_cache.provider import provide_analysis_records
+from nlpo_toolkit.corpus_analysis.analysis_cache.provider import (
+    provide_analysis_records,
+)
 from nlpo_toolkit.corpus_analysis.analysis_policy import AnalysisExtractionPolicy
 from nlpo_toolkit.corpus_analysis.ports import (
     AnalysisRecordCacheSettings,
@@ -59,14 +61,16 @@ def _request(
     )
 
 
-def test_disabled_provider_computes_records_and_returns_stable_key(tmp_path: Path) -> None:
+def test_disabled_provider_computes_records_and_returns_stable_key(
+    tmp_path: Path,
+) -> None:
     backend = RecordingBackend()
     request = _request(tmp_path, backend, enabled=False)
     with provide_analysis_records(request) as source:
         records = list(source.records)
         assert source.cache_status == "disabled"
         assert source.cache_key == (
-            "891e48ac579a03b6803671df700cc48455114607963376e9671c8cd14fe51c35"
+            "bcab8f7f10b6bff1aecdb3ce75aa793c690e8fce66ca22f532e286bffe5d5ab1"
         )
     assert [record.token for record in records] == ["Rosa"]
     assert backend.calls == ["Rosa"]
@@ -93,22 +97,36 @@ def test_policy_and_backend_metadata_change_provider_key(tmp_path: Path) -> None
             return source.cache_key
 
     base_key = key(base)
-    assert key(replace(base, extraction_policy=AnalysisExtractionPolicy(chunk_chars=101))) != base_key
-    assert key(
-        replace(base, extraction_policy=AnalysisExtractionPolicy(processors=("tokenize",)))
-    ) != base_key
-    assert key(
-        replace(
-            base,
-            backend=BuiltNLPBackend(
-                backend=backend,
-                info=NLPBackendInfo(name="fake", language="la", package="other"),
-            ),
+    assert (
+        key(replace(base, extraction_policy=AnalysisExtractionPolicy(chunk_chars=101)))
+        != base_key
+    )
+    assert (
+        key(
+            replace(
+                base,
+                extraction_policy=AnalysisExtractionPolicy(processors=("tokenize",)),
+            )
         )
-    ) != base_key
+        != base_key
+    )
+    assert (
+        key(
+            replace(
+                base,
+                backend=BuiltNLPBackend(
+                    backend=backend,
+                    info=NLPBackendInfo(name="fake", language="la", package="other"),
+                ),
+            )
+        )
+        != base_key
+    )
 
 
-def test_provider_early_exit_and_failure_leave_no_complete_cache(tmp_path: Path) -> None:
+def test_provider_early_exit_and_failure_leave_no_complete_cache(
+    tmp_path: Path,
+) -> None:
     backend = RecordingBackend()
     request = _request(tmp_path, backend, enabled=True)
     with provide_analysis_records(request) as source:

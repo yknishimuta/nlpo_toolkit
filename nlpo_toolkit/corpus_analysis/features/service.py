@@ -72,6 +72,7 @@ def execute_feature_command(
         function_words=function_words,
         character_ngrams=request.character_ngrams,
         upos_ngrams=request.upos_ngrams,
+        morphology=request.morphology,
     )
     return FeatureCommandResult(
         rows=build_feature_matrix(

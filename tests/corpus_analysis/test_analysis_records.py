@@ -27,6 +27,7 @@ def _analysis_record(**overrides) -> NLPAnalysisRecord:
         "token": "Arma",
         "lemma": "arma",
         "upos": "NOUN",
+        "morphology": (),
     }
     data.update(overrides)
     return NLPAnalysisRecord(**data)
@@ -75,6 +76,7 @@ def test_nlp_analysis_record_fields_are_stable() -> None:
         "token": "Arma",
         "lemma": "arma",
         "upos": "NOUN",
+        "morphology": (),
     }
 
 
@@ -178,7 +180,9 @@ class _FakeBackend:
         return NLPDocument(sentences=[NLPSentence(tokens=tokens, text=text)])
 
 
-def test_iter_nlp_analysis_records_from_text_preserves_offsets_and_global_indices() -> None:
+def test_iter_nlp_analysis_records_from_text_preserves_offsets_and_global_indices() -> (
+    None
+):
     records = list(
         iter_nlp_analysis_records_from_text(
             text="aa bb cc dd",
@@ -187,7 +191,9 @@ def test_iter_nlp_analysis_records_from_text_preserves_offsets_and_global_indice
         )
     )
 
-    assert [record.global_token_index for record in records] == list(range(len(records)))
+    assert [record.global_token_index for record in records] == list(
+        range(len(records))
+    )
     assert {record.chunk_index for record in records} == {0, 1, 2}
     assert records[0].sentence == "aa bb"
     assert records[0].token == "aa"

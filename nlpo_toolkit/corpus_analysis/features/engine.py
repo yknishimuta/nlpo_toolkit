@@ -17,6 +17,7 @@ from .function_words import compute_function_word_features
 from .lexical import compute_basic_features
 from .lexical_diversity import compute_lexical_diversity_features
 from .mfw import compute_mfw_features, select_mfw_terms
+from .morphology import compute_morphology_features, fit_morphology_vocabulary
 from .models import (
     AnalyzedFeatureCorpus,
     FeatureFilterPolicy,
@@ -137,6 +138,11 @@ def fit_feature_vocabulary(
         mfw_terms=select_mfw_terms(corpora, count=options.mfw, field=options.field),
         character_ngrams=character_vocabulary,
         upos_ngrams=upos_vocabulary,
+        morphology=(
+            fit_morphology_vocabulary(corpora, options=options.morphology)
+            if options.morphology is not None and options.morphology.enabled
+            else None
+        ),
     )
 
 
@@ -186,6 +192,13 @@ def build_feature_rows(
                 compute_upos_ngram_features(
                     corpus.lexical_records,
                     vocabulary=vocabulary.upos_ngrams,
+                )
+            )
+        if vocabulary.morphology is not None:
+            values.update(
+                compute_morphology_features(
+                    corpus.lexical_records,
+                    vocabulary=vocabulary.morphology,
                 )
             )
         if options.function_words is not None:

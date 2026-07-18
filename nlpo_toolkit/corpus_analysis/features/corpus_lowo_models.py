@@ -14,6 +14,7 @@ from ..requests import CorpusPreparationRequest
 from .character_ngrams import CharacterNgramTerm
 from .models import FeatureRequest
 from .upos_ngrams import UposNgramTerm
+from .morphology import MorphologyVocabulary
 
 
 @dataclass(frozen=True)
@@ -48,6 +49,7 @@ class FoldVocabularyAudit:
     mfw_terms: tuple[str, ...]
     character_ngrams: tuple[CharacterNgramTerm, ...]
     upos_ngrams: tuple[UposNgramTerm, ...]
+    morphology: MorphologyVocabulary | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "mfw_terms", tuple(self.mfw_terms))
@@ -62,6 +64,16 @@ class FoldVocabularyAudit:
             f"c:{term.size}:{len(term.value)}:{term.value}:{term.column_name}"
             for term in self.character_ngrams
         )
+        if self.morphology is not None:
+            parts.extend(f"ma:{attribute}" for attribute in self.morphology.attributes)
+            parts.extend(
+                f"mv:{item.attribute}={item.value}" for item in self.morphology.values
+            )
+            parts.extend(
+                "mb:"
+                + "|".join(f"{item.attribute}={item.value}" for item in bundle.features)
+                for bundle in self.morphology.bundles
+            )
         parts.extend(
             f"u:{term.size}:{'|'.join(term.tags)}:{term.column_name}"
             for term in self.upos_ngrams
@@ -86,6 +98,15 @@ class CorpusLowoFoldResult:
     @property
     def selected_upos_ngram_count(self) -> int:
         return len(self.vocabulary.upos_ngrams)
+
+    @property
+    def selected_morphology_count(self) -> int:
+        morphology = self.vocabulary.morphology
+        return (
+            0
+            if morphology is None
+            else len(morphology.values) + len(morphology.bundles)
+        )
 
 
 @dataclass(frozen=True)

@@ -4,8 +4,33 @@ from pathlib import Path
 from typing import Mapping
 
 from ..analysis_records import TokenRecord
+from nlpo_toolkit.nlp.contracts import UDMorphFeature
 from .errors import TokenArtifactRowError
-from .schema import TOKEN_ARTIFACT_COLUMNS
+from .schema import TOKEN_ARTIFACT_V1_COLUMNS, TOKEN_ARTIFACT_V2_COLUMNS
+
+
+def encode_ud_feats(features: tuple[UDMorphFeature, ...]) -> str:
+    return "|".join(f"{item.attribute}={item.value}" for item in features)
+
+
+def decode_ud_feats(value: str, *, path: Path, line: int) -> tuple[UDMorphFeature, ...]:
+    if not value:
+        return ()
+    try:
+        features = tuple(
+            UDMorphFeature(*segment.split("=", 1))
+            for segment in value.split("|")
+            if "=" in segment
+        )
+        if len(features) != len(value.split("|")):
+            raise ValueError
+        if len({item.attribute for item in features}) != len(features):
+            raise ValueError
+        return tuple(sorted(features))
+    except (TypeError, ValueError) as exc:
+        raise TokenArtifactRowError(
+            f"Invalid feats value at {path.resolve()}:{line}"
+        ) from exc
 
 
 def encode_token_record(record: TokenRecord) -> dict[str, str]:
@@ -28,6 +53,7 @@ def encode_token_record(record: TokenRecord) -> dict[str, str]:
         "token": record.token,
         "lemma": optional(record.lemma),
         "upos": optional(record.upos),
+        "feats": encode_ud_feats(record.morphology),
         "analysis_key": optional(record.analysis_key),
         "included": "true" if record.included else "false",
         "exclusion_reason": optional(record.exclusion_reason),
@@ -72,9 +98,16 @@ def _integer(
 
 
 def decode_token_record(
-    row: Mapping[str, str], *, source_path: Path, line_number: int
+    row: Mapping[str, str],
+    *,
+    source_path: Path,
+    line_number: int,
+    schema_version: int = 1,
 ) -> TokenRecord:
-    for column in TOKEN_ARTIFACT_COLUMNS:
+    columns = (
+        TOKEN_ARTIFACT_V1_COLUMNS if schema_version == 1 else TOKEN_ARTIFACT_V2_COLUMNS
+    )
+    for column in columns:
         _value(row, column, source_path, line_number)
     included_raw = _value(row, "included", source_path, line_number)
     if included_raw not in {"true", "false"}:
@@ -82,6 +115,7 @@ def decode_token_record(
             f"Invalid boolean {included_raw!r} in column included at "
             f"{source_path.resolve()}:{line_number}; expected 'true' or 'false'"
         )
+
     def optional(column: str) -> str | None:
         return _value(row, column, source_path, line_number) or None
 
@@ -89,14 +123,30 @@ def decode_token_record(
         group=_value(row, "group", source_path, line_number),
         source_file=optional("source_file"),
         section=optional("section"),
-        chunk_index=_integer(row, "chunk_index", source_path, line_number, optional=False),
-        sentence_index=_integer(row, "sentence_index", source_path, line_number, optional=False),
-        token_index=_integer(row, "token_index", source_path, line_number, optional=False),
-        global_token_index=_integer(row, "global_token_index", source_path, line_number, optional=False),
-        char_start_in_chunk=_integer(row, "char_start_in_chunk", source_path, line_number, optional=True),
-        char_end_in_chunk=_integer(row, "char_end_in_chunk", source_path, line_number, optional=True),
-        char_start_in_text=_integer(row, "char_start_in_text", source_path, line_number, optional=True),
-        char_end_in_text=_integer(row, "char_end_in_text", source_path, line_number, optional=True),
+        chunk_index=_integer(
+            row, "chunk_index", source_path, line_number, optional=False
+        ),
+        sentence_index=_integer(
+            row, "sentence_index", source_path, line_number, optional=False
+        ),
+        token_index=_integer(
+            row, "token_index", source_path, line_number, optional=False
+        ),
+        global_token_index=_integer(
+            row, "global_token_index", source_path, line_number, optional=False
+        ),
+        char_start_in_chunk=_integer(
+            row, "char_start_in_chunk", source_path, line_number, optional=True
+        ),
+        char_end_in_chunk=_integer(
+            row, "char_end_in_chunk", source_path, line_number, optional=True
+        ),
+        char_start_in_text=_integer(
+            row, "char_start_in_text", source_path, line_number, optional=True
+        ),
+        char_end_in_text=_integer(
+            row, "char_end_in_text", source_path, line_number, optional=True
+        ),
         sentence=_value(row, "sentence", source_path, line_number),
         token=_value(row, "token", source_path, line_number),
         lemma=optional("lemma"),
@@ -105,4 +155,13 @@ def decode_token_record(
         included=included_raw == "true",
         exclusion_reason=optional("exclusion_reason"),
         ref_tag=optional("ref_tag"),
+        morphology=(
+            ()
+            if schema_version == 1
+            else decode_ud_feats(
+                _value(row, "feats", source_path, line_number),
+                path=source_path,
+                line=line_number,
+            )
+        ),
     )

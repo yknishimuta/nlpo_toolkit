@@ -124,6 +124,7 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.corpus_analysis.features.character_ngrams",
             "nlpo_toolkit.corpus_analysis.features.upos_ngrams",
             "nlpo_toolkit.corpus_analysis.features.vocabulary",
+            "nlpo_toolkit.corpus_analysis.features.morphology",
             "nlpo_toolkit.corpus_analysis.features.corpus_lowo_models",
         ),
         recursive_packages=(
@@ -268,6 +269,7 @@ PURE_MODULES = (
     f"{CA}.features.character_ngrams",
     f"{CA}.features.upos_ngrams",
     f"{CA}.features.vocabulary",
+    f"{CA}.features.morphology",
     f"{CA}.features.corpus_lowo_models",
     f"{CA}.features.descriptive",
     f"{CA}.features.filtering",

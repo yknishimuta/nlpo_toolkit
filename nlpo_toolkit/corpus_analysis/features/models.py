@@ -18,6 +18,30 @@ FeatureScalar = str | int | float
 
 
 @dataclass(frozen=True)
+class MorphologyOptions:
+    enabled: bool = False
+    attributes: tuple[str, ...] = ()
+    bundle_top: int | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.enabled, bool):
+            raise FeatureError("morphology enabled must be a bool")
+        attributes = tuple(self.attributes)
+        if any(not isinstance(item, str) or not item.strip() for item in attributes):
+            raise FeatureError("--morph-attribute must not be empty")
+        attributes = tuple(item.strip() for item in attributes)
+        if len(attributes) != len(set(attributes)):
+            raise FeatureError("duplicate morphology attribute")
+        object.__setattr__(self, "attributes", attributes)
+        if self.bundle_top is not None and (
+            isinstance(self.bundle_top, bool)
+            or not isinstance(self.bundle_top, int)
+            or self.bundle_top <= 0
+        ):
+            raise FeatureError("--morph-bundle-top must be a positive integer")
+
+
+@dataclass(frozen=True)
 class CharacterNgramOptions:
     sizes: tuple[int, ...]
     top: int = 500
@@ -184,6 +208,7 @@ class FeatureOptions:
     function_words: FunctionWordOptions | None = None
     character_ngrams: CharacterNgramOptions | None = None
     upos_ngrams: UposNgramOptions | None = None
+    morphology: MorphologyOptions | None = None
 
 
 def validate_feature_options(options: FeatureOptions) -> None:
@@ -205,6 +230,7 @@ class FeatureRequest:
     function_words: FunctionWordSource | None = None
     character_ngrams: CharacterNgramOptions | None = None
     upos_ngrams: UposNgramOptions | None = None
+    morphology: MorphologyOptions | None = None
 
 
 @dataclass(frozen=True)

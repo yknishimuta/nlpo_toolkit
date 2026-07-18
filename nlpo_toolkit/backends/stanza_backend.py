@@ -1,11 +1,47 @@
-from nlpo_toolkit.nlp.contracts import NLPDocument, NLPSentence, NLPToken
+from nlpo_toolkit.nlp.contracts import (
+    NLPDocument,
+    NLPSentence,
+    NLPToken,
+    UDMorphFeature,
+)
 
 
 class StanzaBackendUnavailableError(RuntimeError):
     pass
 
 
-def convert_stanza_document_to_common_model(stanza_doc, original_text: str) -> NLPDocument:
+class StanzaBackendDataError(RuntimeError):
+    pass
+
+
+def parse_stanza_feats(raw: object) -> tuple[UDMorphFeature, ...]:
+    if raw is None or raw in ("", "_"):
+        return ()
+    if not isinstance(raw, str):
+        raise StanzaBackendDataError("Stanza feats must be a string")
+    features = []
+    for segment in raw.split("|"):
+        if not segment or segment.count("=") != 1:
+            raise StanzaBackendDataError(f"Invalid Stanza feats segment: {segment!r}")
+        attribute, value = segment.split("=", 1)
+        try:
+            features.append(UDMorphFeature(attribute, value))
+        except (TypeError, ValueError) as exc:
+            raise StanzaBackendDataError(
+                f"Invalid Stanza feats segment: {segment!r}"
+            ) from exc
+    try:
+        token = NLPToken("", None, None, morphology=tuple(features))
+    except (TypeError, ValueError) as exc:
+        raise StanzaBackendDataError(
+            f"Invalid duplicate Stanza feats: {raw[:200]!r}"
+        ) from exc
+    return token.morphology
+
+
+def convert_stanza_document_to_common_model(
+    stanza_doc, original_text: str
+) -> NLPDocument:
     """Convert a Stanza document-like object into the common NLPDocument model."""
     sentences: list[NLPSentence] = []
     for stanza_sent in getattr(stanza_doc, "sentences", []):
@@ -21,6 +57,7 @@ def convert_stanza_document_to_common_model(stanza_doc, original_text: str) -> N
                 upos=getattr(word, "upos", None),
                 start_char=getattr(word, "start_char", None),
                 end_char=getattr(word, "end_char", None),
+                morphology=parse_stanza_feats(getattr(word, "feats", None)),
             )
             for word in words
         )
@@ -47,10 +84,7 @@ class StanzaBackend:
             ) from exc
 
         self.pipeline = stanza.Pipeline(
-            lang=lang,
-            processors=processors,
-            package=package,
-            use_gpu=use_gpu
+            lang=lang, processors=processors, package=package, use_gpu=use_gpu
         )
 
     def __call__(self, text: str) -> NLPDocument:

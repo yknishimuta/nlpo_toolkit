@@ -10,6 +10,7 @@ from ..features.models import (
     FeatureSamplingOptions,
     FunctionWordSource,
     LexicalDiversityOptions,
+    MorphologyOptions,
     UposNgramOptions,
 )
 from ..requests import CorpusPreparationRequest
@@ -41,6 +42,9 @@ def add_feature_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--char-ngram-top", type=int, default=None)
     parser.add_argument("--upos-ngram-size", type=int, action="append", default=[])
     parser.add_argument("--upos-ngram-top", type=int, default=None)
+    parser.add_argument("--morphology", action="store_true")
+    parser.add_argument("--morph-attribute", action="append", default=[])
+    parser.add_argument("--morph-bundle-top", type=int, default=None)
 
 
 def build_feature_request(
@@ -91,6 +95,17 @@ def build_feature_request(
         upos_ngrams=(
             UposNgramOptions(tuple(args.upos_ngram_size), args.upos_ngram_top or 100)
             if args.upos_ngram_size
+            else None
+        ),
+        morphology=(
+            MorphologyOptions(
+                enabled=True,
+                attributes=tuple(args.morph_attribute),
+                bundle_top=args.morph_bundle_top,
+            )
+            if args.morphology
+            or args.morph_attribute
+            or args.morph_bundle_top is not None
             else None
         ),
     )

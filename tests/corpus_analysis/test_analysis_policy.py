@@ -6,7 +6,9 @@ import pytest
 
 from nlpo_toolkit.nlp.contracts import NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.analysis_cache.keys import build_analysis_cache_key
-from nlpo_toolkit.corpus_analysis.analysis_cache.provider import build_analysis_fingerprint
+from nlpo_toolkit.corpus_analysis.analysis_cache.provider import (
+    build_analysis_fingerprint,
+)
 from nlpo_toolkit.corpus_analysis.analysis_policy import (
     AnalysisExtractionPolicy,
     DEFAULT_ANALYSIS_EXTRACTION_POLICY,
@@ -49,9 +51,13 @@ def test_policy_builds_flat_fingerprint_and_invalidates_cache_key() -> None:
     changed_size = replace(default, chunk_chars=100_000)
     changed_processors = replace(default, processors=("tokenize", "pos", "lemma"))
 
-    default_fingerprint = build_analysis_fingerprint(backend_info=backend, policy=default)
+    default_fingerprint = build_analysis_fingerprint(
+        backend_info=backend, policy=default
+    )
     same_fingerprint = build_analysis_fingerprint(backend_info=backend, policy=default)
-    size_fingerprint = build_analysis_fingerprint(backend_info=backend, policy=changed_size)
+    size_fingerprint = build_analysis_fingerprint(
+        backend_info=backend, policy=changed_size
+    )
     processor_fingerprint = build_analysis_fingerprint(
         backend_info=backend,
         policy=changed_processors,
@@ -69,7 +75,7 @@ def test_policy_builds_flat_fingerprint_and_invalidates_cache_key() -> None:
 
     assert key(default_fingerprint) == key(same_fingerprint)
     assert key(default_fingerprint) == (
-        "50841412dcf22c28668539ccd1f9f7b32b50f86ab6424dcd82d57f4a1a4946eb"
+        "bf65446cdea5d582e169708619af069db28992bc93d4663187ac4b66791feb85"
     )
     assert key(default_fingerprint) != key(size_fingerprint)
     assert key(default_fingerprint) != key(processor_fingerprint)

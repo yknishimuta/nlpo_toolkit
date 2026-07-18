@@ -101,6 +101,30 @@ def write_vocabulary_audit(result: CorpusLowoResult, *, path: Path) -> None:
                         }
                         for term in item.vocabulary.upos_ngrams
                     ],
+                    "morphology": (
+                        {
+                            "attributes": list(item.vocabulary.morphology.attributes),
+                            "values": [
+                                {
+                                    "attribute": value.attribute,
+                                    "value": value.value,
+                                }
+                                for value in item.vocabulary.morphology.values
+                            ],
+                            "bundles": [
+                                [
+                                    {
+                                        "attribute": value.attribute,
+                                        "value": value.value,
+                                    }
+                                    for value in bundle.features
+                                ]
+                                for bundle in item.vocabulary.morphology.bundles
+                            ],
+                        }
+                        if item.vocabulary.morphology is not None
+                        else None
+                    ),
                     "sha256": item.vocabulary.sha256,
                 }
                 for item in result.folds

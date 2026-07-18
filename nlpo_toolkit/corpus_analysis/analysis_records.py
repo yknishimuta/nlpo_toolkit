@@ -10,7 +10,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
 
-from nlpo_toolkit.nlp.contracts import NLPBackend, NLPDocument, NLPSentence
+from nlpo_toolkit.nlp.contracts import (
+    NLPBackend,
+    NLPDocument,
+    NLPSentence,
+    UDMorphFeature,
+)
 from nlpo_toolkit.nlp.roman_numerals import (
     effective_roman_exceptions,
     should_drop_roman_numeral,
@@ -44,6 +49,10 @@ class NLPAnalysisRecord:
     token: str
     lemma: str | None
     upos: str | None
+    morphology: tuple[UDMorphFeature, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "morphology", tuple(self.morphology))
 
 
 @dataclass(frozen=True)
@@ -67,6 +76,10 @@ class TokenRecord:
     exclusion_reason: str | None
     ref_tag: str | None
     section: str | None = None
+    morphology: tuple[UDMorphFeature, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "morphology", tuple(self.morphology))
 
 
 @dataclass(frozen=True)
@@ -91,7 +104,9 @@ def _sentence_text(sentence: NLPSentence) -> str:
     return " ".join(token.text for token in sentence.tokens)
 
 
-def _token_key_from_values(token: str, lemma: str | None, *, use_lemma: bool) -> str | None:
+def _token_key_from_values(
+    token: str, lemma: str | None, *, use_lemma: bool
+) -> str | None:
     selected = lemma if (use_lemma and lemma) else token
     if selected is None:
         return None
@@ -131,6 +146,7 @@ def iter_nlp_analysis_records(
                 token=token.text,
                 lemma=token.lemma,
                 upos=token.upos,
+                morphology=token.morphology,
             )
             global_index += 1
 
@@ -167,8 +183,12 @@ def evaluate_analysis_record(
     *,
     options: AnalysisOptions,
 ) -> TokenRecord:
-    source_file = str(options.source_files[0]) if len(options.source_files) == 1 else None
-    key = _token_key_from_values(record.token, record.lemma, use_lemma=options.use_lemma)
+    source_file = (
+        str(options.source_files[0]) if len(options.source_files) == 1 else None
+    )
+    key = _token_key_from_values(
+        record.token, record.lemma, use_lemma=options.use_lemma
+    )
     effective_exceptions = effective_roman_exceptions(
         use_lemma=options.use_lemma,
         configured_exceptions=options.roman_exceptions,
@@ -207,4 +227,5 @@ def evaluate_analysis_record(
         included=exclusion_reason is None,
         exclusion_reason=exclusion_reason,
         ref_tag=None,
+        morphology=record.morphology,
     )
