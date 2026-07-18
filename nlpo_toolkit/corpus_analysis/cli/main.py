@@ -5,7 +5,7 @@ import sys
 from collections.abc import Sequence
 from typing import TextIO
 
-from . import cache, compare, concordance, count, features, ngram
+from . import cache, compare, concordance, count, features, ngram, stylometry
 from .common import CLIContext, CommandHandler
 
 
@@ -16,6 +16,7 @@ COMMAND_MODULES = (
     compare,
     features,
     ngram,
+    stylometry,
 )
 
 

@@ -27,6 +27,7 @@ def test_root_parser_registers_all_commands() -> None:
         "count",
         "features",
         "ngram",
+        "stylometry",
     }
 
 
@@ -49,12 +50,13 @@ def test_count_vocabula_command_is_not_registered() -> None:
 def test_compare_metric_option_is_not_registered() -> None:
     parser = build_parser()
     with pytest.raises(SystemExit) as exc_info:
-        parser.parse_args([
-            "compare", "--inputs", "a.csv", "b.csv", "--metric", "log-ratio"
-        ])
+        parser.parse_args(
+            ["compare", "--inputs", "a.csv", "b.csv", "--metric", "log-ratio"]
+        )
     assert exc_info.value.code == 2
     subparsers = next(
-        action for action in parser._actions
+        action
+        for action in parser._actions
         if isinstance(action, argparse._SubParsersAction)
     )
     assert "--metric" not in subparsers.choices["compare"].format_help()
@@ -99,15 +101,24 @@ def test_parser_build_does_not_initialize_count_backend(monkeypatch) -> None:
 
 
 def test_root_main_has_no_command_name_if_dispatch() -> None:
-    source = Path("nlpo_toolkit/corpus_analysis/cli/main.py").read_text(encoding="utf-8")
+    source = Path("nlpo_toolkit/corpus_analysis/cli/main.py").read_text(
+        encoding="utf-8"
+    )
     tree = ast.parse(source)
-    main_func = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "main")
+    main_func = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "main"
+    )
 
     command_comparisons = [
         node
         for node in ast.walk(main_func)
         if isinstance(node, ast.Compare)
-        and any(isinstance(left, ast.Attribute) and left.attr == "command" for left in [node.left])
+        and any(
+            isinstance(left, ast.Attribute) and left.attr == "command"
+            for left in [node.left]
+        )
     ]
 
     assert command_comparisons == []

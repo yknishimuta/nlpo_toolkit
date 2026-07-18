@@ -46,6 +46,7 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.latin.latin_wordlist",
             "nlpo_toolkit.latin.latin_wordlist.errors",
             "nlpo_toolkit.latin.latin_wordlist.ports",
+            "nlpo_toolkit.stylometry.ports",
         ),
         recursive_packages=("nlpo_toolkit.serialization",),
     ),
@@ -98,6 +99,12 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.nlp.vocabulary",
             "nlpo_toolkit.latin.latin_wordlist.engine",
             "nlpo_toolkit.latin.latin_wordlist.models",
+            "nlpo_toolkit.stylometry",
+            "nlpo_toolkit.stylometry.delta",
+            "nlpo_toolkit.stylometry.errors",
+            "nlpo_toolkit.stylometry.models",
+            "nlpo_toolkit.stylometry.results",
+            "nlpo_toolkit.stylometry.standardization",
         ),
         recursive_packages=(
             "nlpo_toolkit.corpus_analysis.token_sequences",
@@ -132,6 +139,7 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.latin.cleaners.pipeline",
             "nlpo_toolkit.latin.cleaners.service",
             "nlpo_toolkit.latin.latin_wordlist.service",
+            "nlpo_toolkit.stylometry.service",
         ),
         recursive_packages=("nlpo_toolkit.comparison.services",),
     ),
@@ -175,6 +183,7 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.latin.latin_wordlist.collectors",
             "nlpo_toolkit.latin.latin_wordlist.config",
             "nlpo_toolkit.latin.latin_wordlist.publication",
+            "nlpo_toolkit.stylometry.csv_reader",
         ),
         recursive_packages=(
             "nlpo_toolkit.backends",
@@ -190,6 +199,7 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.latin.latin_wordlist.__main__",
             "nlpo_toolkit.latin.latin_wordlist.cli",
             "nlpo_toolkit.latin.latin_wordlist.composition",
+            "nlpo_toolkit.stylometry.composition",
         ),
         recursive_packages=("nlpo_toolkit.corpus_analysis.cli",),
     ),
@@ -213,6 +223,7 @@ APPLICATION_MODULES = (
     "nlpo_toolkit.comparison.services",
     "nlpo_toolkit.latin.cleaners.service",
     "nlpo_toolkit.latin.latin_wordlist.service",
+    "nlpo_toolkit.stylometry.service",
 )
 
 PURE_MODULES = (
@@ -246,6 +257,11 @@ PURE_MODULES = (
     f"{CA}.token_sequences",
     "nlpo_toolkit.latin.latin_wordlist.engine",
     "nlpo_toolkit.latin.latin_wordlist.models",
+    "nlpo_toolkit.stylometry.delta",
+    "nlpo_toolkit.stylometry.errors",
+    "nlpo_toolkit.stylometry.models",
+    "nlpo_toolkit.stylometry.results",
+    "nlpo_toolkit.stylometry.standardization",
 )
 
 INFRASTRUCTURE_MODULES = (
@@ -267,6 +283,7 @@ INFRASTRUCTURE_MODULES = (
     "nlpo_toolkit.latin.latin_wordlist.collectors",
     "nlpo_toolkit.latin.latin_wordlist.config",
     "nlpo_toolkit.latin.latin_wordlist.publication",
+    "nlpo_toolkit.stylometry.csv_reader",
 )
 
 DEPENDENCY_RULES = (
@@ -364,6 +381,45 @@ DEPENDENCY_RULES = (
         ("nlpo_toolkit.comparison",),
         (CA,),
         explanation="The comparison package is reusable and independent of corpus-analysis orchestration.",
+    ),
+    DependencyRule(
+        "stylometry-independent",
+        ("nlpo_toolkit.stylometry",),
+        (
+            CA,
+            "nlpo_toolkit.comparison",
+            "nlpo_toolkit.backends",
+            "nlpo_toolkit.latin",
+            "nlpo_toolkit.nlp",
+        ),
+        explanation="Stylometry consumes published feature tables and is independent of NLP, corpus preparation, and frequency-table comparison.",
+    ),
+    DependencyRule(
+        "stylometry-domain-inward",
+        (
+            "nlpo_toolkit.stylometry.models",
+            "nlpo_toolkit.stylometry.results",
+            "nlpo_toolkit.stylometry.standardization",
+            "nlpo_toolkit.stylometry.delta",
+        ),
+        (
+            "csv",
+            "nlpo_toolkit.stylometry.csv_reader",
+            "nlpo_toolkit.stylometry.service",
+            "nlpo_toolkit.stylometry.composition",
+            CLI,
+        ),
+        explanation="Stylometry models and calculations are independent of table I/O, orchestration, composition, and CLI presentation.",
+    ),
+    DependencyRule(
+        "stylometry-service-ports-only",
+        ("nlpo_toolkit.stylometry.service",),
+        (
+            "nlpo_toolkit.stylometry.csv_reader",
+            "nlpo_toolkit.stylometry.composition",
+            CLI,
+        ),
+        explanation="The stylometry application service receives its feature-table reader through a typed port.",
     ),
     DependencyRule(
         "comparison-config-inward",

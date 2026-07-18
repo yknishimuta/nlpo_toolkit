@@ -821,6 +821,42 @@ record count, while `word_token_count` is the count that passed the feature
 eligibility filter. Features do not require token artifacts or imply use of the
 analysis cache.
 
+## Stylometry / Burrows's Delta
+
+`nlpo stylometry delta` reads an already-published Features CSV or TSV. It does
+not rerun NLP, corpus preparation, Cleaner, or feature calculation. Every input
+row is treated as one stylometric vector, and the feature family is always
+selected explicitly:
+
+```bash
+nlpo stylometry delta \
+  --features output/features.csv \
+  --id-column sample_id \
+  --feature-prefix mfw_ \
+  --out output/burrows_delta.csv
+```
+
+For fixed-token Features output, use the unique `sample_id` rather than a
+repeated group label. Prefixes and explicit columns may be combined, for
+example `--feature-prefix fw_ --feature-prefix mfw_`, or individual columns can
+be supplied repeatedly with `--feature-column`. No numeric columns are selected
+implicitly, so MFW count, function-word list, fixed-window size, and all other
+feature-generation settings should be held constant across an experiment.
+
+The initial CLI fits one z-score model on all input rows and transforms those
+same rows. Each retained feature uses its sample standard deviation with
+denominator `N - 1`; this differs from the population variance used by Features
+descriptive statistics. Burrows's Delta is the mean absolute difference between
+two standardized vectors. A smaller distance indicates greater stylometric
+proximity, but distance alone does not establish authorship or authenticity.
+
+Features with exactly zero sample variance are excluded and reported on stderr;
+the command fails if none remain. Output is a long-form table containing each
+unordered sample pair once as `sample_a`, `sample_b`, and `burrows_delta`, sorted
+by distance. Rigorous unknown-work evaluation will require a future workflow
+that fits the standardization model on reference works only; the fit and
+transform calculations are already separated internally for that extension.
+
 ## N-Gram CLI
 
 Use `nlpo ngram` to build n-gram frequency tables from a complete token artifact
