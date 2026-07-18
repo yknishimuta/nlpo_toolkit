@@ -52,7 +52,9 @@ def _config(data: dict):
     return ensure_app_config(data)
 
 
-def test_resolve_group_files_project_relative_absolute_cleaned_and_empty(tmp_path: Path) -> None:
+def test_resolve_group_files_project_relative_absolute_cleaned_and_empty(
+    tmp_path: Path,
+) -> None:
     project_root = tmp_path
     input_dir = project_root / "input"
     cleaned_dir = project_root / "cleaned"
@@ -100,7 +102,9 @@ def test_resolve_corpus_work_items_errors_on_empty_group(tmp_path: Path) -> None
         )
 
 
-def test_group_by_file_deduplicates_and_labels_deterministically(tmp_path: Path) -> None:
+def test_group_by_file_deduplicates_and_labels_deterministically(
+    tmp_path: Path,
+) -> None:
     one = tmp_path / "group one.txt"
     two = tmp_path / "sub" / "group one.txt"
     two.parent.mkdir()
@@ -126,7 +130,9 @@ def test_auto_single_cleaned_success_and_errors(tmp_path: Path) -> None:
 
     assert cleaned_txt_files(cleaned_dir) == ()
     with pytest.raises(CorpusPreparationError, match="no \\.txt files"):
-        resolve_auto_single_cleaned_group(cleaned_dir=cleaned_dir, group_name="corpus_a")
+        resolve_auto_single_cleaned_group(
+            cleaned_dir=cleaned_dir, group_name="corpus_a"
+        )
 
     selected = cleaned_dir / "sample_text_a.txt"
     selected.write_text("text", encoding="utf-8")
@@ -139,7 +145,9 @@ def test_auto_single_cleaned_success_and_errors(tmp_path: Path) -> None:
     extra = cleaned_dir / "sample_text_b.txt"
     extra.write_text("text", encoding="utf-8")
     with pytest.raises(CorpusPreparationError, match="found 2"):
-        resolve_auto_single_cleaned_group(cleaned_dir=cleaned_dir, group_name="corpus_a")
+        resolve_auto_single_cleaned_group(
+            cleaned_dir=cleaned_dir, group_name="corpus_a"
+        )
 
 
 def test_prepare_corpus_text_normalizes_and_counts_ref_tags(
@@ -189,7 +197,9 @@ def test_prepare_corpus_text_normalizes_and_counts_ref_tags(
     assert loaded_paths == [ref_path.resolve()]
 
 
-def test_prepare_corpus_text_uses_supplied_patterns_without_reload(tmp_path: Path, monkeypatch) -> None:
+def test_prepare_corpus_text_uses_supplied_patterns_without_reload(
+    tmp_path: Path, monkeypatch
+) -> None:
     text_path = tmp_path / "sample_text_a.txt"
     text_path.write_text("ref. item_a", encoding="utf-8")
     ref_path = tmp_path / "ref_tags.txt"
@@ -200,11 +210,19 @@ def test_prepare_corpus_text_uses_supplied_patterns_without_reload(tmp_path: Pat
             "ref_tags": {"enabled": True, "patterns": str(ref_path)},
         }
     )
-    patterns = tuple(__import__("nlpo_toolkit.corpus_analysis.ref_tags", fromlist=["load_ref_tag_patterns"]).load_ref_tag_patterns(ref_path))
+    patterns = tuple(
+        __import__(
+            "nlpo_toolkit.corpus_analysis.ref_tags", fromlist=["load_ref_tag_patterns"]
+        ).load_ref_tag_patterns(ref_path)
+    )
 
     import nlpo_toolkit.corpus_analysis.corpus as corpus_mod
 
-    monkeypatch.setattr(corpus_mod, "load_ref_tag_patterns", lambda path: pytest.fail("patterns reloaded"))
+    monkeypatch.setattr(
+        corpus_mod,
+        "load_ref_tag_patterns",
+        lambda path: pytest.fail("patterns reloaded"),
+    )
     prepared = prepare_corpus_text(
         work_item=CorpusWorkItem("corpus_a", (text_path,)),
         config=cfg,
@@ -261,7 +279,9 @@ def test_prepare_corpus_text_fails_before_normalization_on_read_error(
     assert normalize_calls == []
 
 
-def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Path, monkeypatch) -> None:
+def test_count_features_and_ngram_config_receive_same_prepared_text(
+    tmp_path: Path, monkeypatch
+) -> None:
     import nlpo_toolkit.corpus_analysis.features.service as features_mod
     import nlpo_toolkit.corpus_analysis.ngram as ngram_mod
     import nlpo_toolkit.corpus_analysis.runner as runner_mod
@@ -318,12 +338,14 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
         cleaner_inspector=inspect_cleaner_config,
     )
     preparation = CorpusPreparationDependencies(
-        execute_cleaner=lambda _request: pytest.fail("cleaner service must not be called")
+        execute_cleaner=lambda _request: pytest.fail(
+            "cleaner service must not be called"
+        )
     )
     features_mod.execute_feature_command(
-            FeatureRequest(
-                corpus_request(tmp_path, config_path),
-            ),
+        FeatureRequest(
+            corpus_request(tmp_path, config_path),
+        ),
         dependencies=FeatureCommandDependencies(
             corpus=CorpusExecutionDependencies(
                 planning=planning,
@@ -332,9 +354,14 @@ def test_count_features_and_ngram_config_receive_same_prepared_text(tmp_path: Pa
             nlp=NLPExecutionDependencies(
                 backend_factory=lambda _config: BuiltNLPBackend(
                     backend=CaptureNLP(),
-                    info=NLPBackendInfo(name="fake", language="la", package="package_a"),
+                    info=NLPBackendInfo(
+                        name="fake", language="la", package="package_a"
+                    ),
                 ),
                 extraction_policy=AnalysisExtractionPolicy(),
+            ),
+            load_function_words=lambda _path: pytest.fail(
+                "function-word loader must not be called"
             ),
         ),
     )

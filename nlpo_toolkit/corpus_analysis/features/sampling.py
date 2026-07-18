@@ -35,7 +35,9 @@ def iter_feature_window_ranges(
         start += step
 
 
-def _sample_char_count(corpus: AnalyzedFeatureCorpus, raw_start: int, raw_end: int) -> int:
+def _sample_char_count(
+    corpus: AnalyzedFeatureCorpus, raw_start: int, raw_end: int
+) -> int:
     raw_span = corpus.raw_records[raw_start:raw_end]
     first_start = raw_span[0].char_start_in_text
     last_end = raw_span[-1].char_end_in_text

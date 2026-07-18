@@ -18,6 +18,9 @@ from nlpo_toolkit.corpus_analysis.features.models import (
     FeatureRequest,
     FeatureRow,
     FeatureSamplingOptions,
+    FunctionWordOptions,
+    FunctionWordSource,
+    FunctionWordVocabulary,
 )
 from nlpo_toolkit.corpus_analysis.features.engine import build_feature_matrix
 from nlpo_toolkit.corpus_analysis.features.filtering import (
@@ -31,6 +34,9 @@ from nlpo_toolkit.corpus_analysis.features.mfw import (
 )
 from nlpo_toolkit.corpus_analysis.features.upos import compute_upos_features
 from nlpo_toolkit.corpus_analysis.features.service import execute_feature_command
+from nlpo_toolkit.corpus_analysis.features.function_word_loader import (
+    load_function_word_vocabulary,
+)
 from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
 from nlpo_toolkit.corpus_analysis.cli.output import write_feature_result
 from nlpo_toolkit.corpus_analysis.analysis_records import (
@@ -131,6 +137,7 @@ def _dependencies(cleaner=None) -> FeatureCommandDependencies:
             backend_factory=_backend_factory,
             extraction_policy=AnalysisExtractionPolicy(),
         ),
+        load_function_words=load_function_word_vocabulary,
     )
 
 
@@ -480,6 +487,7 @@ def test_run_features_accepts_backend_factory(tmp_path: Path) -> None:
                 backend_factory=recording_factory,
                 extraction_policy=base.nlp.extraction_policy,
             ),
+            load_function_words=base.load_function_words,
         ),
     )
 
@@ -620,6 +628,7 @@ def test_feature_command_applies_one_shared_filter_and_loads_roman_exceptions_on
             ),
             extraction_policy=dependencies.nlp.extraction_policy,
         ),
+        load_function_words=dependencies.load_function_words,
     )
     result = execute_feature_command(
         FeatureRequest(
@@ -791,6 +800,8 @@ def test_cli_features_help(capsys) -> None:
     assert "--lexdiv-window" in help_text
     assert "--mtld-threshold" in help_text
     assert "--hdd-sample-size" in help_text
+    assert "--function-words" in help_text
+    assert "--function-word-field" in help_text
 
 
 def test_cli_sampling_arguments_are_composed_into_request(monkeypatch) -> None:
@@ -837,3 +848,191 @@ def test_cli_invalid_sampling_value_returns_one() -> None:
         == 1
     )
     assert "window_tokens must be a positive integer" in stderr.getvalue()
+
+
+def test_cli_function_word_arguments_are_composed_separately_from_mfw(
+    monkeypatch,
+) -> None:
+    import nlpo_toolkit.corpus_analysis.cli.features as feature_cli
+
+    requests: list[FeatureRequest] = []
+
+    def execute(request, *, dependencies):
+        requests.append(request)
+        return FeatureCommandResult(())
+
+    monkeypatch.setattr(feature_cli, "execute_feature_command", execute)
+    monkeypatch.setattr(
+        feature_cli, "default_feature_command_dependencies", lambda: object()
+    )
+    assert (
+        cli.main(
+            [
+                "features",
+                "--mfw",
+                "5",
+                "--field",
+                "token",
+                "--function-words",
+                "config/function_words.txt",
+                "--function-word-field",
+                "lemma",
+            ],
+            stdout=io.StringIO(),
+            stderr=io.StringIO(),
+        )
+        == 0
+    )
+    assert requests[0].field == "token"
+    assert requests[0].function_words == FunctionWordSource(
+        Path("config/function_words.txt"), "lemma"
+    )
+
+    requests.clear()
+    assert (
+        cli.main(
+            ["features", "--function-words", "config/function_words.txt"],
+            stdout=io.StringIO(),
+            stderr=io.StringIO(),
+        )
+        == 0
+    )
+    assert requests[0].function_words == FunctionWordSource(
+        Path("config/function_words.txt"), "lemma"
+    )
+
+
+def test_cli_function_word_field_requires_file() -> None:
+    stderr = io.StringIO()
+    assert (
+        cli.main(
+            ["features", "--function-word-field", "token"],
+            stdout=io.StringIO(),
+            stderr=stderr,
+        )
+        == 1
+    )
+    assert "--function-word-field requires --function-words" in stderr.getvalue()
+
+
+def test_cli_function_word_validation_failure_does_not_create_output(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "features.csv"
+    stderr = io.StringIO()
+
+    assert (
+        cli.main(
+            [
+                "features",
+                "--project-root",
+                str(tmp_path),
+                "--function-words",
+                "missing.txt",
+                "--out",
+                str(output),
+            ],
+            stdout=io.StringIO(),
+            stderr=stderr,
+        )
+        == 1
+    )
+    assert "function-word file not found" in stderr.getvalue()
+    assert not output.exists()
+
+
+def test_function_word_loader_runs_before_backend_and_resolves_project_path(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input" / "a.txt").write_text("Rosa amat et", encoding="utf-8")
+    config_path = _write_config(tmp_path)
+    loaded_paths: list[Path] = []
+    backend_calls = 0
+
+    def loader(path: Path) -> FunctionWordVocabulary:
+        loaded_paths.append(path)
+        return FunctionWordVocabulary(("et",))
+
+    def backend_factory(config: NLPConfig) -> BuiltNLPBackend:
+        nonlocal backend_calls
+        backend_calls += 1
+        return _backend_factory(config)
+
+    base = _dependencies()
+    result = execute_feature_command(
+        FeatureRequest(
+            corpus=CorpusPreparationRequest(tmp_path, config_path),
+            function_words=FunctionWordSource(Path("lists/function_words.txt")),
+        ),
+        dependencies=FeatureCommandDependencies(
+            corpus=base.corpus,
+            nlp=NLPExecutionDependencies(
+                backend_factory=backend_factory,
+                extraction_policy=base.nlp.extraction_policy,
+            ),
+            load_function_words=loader,
+        ),
+    )
+
+    assert loaded_paths == [(tmp_path / "lists/function_words.txt").resolve()]
+    assert backend_calls == 1
+    assert result.rows[0]["fw_et"] == pytest.approx(1 / 3)
+
+
+def test_function_word_validation_failure_is_before_backend_start(
+    tmp_path: Path,
+) -> None:
+    backend_calls = 0
+
+    def failing_loader(path: Path) -> FunctionWordVocabulary:
+        raise FeatureError(f"invalid function-word list: {path}")
+
+    def backend_factory(config: NLPConfig) -> BuiltNLPBackend:
+        nonlocal backend_calls
+        backend_calls += 1
+        return _backend_factory(config)
+
+    base = _dependencies()
+    with pytest.raises(FeatureError, match="invalid function-word list"):
+        execute_feature_command(
+            FeatureRequest(
+                corpus=CorpusPreparationRequest(tmp_path, tmp_path / "missing.yml"),
+                function_words=FunctionWordSource(Path("bad.txt")),
+            ),
+            dependencies=FeatureCommandDependencies(
+                corpus=base.corpus,
+                nlp=NLPExecutionDependencies(
+                    backend_factory=backend_factory,
+                    extraction_policy=base.nlp.extraction_policy,
+                ),
+                load_function_words=failing_loader,
+            ),
+        )
+    assert backend_calls == 0
+
+
+def test_function_words_follow_upos_and_precede_mfw_in_each_sample() -> None:
+    rows = build_feature_matrix(
+        corpora=(_prepared("g", Path("a.txt"), "et rosa et"),),
+        nlp=DummyNLP(),
+        extraction_policy=AnalysisExtractionPolicy(),
+        options=FeatureOptions(
+            mfw=1,
+            field="token",
+            sampling=FeatureSamplingOptions(2, 1, include_partial=True),
+            function_words=FunctionWordOptions(
+                FunctionWordVocabulary(("et", "non")),
+                field="token",
+            ),
+        ),
+    )
+
+    first = rows[0]
+    keys = tuple(first)
+    assert keys.index("function_word_ratio") < keys.index("fw_et")
+    assert keys.index("fw_non") < keys.index("mfw_et")
+    assert first["fw_et"] == 0.5
+    assert first["fw_non"] == 0.0
+    assert rows[1]["fw_et"] == 0.5
+    assert rows[-1]["fw_et"] == 1.0

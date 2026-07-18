@@ -7,14 +7,21 @@ from pathlib import Path
 import pytest
 
 from nlpo_toolkit.corpus_analysis.analysis_records import NLPAnalysisRecord
-from nlpo_toolkit.corpus_analysis.features.models import AnalyzedFeatureCorpus, FeatureFilterPolicy, FeatureOptions
+from nlpo_toolkit.corpus_analysis.features.models import (
+    AnalyzedFeatureCorpus,
+    FeatureFilterPolicy,
+    FeatureOptions,
+)
 from nlpo_toolkit.corpus_analysis.features.engine import (
     analyze_feature_corpus,
     build_feature_matrix,
 )
 from nlpo_toolkit.corpus_analysis.features.filtering import filter_feature_records
 from nlpo_toolkit.corpus_analysis.features.lexical import compute_basic_features
-from nlpo_toolkit.corpus_analysis.features.mfw import compute_mfw_features, select_mfw_terms
+from nlpo_toolkit.corpus_analysis.features.mfw import (
+    compute_mfw_features,
+    select_mfw_terms,
+)
 from nlpo_toolkit.corpus_analysis.features.upos import compute_upos_features
 from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
 from nlpo_toolkit.nlp.contracts import NLPDocument, NLPSentence, NLPToken
@@ -28,7 +35,13 @@ def _analyzed(
     raw_records=None,
     files: int = 1,
 ):
-    source = PreparedCorpus("g", tuple(Path(f"{index}.txt") for index in range(files)), text, text, Counter())
+    source = PreparedCorpus(
+        "g",
+        tuple(Path(f"{index}.txt") for index in range(files)),
+        text,
+        text,
+        Counter(),
+    )
     lexical = tuple(lexical_records)
     return AnalyzedFeatureCorpus(
         source=source,
@@ -111,9 +124,10 @@ def test_filter_preserves_order_and_returns_tuple_without_mutating_input() -> No
 
 @pytest.mark.parametrize("token", ["", "   ", ".", "—", "..."])
 def test_filter_removes_empty_and_punctuation_only_tokens(token: str) -> None:
-    assert filter_feature_records(
-        [_record(token, token)], policy=FeatureFilterPolicy()
-    ) == ()
+    assert (
+        filter_feature_records([_record(token, token)], policy=FeatureFilterPolicy())
+        == ()
+    )
 
 
 def test_filter_keeps_tokens_containing_alphanumeric_characters() -> None:
@@ -135,9 +149,12 @@ def test_roman_filter_disabled_keeps_numeral_and_enabled_drops_it() -> None:
     assert filter_feature_records(
         [roman], policy=FeatureFilterPolicy(drop_roman_numerals=False)
     ) == (roman,)
-    assert filter_feature_records(
-        [roman], policy=FeatureFilterPolicy(drop_roman_numerals=True)
-    ) == ()
+    assert (
+        filter_feature_records(
+            [roman], policy=FeatureFilterPolicy(drop_roman_numerals=True)
+        )
+        == ()
+    )
 
 
 def test_configured_and_shared_roman_exceptions_are_case_insensitive() -> None:
@@ -182,9 +199,7 @@ def test_analysis_retains_raw_records_and_filters_one_lexical_population() -> No
                 text=text,
             )
 
-    source = PreparedCorpus(
-        "g", (Path("a.txt"),), "ignored", "ignored", Counter()
-    )
+    source = PreparedCorpus("g", (Path("a.txt"),), "ignored", "ignored", Counter())
     analyzed = analyze_feature_corpus(
         source,
         nlp=NLP(),
@@ -300,7 +315,9 @@ def test_mfw_field_changes_values_but_not_basic_or_upos_population() -> None:
         drop_roman_numerals=True,
     )
     source = (
-        PreparedCorpus("g", (Path("a.txt"),), "xiv a Rosa .", "xiv a Rosa .", Counter()),
+        PreparedCorpus(
+            "g", (Path("a.txt"),), "xiv a Rosa .", "xiv a Rosa .", Counter()
+        ),
     )
     lemma_row = build_feature_matrix(
         corpora=source,
@@ -315,8 +332,12 @@ def test_mfw_field_changes_values_but_not_basic_or_upos_population() -> None:
         options=FeatureOptions(field="token", mfw=1, filter_policy=policy),
     )[0]
 
-    lemma_shared = {key: value for key, value in lemma_row.items() if not key.startswith("mfw_")}
-    token_shared = {key: value for key, value in token_row.items() if not key.startswith("mfw_")}
+    lemma_shared = {
+        key: value for key, value in lemma_row.items() if not key.startswith("mfw_")
+    }
+    token_shared = {
+        key: value for key, value in token_row.items() if not key.startswith("mfw_")
+    }
     assert lemma_shared == token_shared
     assert lemma_row["word_token_count"] == 1
     assert lemma_row["upos_NOUN_count"] == 1

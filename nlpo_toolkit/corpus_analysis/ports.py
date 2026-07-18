@@ -24,11 +24,16 @@ if TYPE_CHECKING:
     from .archive.contracts import RunArchiveRequest, RunArchiveResult
     from .requests import CorpusPreparationRequest
     from .count_result import CountRunResult
+    from .features.models import FunctionWordVocabulary
 
 
 ConfigLoader = Callable[[Path], AppConfig]
 CleanerConfigInspector = Callable[[Path], CleanerConfigInspection]
 BackendFactory = Callable[[NLPConfig], BuiltNLPBackend]
+
+
+class FunctionWordVocabularyLoader(Protocol):
+    def __call__(self, path: Path) -> FunctionWordVocabulary: ...
 
 
 @dataclass(frozen=True)
@@ -119,6 +124,7 @@ class CountCommandDependencies:
 class FeatureCommandDependencies:
     corpus: CorpusExecutionDependencies
     nlp: NLPExecutionDependencies
+    load_function_words: FunctionWordVocabularyLoader
 
 
 @dataclass(frozen=True)

@@ -7,7 +7,21 @@ from ..analysis_records import NLPAnalysisRecord
 from .models import FeatureScalar
 
 
-UPOS_FEATURES = ("NOUN", "VERB", "ADJ", "ADV", "PROPN", "PRON", "ADP", "AUX", "CCONJ", "SCONJ", "PART", "DET", "NUM")
+UPOS_FEATURES = (
+    "NOUN",
+    "VERB",
+    "ADJ",
+    "ADV",
+    "PROPN",
+    "PRON",
+    "ADP",
+    "AUX",
+    "CCONJ",
+    "SCONJ",
+    "PART",
+    "DET",
+    "NUM",
+)
 CONTENT_UPOS = {"NOUN", "PROPN", "VERB", "ADJ", "ADV"}
 FUNCTION_UPOS = {"PRON", "ADP", "AUX", "CCONJ", "SCONJ", "PART", "DET"}
 
@@ -27,5 +41,7 @@ def compute_upos_features(
     features["content_word_count"] = content_count
     features["content_word_ratio"] = content_count / denominator if denominator else 0.0
     features["function_word_count"] = function_count
-    features["function_word_ratio"] = function_count / denominator if denominator else 0.0
+    features["function_word_ratio"] = (
+        function_count / denominator if denominator else 0.0
+    )
     return features

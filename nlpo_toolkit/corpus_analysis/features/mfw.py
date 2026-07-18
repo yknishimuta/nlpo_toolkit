@@ -39,9 +39,7 @@ def compute_mfw_features(
 ) -> Mapping[str, FeatureScalar]:
     denominator = len(records)
     frequencies = Counter(
-        value
-        for record in records
-        if (value := feature_field_value(record, field))
+        value for record in records if (value := feature_field_value(record, field))
     )
     return {
         f"mfw_{safe_feature_name(term)}": frequencies.get(term, 0) / denominator

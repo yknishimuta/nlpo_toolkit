@@ -705,6 +705,39 @@ nlpo features \
   --out output/features_lexdiv.csv
 ```
 
+Explicit Latin function-word features can be supplied from a research-specific
+UTF-8 list:
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --function-words config/latin_function_words.txt \
+  --out output/features_function_words.csv
+```
+
+The list contains one token per line. Blank lines and lines whose stripped
+content starts with `#` are ignored; duplicate normalized terms, tab-separated
+content, multiword expressions, and lists with no terms are rejected. Terms are
+matched case-insensitively after stripping. `--function-word-field lemma` is
+the default and uses the normal lemma-with-surface-fallback rule;
+`--function-word-field token` selects normalized surface tokens. This setting
+is independent of the MFW-only `--field` option.
+
+Each listed term produces one `fw_<term>` column in list order. Its value is
+the term count divided by all lexical tokens in that feature row, including
+tokens that are not in the list. These explicit columns coexist with the UPOS
+aggregate `function_word_count` and `function_word_ratio`, and with independently
+selected MFW columns. Use the same reviewed list for every text in a comparison;
+the toolkit does not provide or infer an authoritative Latin function-word set.
+
+Only records passing the shared Features eligibility filter participate. Thus
+a one-character term may remain at zero when the configured minimum token
+length excludes it. Matching is exact: attached enclitics such as `-que`,
+`-ve`, and `-ne` are not split or suffix-matched, and multiword expressions are
+not supported. With fixed-token windows, frequencies and denominators are
+calculated independently inside each full, partial, or overlapping sample.
+
 One row per input file:
 
 ```bash

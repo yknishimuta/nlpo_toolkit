@@ -17,22 +17,30 @@ _PUNCT_CHARS = set(string.punctuation + "“”‘’«»…—–-­")
 _FEATURE_SAFE_RE = re.compile(r"[^0-9A-Za-z_]+")
 
 
+def normalize_feature_value(value: str) -> str:
+    return value.strip().lower()
+
+
 def feature_token_value(record: NLPAnalysisRecord) -> str:
-    return record.token.strip().lower()
+    return normalize_feature_value(record.token)
 
 
 def feature_lemma_value(record: NLPAnalysisRecord) -> str:
-    return (record.lemma or record.token).strip().lower()
+    return normalize_feature_value(record.lemma or record.token)
 
 
 def feature_field_value(record: NLPAnalysisRecord, field: FeatureField) -> str:
-    return feature_lemma_value(record) if field == "lemma" else feature_token_value(record)
+    return (
+        feature_lemma_value(record) if field == "lemma" else feature_token_value(record)
+    )
 
 
 def is_word_token_text(value: str) -> bool:
     text = str(value or "").strip()
-    return bool(text) and any(ch.isalnum() for ch in text) and not all(
-        ch in _PUNCT_CHARS for ch in text
+    return (
+        bool(text)
+        and any(ch.isalnum() for ch in text)
+        and not all(ch in _PUNCT_CHARS for ch in text)
     )
 
 

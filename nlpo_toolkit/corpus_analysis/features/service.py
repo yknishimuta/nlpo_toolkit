@@ -10,11 +10,13 @@ from ..execution_session import (
 from ..ports import FeatureCommandDependencies
 from .engine import build_feature_matrix
 from .errors import FeatureError
+from .function_words import build_function_word_columns
 from .models import (
     FeatureCommandResult,
     FeatureFilterPolicy,
     FeatureOptions,
     FeatureRequest,
+    FunctionWordOptions,
 )
 
 
@@ -23,6 +25,22 @@ def execute_feature_command(
     *,
     dependencies: FeatureCommandDependencies,
 ) -> FeatureCommandResult:
+    function_words = None
+    if request.function_words is not None:
+        source = request.function_words
+        project_root = request.corpus.project_root.expanduser().resolve()
+        path = source.path.expanduser()
+        resolved_path = (
+            (project_root / path).resolve()
+            if not path.is_absolute()
+            else path.resolve()
+        )
+        vocabulary = dependencies.load_function_words(resolved_path)
+        build_function_word_columns(vocabulary)
+        function_words = FunctionWordOptions(
+            vocabulary=vocabulary,
+            field=source.field,
+        )
     try:
         corpus_session = prepare_analysis_corpus_session(
             request.corpus,
@@ -47,6 +65,7 @@ def execute_feature_command(
         ),
         sampling=request.sampling,
         lexical_diversity=request.lexical_diversity,
+        function_words=function_words,
     )
     return FeatureCommandResult(
         rows=build_feature_matrix(

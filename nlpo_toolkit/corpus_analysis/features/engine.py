@@ -7,6 +7,7 @@ from ..analysis_records import iter_nlp_analysis_records_from_text
 from ..corpus import PreparedCorpus
 from .errors import FeatureError
 from .filtering import filter_feature_records
+from .function_words import compute_function_word_features
 from .lexical import compute_basic_features
 from .lexical_diversity import compute_lexical_diversity_features
 from .mfw import compute_mfw_features, select_mfw_terms
@@ -97,6 +98,13 @@ def build_feature_matrix(
             )
         if options.include_upos:
             values.update(compute_upos_features(corpus.lexical_records))
+        if options.function_words is not None:
+            values.update(
+                compute_function_word_features(
+                    corpus.lexical_records,
+                    options=options.function_words,
+                )
+            )
         if terms:
             values.update(
                 compute_mfw_features(

@@ -227,6 +227,7 @@ PURE_MODULES = (
     f"{CA}.features.filtering",
     f"{CA}.features.lexical",
     f"{CA}.features.lexical_diversity",
+    f"{CA}.features.function_words",
     f"{CA}.features.mfw",
     f"{CA}.features.models",
     f"{CA}.features.sampling",

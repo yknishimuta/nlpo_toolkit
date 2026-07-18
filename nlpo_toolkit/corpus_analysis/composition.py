@@ -41,6 +41,7 @@ from .ports import (
 )
 from .runner import run
 from .publication_ports import CountPublicationDependencies
+from .features.function_word_loader import load_function_word_vocabulary
 
 
 def _inspect_cleaner_config(path: Path) -> CleanerConfigInspection:
@@ -137,6 +138,7 @@ def default_feature_command_dependencies() -> FeatureCommandDependencies:
     return FeatureCommandDependencies(
         corpus=default_corpus_execution_dependencies(),
         nlp=default_nlp_execution_dependencies(),
+        load_function_words=load_function_word_vocabulary,
     )
 
 

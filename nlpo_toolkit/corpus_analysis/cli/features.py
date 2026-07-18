@@ -9,6 +9,7 @@ from ..features.errors import FeatureError
 from ..features.models import (
     FeatureRequest,
     FeatureSamplingOptions,
+    FunctionWordSource,
     LexicalDiversityOptions,
 )
 from ..features.service import execute_feature_command
@@ -120,6 +121,18 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         default=None,
         help="HD-D sample size. Implies --lexical-diversity; default: 42.",
     )
+    parser.add_argument(
+        "--function-words",
+        type=Path,
+        default=None,
+        help="UTF-8 file containing one explicit function word per line.",
+    )
+    parser.add_argument(
+        "--function-word-field",
+        choices=("lemma", "token"),
+        default=None,
+        help="Field used for explicit function-word matching; default: lemma.",
+    )
     add_grouping_override_arguments(parser)
     add_empty_group_argument(parser)
     set_handler(parser, execute)
@@ -127,6 +140,8 @@ def register(subparsers: argparse._SubParsersAction) -> None:
 
 def execute(args: argparse.Namespace, context: CLIContext) -> int:
     try:
+        if args.function_word_field is not None and args.function_words is None:
+            raise FeatureError("--function-word-field requires --function-words")
         lexical_diversity = None
         if args.lexical_diversity or any(
             value is not None
@@ -160,6 +175,14 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
                     include_partial=args.include_partial_window,
                 ),
                 lexical_diversity=lexical_diversity,
+                function_words=(
+                    FunctionWordSource(
+                        path=args.function_words,
+                        field=args.function_word_field or "lemma",
+                    )
+                    if args.function_words is not None
+                    else None
+                ),
             ),
             dependencies=default_feature_command_dependencies(),
         )

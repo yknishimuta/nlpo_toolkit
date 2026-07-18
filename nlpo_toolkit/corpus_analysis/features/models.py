@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 import math
+from pathlib import Path
 from typing import Literal
 
 from ..analysis_records import NLPAnalysisRecord
@@ -38,6 +39,38 @@ class LexicalDiversityOptions:
         ):
             raise FeatureError("mtld_threshold must be a finite number between 0 and 1")
         object.__setattr__(self, "mtld_threshold", float(threshold))
+
+
+@dataclass(frozen=True)
+class FunctionWordSource:
+    path: Path
+    field: FeatureField = "lemma"
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.path, Path):
+            raise FeatureError("function-word path must be a Path")
+        if self.field not in {"lemma", "token"}:
+            raise FeatureError("--function-word-field must be 'lemma' or 'token'")
+
+
+@dataclass(frozen=True)
+class FunctionWordVocabulary:
+    terms: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "terms", tuple(self.terms))
+        if not self.terms:
+            raise FeatureError("function-word list contains no terms")
+
+
+@dataclass(frozen=True)
+class FunctionWordOptions:
+    vocabulary: FunctionWordVocabulary
+    field: FeatureField = "lemma"
+
+    def __post_init__(self) -> None:
+        if self.field not in {"lemma", "token"}:
+            raise FeatureError("--function-word-field must be 'lemma' or 'token'")
 
 
 @dataclass(frozen=True)
@@ -106,6 +139,7 @@ class FeatureOptions:
     filter_policy: FeatureFilterPolicy = FeatureFilterPolicy()
     sampling: FeatureSamplingOptions = FeatureSamplingOptions()
     lexical_diversity: LexicalDiversityOptions | None = None
+    function_words: FunctionWordOptions | None = None
 
 
 def validate_feature_options(options: FeatureOptions) -> None:
@@ -124,6 +158,7 @@ class FeatureRequest:
     include_basic: bool = True
     sampling: FeatureSamplingOptions = FeatureSamplingOptions()
     lexical_diversity: LexicalDiversityOptions | None = None
+    function_words: FunctionWordSource | None = None
 
 
 @dataclass(frozen=True)
