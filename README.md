@@ -857,6 +857,41 @@ by distance. Rigorous unknown-work evaluation will require a future workflow
 that fits the standardization model on reference works only; the fit and
 transform calculations are already separated internally for that extension.
 
+### Nearest-neighbor metrics
+
+`stylometry neighbors` ranks every other observation for each query after
+fitting the existing z-score model once on all input observations. Feature
+selection is explicit and uses the same reader as `stylometry delta`:
+
+```bash
+nlpo stylometry neighbors \
+  --features output/features.csv \
+  --id-column sample_id \
+  --feature-prefix mfw_ \
+  --metric burrows_delta \
+  --top 10 \
+  --out output/neighbors.csv
+```
+
+Use `--metric manhattan` for the sum of absolute standardized differences,
+`--metric cosine_delta` for `1 - cosine similarity`, or
+`--metric cosine_similarity` for similarity itself. Burrows's Delta is the
+mean Manhattan difference, while Manhattan is the unscaled sum. Distance
+metrics rank smaller values first; cosine similarity ranks larger values
+first. Cosine metrics fail when either standardized vector has exactly zero
+Euclidean norm rather than inventing a similarity value.
+
+The output is directed: the ranking for A may contain B and the ranking for B
+may independently contain A. Self-neighbors are excluded, and `--top N` is
+applied after metric-aware sorting. Without `--top`, all other observations are
+included. Scores are not rounded before ranking.
+
+Neighbors is exploratory and fits one global model on all input rows. LOWO is
+an evaluation workflow and continues to fit a separate model using training
+works only in every fold. Use identical Features settings, selected columns,
+and fixed-window sizes for all compared observations. Nearest-neighbor
+proximity alone cannot establish authorship or authenticity.
+
 ### Leave-one-work-out evaluation
 
 `evaluate-lowo` holds out one entire known work at a time. All fixed-window

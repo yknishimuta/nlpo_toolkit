@@ -109,6 +109,10 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.stylometry.evaluation",
             "nlpo_toolkit.stylometry.evaluation_models",
             "nlpo_toolkit.stylometry.evaluation_results",
+            "nlpo_toolkit.stylometry.metrics",
+            "nlpo_toolkit.stylometry.ranking",
+            "nlpo_toolkit.stylometry.neighbor_models",
+            "nlpo_toolkit.stylometry.neighbor_results",
         ),
         recursive_packages=(
             "nlpo_toolkit.corpus_analysis.token_sequences",
@@ -145,6 +149,7 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.latin.latin_wordlist.service",
             "nlpo_toolkit.stylometry.service",
             "nlpo_toolkit.stylometry.evaluation_service",
+            "nlpo_toolkit.stylometry.neighbor_service",
         ),
         recursive_packages=("nlpo_toolkit.comparison.services",),
     ),
@@ -231,6 +236,7 @@ APPLICATION_MODULES = (
     "nlpo_toolkit.latin.latin_wordlist.service",
     "nlpo_toolkit.stylometry.service",
     "nlpo_toolkit.stylometry.evaluation_service",
+    "nlpo_toolkit.stylometry.neighbor_service",
 )
 
 PURE_MODULES = (
@@ -273,6 +279,10 @@ PURE_MODULES = (
     "nlpo_toolkit.stylometry.evaluation",
     "nlpo_toolkit.stylometry.evaluation_models",
     "nlpo_toolkit.stylometry.evaluation_results",
+    "nlpo_toolkit.stylometry.metrics",
+    "nlpo_toolkit.stylometry.ranking",
+    "nlpo_toolkit.stylometry.neighbor_models",
+    "nlpo_toolkit.stylometry.neighbor_results",
 )
 
 INFRASTRUCTURE_MODULES = (
@@ -417,6 +427,10 @@ DEPENDENCY_RULES = (
             "nlpo_toolkit.stylometry.evaluation",
             "nlpo_toolkit.stylometry.evaluation_models",
             "nlpo_toolkit.stylometry.evaluation_results",
+            "nlpo_toolkit.stylometry.metrics",
+            "nlpo_toolkit.stylometry.ranking",
+            "nlpo_toolkit.stylometry.neighbor_models",
+            "nlpo_toolkit.stylometry.neighbor_results",
         ),
         (
             "csv",
@@ -432,6 +446,7 @@ DEPENDENCY_RULES = (
         (
             "nlpo_toolkit.stylometry.service",
             "nlpo_toolkit.stylometry.evaluation_service",
+            "nlpo_toolkit.stylometry.neighbor_service",
         ),
         (
             "nlpo_toolkit.stylometry.csv_reader",

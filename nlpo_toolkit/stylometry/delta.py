@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .errors import StylometryError
+from .metrics import burrows_delta as burrows_delta_values
 from .models import StandardizedFeatureDataset, StandardizedObservation
 from .results import DeltaPair
 
@@ -9,12 +10,12 @@ def burrows_delta(
     first: StandardizedObservation,
     second: StandardizedObservation,
 ) -> float:
-    if len(first.values) != len(second.values) or not first.values:
-        raise StylometryError("standardized vectors must have the same non-zero width")
-    return float(
-        sum(abs(left - right) for left, right in zip(first.values, second.values))
-        / len(first.values)
-    )
+    try:
+        return burrows_delta_values(first.values, second.values)
+    except StylometryError as exc:
+        raise StylometryError(
+            "standardized vectors must have the same non-zero width"
+        ) from exc
 
 
 def build_delta_pairs(dataset: StandardizedFeatureDataset) -> tuple[DeltaPair, ...]:

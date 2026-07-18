@@ -12,12 +12,14 @@ from .common import CLIContext, set_handler
 from .output import open_cli_output, present_error
 from .stylometry_rendering import write_burrows_delta_result
 from .stylometry_evaluate_lowo import register_evaluate_lowo
+from .stylometry_neighbors import register_neighbors
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser("stylometry")
     commands = parser.add_subparsers(dest="stylometry_command", required=True)
     register_evaluate_lowo(commands)
+    register_neighbors(commands)
     delta = commands.add_parser("delta")
     delta.add_argument("--features", type=Path, required=True)
     delta.add_argument("--input-format", choices=("csv", "tsv"), default="csv")
