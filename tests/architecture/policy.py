@@ -8,7 +8,8 @@ CA = "nlpo_toolkit.corpus_analysis"
 CLI = f"{CA}.cli"
 STANDALONE_CLI_MODULES = (
     "nlpo_toolkit.latin.cleaners.run_clean_corpus",
-    "nlpo_toolkit.latin.latin_wordlist.build_latin_wordlist",
+    "nlpo_toolkit.latin.latin_wordlist.cli",
+    "nlpo_toolkit.latin.latin_wordlist.__main__",
 )
 COMPOSITION = f"{CA}.composition"
 PORTS = f"{CA}.ports"
@@ -42,6 +43,9 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.corpus_analysis.token_artifact.errors",
             "nlpo_toolkit.nlp",
             "nlpo_toolkit.nlp.contracts",
+            "nlpo_toolkit.latin.latin_wordlist",
+            "nlpo_toolkit.latin.latin_wordlist.errors",
+            "nlpo_toolkit.latin.latin_wordlist.ports",
         ),
         recursive_packages=("nlpo_toolkit.serialization",),
     ),
@@ -89,6 +93,8 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.nlp.chunking",
             "nlpo_toolkit.nlp.roman_numerals",
             "nlpo_toolkit.nlp.vocabulary",
+            "nlpo_toolkit.latin.latin_wordlist.engine",
+            "nlpo_toolkit.latin.latin_wordlist.models",
         ),
         recursive_packages=(
             "nlpo_toolkit.corpus_analysis.token_sequences",
@@ -121,6 +127,7 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.corpus_analysis.runtime",
             "nlpo_toolkit.latin.cleaners.pipeline",
             "nlpo_toolkit.latin.cleaners.service",
+            "nlpo_toolkit.latin.latin_wordlist.service",
         ),
         recursive_packages=("nlpo_toolkit.comparison.services",),
     ),
@@ -161,6 +168,9 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.corpus_analysis.archive.manifest",
             "nlpo_toolkit.corpus_analysis.archive.models",
             "nlpo_toolkit.corpus_analysis.archive.service",
+            "nlpo_toolkit.latin.latin_wordlist.collectors",
+            "nlpo_toolkit.latin.latin_wordlist.config",
+            "nlpo_toolkit.latin.latin_wordlist.publication",
         ),
         recursive_packages=(
             "nlpo_toolkit.backends",
@@ -173,7 +183,9 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
         exact_modules=(
             "nlpo_toolkit.corpus_analysis.composition",
             "nlpo_toolkit.latin.cleaners.run_clean_corpus",
-            "nlpo_toolkit.latin.latin_wordlist.build_latin_wordlist",
+            "nlpo_toolkit.latin.latin_wordlist.__main__",
+            "nlpo_toolkit.latin.latin_wordlist.cli",
+            "nlpo_toolkit.latin.latin_wordlist.composition",
         ),
         recursive_packages=("nlpo_toolkit.corpus_analysis.cli",),
     ),
@@ -196,6 +208,7 @@ APPLICATION_MODULES = (
     f"{CA}.runner",
     "nlpo_toolkit.comparison.services",
     "nlpo_toolkit.latin.cleaners.service",
+    "nlpo_toolkit.latin.latin_wordlist.service",
 )
 
 PURE_MODULES = (
@@ -222,6 +235,8 @@ PURE_MODULES = (
     f"{CA}.token_artifact.integrity",
     f"{CA}.token_artifact.schema",
     f"{CA}.token_sequences",
+    "nlpo_toolkit.latin.latin_wordlist.engine",
+    "nlpo_toolkit.latin.latin_wordlist.models",
 )
 
 INFRASTRUCTURE_MODULES = (
@@ -240,6 +255,9 @@ INFRASTRUCTURE_MODULES = (
     f"{CA}.cache_storage",
     f"{CA}.token_artifact.reader",
     f"{CA}.token_artifact.writer",
+    "nlpo_toolkit.latin.latin_wordlist.collectors",
+    "nlpo_toolkit.latin.latin_wordlist.config",
+    "nlpo_toolkit.latin.latin_wordlist.publication",
 )
 
 DEPENDENCY_RULES = (
@@ -404,6 +422,57 @@ DEPENDENCY_RULES = (
         (f"{CA}.reporting.service", f"{CA}.artifacts.writers"),
         explanation="Reporting values, metadata construction, and rendering are independent of publication orchestration.",
     ),
+    DependencyRule(
+        "latin-wordlist-engine-pure",
+        ("nlpo_toolkit.latin.latin_wordlist.engine",),
+        (
+            "pathlib",
+            "argparse",
+            "nlpo_toolkit.latin.latin_wordlist.config",
+            "nlpo_toolkit.latin.latin_wordlist.collectors",
+            "nlpo_toolkit.latin.latin_wordlist.publication",
+            "nlpo_toolkit.latin.latin_wordlist.service",
+            "nlpo_toolkit.latin.latin_wordlist.cli",
+        ),
+        explanation="The Latin wordlist engine is a pure calculation layer.",
+    ),
+    DependencyRule(
+        "latin-wordlist-service-ports-only",
+        ("nlpo_toolkit.latin.latin_wordlist.service",),
+        (
+            "argparse",
+            "nlpo_toolkit.latin.latin_wordlist.collectors",
+            "nlpo_toolkit.latin.latin_wordlist.publication",
+            "nlpo_toolkit.latin.latin_wordlist.config",
+            "nlpo_toolkit.latin.latin_wordlist.cli",
+            "nlpo_toolkit.latin.latin_wordlist.composition",
+        ),
+        explanation="The Latin wordlist application service receives typed ports and never constructs concrete I/O adapters.",
+    ),
+    DependencyRule(
+        "latin-wordlist-adapters-inward",
+        (
+            "nlpo_toolkit.latin.latin_wordlist.collectors",
+            "nlpo_toolkit.latin.latin_wordlist.publication",
+            "nlpo_toolkit.latin.latin_wordlist.config",
+        ),
+        (
+            "nlpo_toolkit.latin.latin_wordlist.service",
+            "nlpo_toolkit.latin.latin_wordlist.cli",
+        ),
+        explanation="Latin wordlist adapters do not depend on application orchestration or CLI presentation.",
+    ),
+    DependencyRule(
+        "latin-wordlist-ports-inward",
+        ("nlpo_toolkit.latin.latin_wordlist.ports",),
+        (
+            "nlpo_toolkit.latin.latin_wordlist.collectors",
+            "nlpo_toolkit.latin.latin_wordlist.publication",
+            "nlpo_toolkit.latin.latin_wordlist.composition",
+            "nlpo_toolkit.latin.latin_wordlist.cli",
+        ),
+        explanation="Latin wordlist ports contain contracts, not concrete adapters or boundary code.",
+    ),
 )
 
 # There are currently no justified dynamic-import exceptions. Entries must name a
@@ -423,7 +492,7 @@ SERIALIZATION_BOUNDARY_MODULES = (
     f"{CA}.cli.output",
     f"{CA}.diagnostic_trace",
     "nlpo_toolkit.latin.cleaners.config_loader",
-    "nlpo_toolkit.latin.latin_wordlist.build_latin_wordlist",
+    "nlpo_toolkit.latin.latin_wordlist.config",
 )
 
 PACKAGE_CYCLE_GROUPS = (
@@ -441,6 +510,7 @@ PACKAGE_CYCLE_GROUPS = (
     "nlpo_toolkit.corpus_analysis.token_artifact",
     "nlpo_toolkit.corpus_analysis.token_sequences",
     "nlpo_toolkit.latin.cleaners",
+    "nlpo_toolkit.latin.latin_wordlist",
     "nlpo_toolkit.nlp",
     "nlpo_toolkit.serialization",
 )

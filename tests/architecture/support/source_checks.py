@@ -68,6 +68,29 @@ def find_calls(
     return tuple(sorted(violations, key=lambda item: (str(item.source_path), item.line_number)))
 
 
+def find_method_calls(
+    paths: Iterable[Path],
+    *,
+    method_names: Collection[str],
+    rule_name: str = "forbidden-method-call",
+) -> tuple[SourceViolation, ...]:
+    """Find calls by attribute name when receiver types cannot be inferred by AST."""
+    violations: list[SourceViolation] = []
+    for path, tree in _trees(paths):
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in method_names
+            ):
+                violations.append(
+                    SourceViolation(rule_name, path, node.lineno, node.func.attr)
+                )
+    return tuple(
+        sorted(violations, key=lambda item: (str(item.source_path), item.line_number))
+    )
+
+
 def find_imports(
     paths: Iterable[Path], *, module_prefixes: Collection[str], rule_name: str = "forbidden-import"
 ) -> tuple[SourceViolation, ...]:
