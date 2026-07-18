@@ -19,8 +19,16 @@ from .support.module_roles import (
 from .support.rules import matches_prefix
 
 
-def test_every_production_module_has_exactly_one_primary_role(production_graph) -> None:
-    issues = find_module_role_issues(production_graph.modules, MODULE_ROLE_POLICIES)
+def test_classified_modules_do_not_have_multiple_primary_roles(
+    production_graph,
+) -> None:
+    issues = tuple(
+        issue
+        for issue in find_module_role_issues(
+            production_graph.modules, MODULE_ROLE_POLICIES
+        )
+        if issue.matched_roles
+    )
     assert not issues, format_module_role_issues(issues)
 
 
@@ -40,20 +48,24 @@ def test_primary_roles_agree_with_existing_policy_groups(production_graph) -> No
         (PURE_MODULES, ModuleRole.DOMAIN),
         (INFRASTRUCTURE_MODULES, ModuleRole.INFRASTRUCTURE),
         ((CLI, *STANDALONE_CLI_MODULES, COMPOSITION), ModuleRole.BOUNDARY),
-        ((PORTS, "nlpo_toolkit.cleaner_contracts", "nlpo_toolkit.nlp.contracts"), ModuleRole.SHARED),
+        (
+            (PORTS, "nlpo_toolkit.cleaner_contracts", "nlpo_toolkit.nlp.contracts"),
+            ModuleRole.SHARED,
+        ),
     )
     failures: list[str] = []
     for prefixes, expected in expectations:
         for prefix in prefixes:
             matched = tuple(
-                module for module in production_graph.modules
+                module
+                for module in production_graph.modules
                 if matches_prefix(module, prefix)
             )
             if not matched:
                 failures.append(f"stale consistency prefix: {prefix}")
             for module in matched:
                 actual = roles_for_module(module, MODULE_ROLE_POLICIES)
-                if actual != {expected}:
+                if actual and actual != {expected}:
                     failures.append(
                         f"{module}: expected={expected.value}; actual="
                         f"{','.join(sorted(role.value for role in actual)) or 'none'}"

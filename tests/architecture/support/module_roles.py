@@ -29,7 +29,11 @@ class ModuleRoleIssue:
 
     @property
     def kind(self) -> str:
-        return "unclassified-module" if not self.matched_roles else "multiply-classified-module"
+        return (
+            "unclassified-module"
+            if not self.matched_roles
+            else "multiply-classified-module"
+        )
 
     def __str__(self) -> str:
         if not self.matched_roles:
@@ -88,8 +92,22 @@ def find_module_role_issues(
     for module in sorted(set(modules)):
         roles = roles_for_module(module, policies)
         if len(roles) != 1:
-            issues.append(ModuleRoleIssue(module, tuple(sorted(roles, key=lambda role: role.value))))
+            issues.append(
+                ModuleRoleIssue(
+                    module, tuple(sorted(roles, key=lambda role: role.value))
+                )
+            )
     return tuple(issues)
+
+
+def find_unclassified_modules(
+    modules: Iterable[str], policies: tuple[ModuleRolePolicy, ...]
+) -> tuple[str, ...]:
+    return tuple(
+        module
+        for module in sorted(set(modules))
+        if not roles_for_module(module, policies)
+    )
 
 
 def find_stale_role_selectors(
@@ -104,7 +122,11 @@ def find_stale_role_selectors(
         for package in policy.recursive_packages:
             if not any(matches_prefix(module, package) for module in available):
                 stale.append(StaleRoleSelector(policy.role, "recursive", package))
-    return tuple(sorted(stale, key=lambda item: (item.role.value, item.selector_kind, item.selector)))
+    return tuple(
+        sorted(
+            stale, key=lambda item: (item.role.value, item.selector_kind, item.selector)
+        )
+    )
 
 
 def validate_role_policies(
@@ -118,14 +140,32 @@ def validate_role_policies(
             ("recursive", policy.recursive_packages),
         ):
             if len(selectors) != len(set(selectors)):
-                problems.append(RolePolicyProblem(f"duplicate {kind} selector within {policy.role.value} policy"))
+                problems.append(
+                    RolePolicyProblem(
+                        f"duplicate {kind} selector within {policy.role.value} policy"
+                    )
+                )
             for selector in selectors:
                 if not selector:
-                    problems.append(RolePolicyProblem(f"empty {kind} selector in {policy.role.value} policy"))
-                elif not (selector == "nlpo_toolkit" or selector.startswith("nlpo_toolkit.")):
-                    problems.append(RolePolicyProblem(f"selector must start with nlpo_toolkit: {selector}"))
+                    problems.append(
+                        RolePolicyProblem(
+                            f"empty {kind} selector in {policy.role.value} policy"
+                        )
+                    )
+                elif not (
+                    selector == "nlpo_toolkit" or selector.startswith("nlpo_toolkit.")
+                ):
+                    problems.append(
+                        RolePolicyProblem(
+                            f"selector must start with nlpo_toolkit: {selector}"
+                        )
+                    )
                 if kind == "recursive" and (selector.endswith(".*") or "/" in selector):
-                    problems.append(RolePolicyProblem(f"invalid recursive selector syntax: {selector}"))
+                    problems.append(
+                        RolePolicyProblem(
+                            f"invalid recursive selector syntax: {selector}"
+                        )
+                    )
                 if kind == "recursive" and selector in {
                     "nlpo_toolkit",
                     "nlpo_toolkit.corpus_analysis",
@@ -133,12 +173,20 @@ def validate_role_policies(
                     "nlpo_toolkit.corpus_analysis.artifacts",
                     "nlpo_toolkit.latin.cleaners",
                 }:
-                    problems.append(RolePolicyProblem(f"catch-all or heterogeneous recursive selector is forbidden: {selector}"))
+                    problems.append(
+                        RolePolicyProblem(
+                            f"catch-all or heterogeneous recursive selector is forbidden: {selector}"
+                        )
+                    )
                 selector_roles.setdefault((kind, selector), set()).add(policy.role)
     for (kind, selector), roles in selector_roles.items():
         if len(roles) > 1:
             names = ", ".join(sorted(role.value for role in roles))
-            problems.append(RolePolicyProblem(f"{kind} selector has multiple roles ({names}): {selector}"))
+            problems.append(
+                RolePolicyProblem(
+                    f"{kind} selector has multiple roles ({names}): {selector}"
+                )
+            )
     return tuple(sorted(set(problems), key=lambda item: item.message))
 
 

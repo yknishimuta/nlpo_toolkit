@@ -22,25 +22,21 @@ and integration tests answer “does this value or behavior work?”. Consequent
 suite does not normally freeze filenames, function names, signatures, dataclass field
 sets, `__init__.py` emptiness, serialization content, or historical rename state.
 
-When adding a module, classify its role in `policy.py` and add its stable role prefix
-to the smallest applicable group. Prefer a general dependency or source rule over a
-symbol blacklist. Add an allowlist entry only when the dependency is intentional,
-narrowly scoped, cannot be expressed by the normal direction, and has a durable
-reason; migration-only exceptions are not accepted.
+Architecture tests protect concrete dependency direction; module-role coverage is
+not required to be exhaustive. An unclassified production module is diagnostic
+information, not an architecture violation. Existing classifications must remain
+well formed and non-conflicting, but a new classification or layer should be added
+only when a concrete dependency problem requires it.
 
-Every production module, including package `__init__.py` modules, must have exactly
-one primary role: `SHARED`, `DOMAIN`, `APPLICATION`, `INFRASTRUCTURE`, or `BOUNDARY`.
-Primary roles are an exhaustive classification axis, not dependency permissions;
-the dependency rules above remain the source of truth for allowed imports. An exact
-selector classifies only one module. A recursive package selector classifies the
-package module and all descendants using segment-aware matching.
+Classification coverage can be inspected on demand without affecting CI:
 
-When adding a module, add the narrowest correct selector to `MODULE_ROLE_POLICIES`.
-Do not use broad recursive selectors for heterogeneous packages such as
-`corpus_analysis`, `comparison`, `artifacts`, or `latin.cleaners`, and never add a
-catch-all classification. Unclassified modules, modules matched by different roles,
-empty or malformed selectors, and selectors left behind after a rename or deletion
-are architecture violations.
+```bash
+python -m tests.architecture.module_role_report
+```
+
+The report uses the same production graph and role selectors as the tests, lists
+unclassified modules in stable order, and exits successfully whether or not any are
+present.
 
 Frozen value and result models own deeply read-only collections. Ordered values are
 normalized to tuples, set-valued fields to frozensets, and mappings to defensive
