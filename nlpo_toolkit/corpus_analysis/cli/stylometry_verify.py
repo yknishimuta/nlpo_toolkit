@@ -5,10 +5,8 @@ from pathlib import Path
 
 from nlpo_toolkit.stylometry.composition import default_stylometry_dependencies
 from nlpo_toolkit.stylometry.errors import StylometryError
-from nlpo_toolkit.stylometry.models import FeatureSelection
 from nlpo_toolkit.stylometry.verification_models import (
     VerificationRequest,
-    VerificationThresholdSettings,
 )
 from nlpo_toolkit.stylometry.verification_service import execute_verification
 
@@ -18,29 +16,19 @@ from .stylometry_verification_rendering import (
     write_verification_calibration,
     write_verification_json,
 )
+from .stylometry_verification_options import (
+    add_verification_input_arguments,
+    build_feature_selection,
+    build_threshold_settings,
+)
 
 
 def register_verify(commands: argparse._SubParsersAction) -> None:
     parser = commands.add_parser("verify")
-    parser.add_argument("--features", type=Path, required=True)
-    parser.add_argument("--input-format", choices=("csv", "tsv"), default="csv")
-    parser.add_argument("--metadata", type=Path, required=True)
-    parser.add_argument("--metadata-format", choices=("csv", "tsv"), default="csv")
-    parser.add_argument("--id-column", default="group")
-    parser.add_argument("--metadata-id-column", default="sample_id")
-    parser.add_argument("--author-column", default="author")
-    parser.add_argument("--work-column", default="work")
-    parser.add_argument("--feature-prefix", action="append", default=[])
-    parser.add_argument("--feature-column", action="append", default=[])
-    parser.add_argument("--candidate-author", required=True)
-    parser.add_argument("--query-work", required=True)
-    parser.add_argument("--genuine-quantile", type=float, default=0.95)
-    parser.add_argument("--impostor-quantile", type=float, default=0.05)
+    add_verification_input_arguments(parser)
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--calibration-out", type=Path, default=None)
-    parser.add_argument(
-        "--calibration-format", choices=("csv", "tsv"), default="csv"
-    )
+    parser.add_argument("--calibration-format", choices=("csv", "tsv"), default="csv")
     set_handler(parser, execute_verify)
 
 
@@ -49,7 +37,8 @@ def execute_verify(args: argparse.Namespace, context: CLIContext) -> int:
         output = args.out.expanduser().resolve() if args.out is not None else None
         calibration = (
             args.calibration_out.expanduser().resolve()
-            if args.calibration_out is not None else None
+            if args.calibration_out is not None
+            else None
         )
         if output is not None and output == calibration:
             raise StylometryError("--out and --calibration-out must be different paths")
@@ -58,19 +47,13 @@ def execute_verify(args: argparse.Namespace, context: CLIContext) -> int:
             metadata_path=args.metadata.expanduser().resolve(),
             input_format=args.input_format,
             metadata_format=args.metadata_format,
-            feature_selection=FeatureSelection(
-                id_column=args.id_column,
-                prefixes=tuple(args.feature_prefix),
-                columns=tuple(args.feature_column),
-            ),
+            feature_selection=build_feature_selection(args),
             metadata_id_column=args.metadata_id_column,
             author_column=args.author_column,
             work_column=args.work_column,
             candidate_author=args.candidate_author,
             query_work=args.query_work,
-            thresholds=VerificationThresholdSettings(
-                args.genuine_quantile, args.impostor_quantile
-            ),
+            thresholds=build_threshold_settings(args),
         )
         result = execute_verification(
             request, dependencies=default_stylometry_dependencies()

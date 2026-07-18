@@ -1104,6 +1104,61 @@ reference corpus, a vocabulary fitted without the query, or a corpus-input
 training-only vocabulary workflow. Verification measures consistency with a
 candidate model in a closed feature space; it is not proof of authorship.
 
+### Verification Stability and Resampling
+
+`verify-stability` first calculates the ordinary `verify` result using all
+selected rows and features. It then repeats that same pure verification
+calculation under one or more explicitly selected perturbations:
+
+```bash
+nlpo stylometry verify-stability \
+  --features output/features_windows.csv \
+  --metadata config/authorship_metadata.csv \
+  --candidate-author virgil \
+  --query-work ciris \
+  --id-column sample_id \
+  --feature-prefix fw_ \
+  --resample-axis works \
+  --resample-axis samples \
+  --resample-axis features \
+  --work-fraction 0.80 \
+  --feature-fraction 0.80 \
+  --iterations 1000 \
+  --seed 20260718 \
+  --out output/verification_stability.json \
+  --replicates-out output/verification_stability_replicates.csv \
+  --feature-stability-out output/verification_feature_stability.csv
+```
+
+`works` performs stratified sampling without replacement, separately within
+candidate and background works while preserving verification's minimum work
+counts. `samples` bootstraps observations with replacement only inside their
+original work and then rebuilds one equally weighted work mean. `features`
+uniformly samples without replacement from the columns already selected in the
+Features table and restores their original column order. It does not refit MFW,
+character n-gram, or UPOS n-gram vocabularies.
+
+When several axes are supplied they are applied in the fixed order works,
+samples, then features. Every successful replicate refits reference-only
+z-scores, zero-variance filtering, genuine and impostor calibration, and both
+thresholds. The query remains excluded from every fit and calibration step.
+The replicate table records decisions, distances, thresholds, included works,
+selected and retained feature counts, nearest background diagnostics, and
+deterministic feature-set hashes.
+
+The summary reports decision rates, the modal decision, agreement with the base
+decision, empirical resampling intervals, work inclusion, nearest-background
+frequency, and feature selection/retention frequency. `stable` means only that
+the modal three-way decision reaches `--stability-threshold` under this precise
+resampling design. Empirical intervals are not formal confidence guarantees.
+Overlapping windows may not be independent observations, and background corpus
+choice can materially affect the result.
+
+This command does not repeat upstream feature-vocabulary selection and cannot
+remove leakage already present in the Features table. A stable accept does not
+prove authenticity, a stable reject does not prove forgery, and instability
+indicates sensitivity to data or settings rather than forgery by itself.
+
 ### Corpus-input LOWO with fold-fitted vocabularies
 
 `evaluate-lowo-corpus` starts from configured corpora rather than an already
