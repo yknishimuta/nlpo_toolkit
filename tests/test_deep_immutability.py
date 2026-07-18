@@ -4,7 +4,7 @@ import pytest
 
 from nlpo_toolkit.comparison.models import FrequencyTable
 from nlpo_toolkit.comparison.results import MultiComparisonRow
-from nlpo_toolkit.corpus_analysis.analysis_cache.stats import AnalysisCacheStatsCollector
+from nlpo_toolkit.corpus_analysis.analysis_cache_stats import AnalysisCacheStatsCollector
 from nlpo_toolkit.corpus_analysis.analysis_results import AnalysisResults, GroupAnalysisResult
 from nlpo_toolkit.corpus_analysis.config.models import AppConfig
 from nlpo_toolkit.corpus_analysis.partition_validation import PartitionMismatch, PartitionResult

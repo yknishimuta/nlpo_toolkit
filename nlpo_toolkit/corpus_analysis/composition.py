@@ -18,6 +18,7 @@ from .analysis_policy import (
     AnalysisExtractionPolicy,
     DEFAULT_ANALYSIS_EXTRACTION_POLICY,
 )
+from .analysis_cache.provider import provide_analysis_records
 from .archive.service import create_run_archive
 from .artifacts.publication_adapters import (
     open_record_artifact_session,
@@ -119,6 +120,7 @@ def default_runner_dependencies() -> RunnerDependencies:
     return RunnerDependencies(
         corpus=default_corpus_execution_dependencies(),
         nlp=default_nlp_execution_dependencies(),
+        analysis_records=provide_analysis_records,
         publication=default_count_publication_dependencies(),
     )
 

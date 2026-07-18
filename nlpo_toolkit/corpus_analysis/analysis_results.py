@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from nlpo_toolkit.immutable_collections import freeze_count_mapping, freeze_mapping
 
-from .analysis_cache.stats import AnalysisCacheStatsSnapshot
+from .analysis_cache_results import AnalysisCacheStatsSnapshot
 from .token_artifact.schema import TokenArtifactMetadata
 
 

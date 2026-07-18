@@ -128,6 +128,13 @@ The production composition root injects all of these publication dependencies;
 application orchestration neither selects concrete writers nor serializes CSV,
 JSON, TSV, or text output.
 
+Count also obtains NLP analysis records only through the typed
+`AnalysisRecordProvider` port. The production composition root injects the
+cached provider, which owns both cache-enabled and cache-disabled extraction.
+Cache fingerprints and keys, repositories, locking, codecs, hit/miss checks,
+and atomic cache writes remain inside the Analysis Cache infrastructure; Count
+application orchestration does not construct or import them.
+
 Features keeps application orchestration separate from calculation:
 `features.service` connects the execution sessions to `features.engine`, while
 the engine extracts analysis records once per prepared corpus and applies the
@@ -242,10 +249,12 @@ analysis_cache:
 
 The cache is an internal optimization and is not copied into run archives or
 listed in `generated_outputs`. Use token artifacts for stable research outputs.
-Internally, cache keys and paths, record codec, writer, repository, and hit/miss
-service are separate modules. Cached record streams and their
-locks are owned by a context manager so interrupted consumers cannot publish an
-incomplete cache object.
+Internally, the production `AnalysisRecordProvider` coordinates cache keys and
+paths, fingerprinting, record codecs, writers, repositories, and hit/miss
+handling. It returns a context-managed record stream, so locks are released and
+interrupted consumers cannot publish incomplete cache objects. Cache statistics
+snapshots and their application-side collector are independent of the
+filesystem cache package; reporting consumes only those typed result models.
 
 Use `nlpo cache clear` to remove the configured analysis cache for a project
 instead of running `rm -rf .analysis_cache` manually.

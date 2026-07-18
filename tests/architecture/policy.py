@@ -62,6 +62,7 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.corpus_analysis.analysis_policy",
             "nlpo_toolkit.corpus_analysis.analysis_records",
             "nlpo_toolkit.corpus_analysis.analysis_results",
+            "nlpo_toolkit.corpus_analysis.analysis_cache_results",
             "nlpo_toolkit.corpus_analysis.features",
             "nlpo_toolkit.corpus_analysis.features.engine",
             "nlpo_toolkit.corpus_analysis.features.filtering",
@@ -106,6 +107,7 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
         exact_modules=(
             "nlpo_toolkit.corpus_analysis.analysis_execution",
             "nlpo_toolkit.corpus_analysis.analysis_orchestration",
+            "nlpo_toolkit.corpus_analysis.analysis_cache_stats",
             "nlpo_toolkit.corpus_analysis.comparison_run_results",
             "nlpo_toolkit.corpus_analysis.concordance",
             "nlpo_toolkit.corpus_analysis.count_context",
@@ -217,6 +219,7 @@ PURE_MODULES = (
     "nlpo_toolkit.comparison.metrics",
     "nlpo_toolkit.comparison.results",
     f"{CA}.analysis_results",
+    f"{CA}.analysis_cache_results",
     f"{CA}.features.engine",
     f"{CA}.features.filtering",
     f"{CA}.features.lexical",
@@ -298,6 +301,17 @@ DEPENDENCY_RULES = (
             f"{CA}.diagnostic_trace",
         ),
         explanation="Count application services depend on typed publication ports, not filesystem adapters or concrete writers.",
+    ),
+    DependencyRule(
+        "count-application-no-analysis-cache-infrastructure",
+        (
+            f"{CA}.analysis_execution",
+            f"{CA}.analysis_orchestration",
+            f"{CA}.runner",
+            f"{CA}.analysis_results",
+        ),
+        (f"{CA}.analysis_cache",),
+        explanation="Count application code obtains records through AnalysisRecordProvider and does not depend on cache repositories, keys, locking, codecs, or storage services.",
     ),
     DependencyRule(
         "composition-consumed-only-by-cli",

@@ -2,31 +2,29 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Mapping
-from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Iterator, Literal
+from typing import Iterable
 
-from nlpo_toolkit.nlp.contracts import NLPBackendInfo
 from nlpo_toolkit.immutable_collections import freeze_count_mapping
 
-from .analysis_cache.keys import build_analysis_cache_key, prepared_text_sha256
-from .analysis_cache.models import AnalysisFingerprint
-from .analysis_cache.repository import AnalysisCacheRepository
-from .analysis_cache.service import open_or_compute_analysis_records
-from .analysis_cache.stats import AnalysisCacheStatsCollector
-from .analysis_policy import AnalysisExtractionPolicy
+from .analysis_cache_stats import AnalysisCacheStatsCollector
 from .analysis_records import (
     AnalysisOptions,
     NLPAnalysisRecord,
     evaluate_analysis_record,
-    iter_nlp_analysis_records_from_text,
 )
 from .corpus import PreparedCorpus
 from .artifacts.models import ArtifactKind
 from .publication_models import RecordArtifactPublicationRequest
 from .publication_ports import RecordArtifactSession, RecordArtifactSessionFactory
 from .count_context import CountRunContext
+from .ports import (
+    AnalysisRecordCacheSettings,
+    AnalysisRecordProvider,
+    AnalysisRecordRequest,
+    AnalysisRecordSource,
+)
 from .token_artifact.schema import (
     TokenArtifactDescriptor, TokenArtifactFilterDescriptor,
     TokenArtifactMetadata, TokenArtifactNLPDescriptor,
@@ -35,13 +33,9 @@ from .token_artifact.schema import (
 __all__ = [
     "RecordAnalysisResult",
     "RecordConsumptionResult",
-    "AnalysisRecordSource",
-    "build_analysis_fingerprint",
     "build_analysis_options",
     "consume_analysis_records",
-    "create_analysis_cache_stats",
     "execute_record_analysis",
-    "obtain_analysis_records",
 ]
 
 
@@ -64,13 +58,6 @@ class RecordAnalysisResult:
         object.__setattr__(self, "counter", freeze_count_mapping(self.counter))
 
 
-@dataclass(frozen=True)
-class AnalysisRecordSource:
-    records: Iterator[NLPAnalysisRecord]
-    cache_status: Literal["hit", "miss", "disabled"]
-    cache_key: str
-
-
 def _analysis_cache_dir(context: CountRunContext) -> Path:
     definition = context.session.corpus.plan.definition
     directory = Path(definition.config.analysis_cache.directory)
@@ -79,27 +66,14 @@ def _analysis_cache_dir(context: CountRunContext) -> Path:
     return directory.resolve()
 
 
-def create_analysis_cache_stats(context: CountRunContext) -> AnalysisCacheStatsCollector:
-    return AnalysisCacheStatsCollector(
-        enabled=context.session.corpus.plan.definition.config.analysis_cache.enabled,
-        directory=str(_analysis_cache_dir(context)),
-    )
-
-
-def build_analysis_fingerprint(
-    *,
-    backend_info: NLPBackendInfo,
-    policy: AnalysisExtractionPolicy,
-) -> AnalysisFingerprint:
-    return AnalysisFingerprint(
-        backend=backend_info.name,
-        language=backend_info.language,
-        model=backend_info.model,
-        package=backend_info.package,
-        processors=policy.processors,
-        chunk_size=policy.chunk_chars,
-        chunk_strategy=policy.chunk_strategy,
-        device=backend_info.device,
+def analysis_record_cache_settings(
+    context: CountRunContext,
+) -> AnalysisRecordCacheSettings:
+    config = context.session.corpus.plan.definition.config.analysis_cache
+    return AnalysisRecordCacheSettings(
+        enabled=config.enabled,
+        directory=_analysis_cache_dir(context),
+        lock_timeout_sec=config.lock_timeout_sec,
     )
 
 
@@ -119,50 +93,6 @@ def build_analysis_options(
         drop_roman_numerals=filters.drop_roman_numerals,
         roman_exceptions=context.session.roman_exceptions,
     )
-
-
-@contextmanager
-def obtain_analysis_records(
-    *,
-    context: CountRunContext,
-    text: str,
-) -> Iterator[AnalysisRecordSource]:
-    session = context.session
-    definition = session.corpus.plan.definition
-    policy = session.extraction_policy
-    fingerprint = build_analysis_fingerprint(
-        backend_info=session.backend.info,
-        policy=policy,
-    )
-    text_hash = prepared_text_sha256(text)
-    cache_key = build_analysis_cache_key(
-        prepared_text_sha256=text_hash,
-        fingerprint=fingerprint,
-    )
-    if definition.config.analysis_cache.enabled:
-        repository = AnalysisCacheRepository(_analysis_cache_dir(context))
-        with open_or_compute_analysis_records(
-            repository=repository,
-            cache_key=cache_key,
-            prepared_text_sha256=text_hash,
-            prepared_text_length=len(text),
-            fingerprint=fingerprint,
-            compute_records=lambda: iter_nlp_analysis_records_from_text(
-                text=text,
-                nlp=session.backend.backend,
-                policy=policy,
-            ),
-            lock_timeout_sec=definition.config.analysis_cache.lock_timeout_sec,
-        ) as cached:
-            yield AnalysisRecordSource(cached.records, cached.status, cache_key)
-        return
-    records = iter_nlp_analysis_records_from_text(
-            text=text,
-            nlp=session.backend.backend,
-            policy=policy,
-    )
-    with closing(records):
-        yield AnalysisRecordSource(records, "disabled", cache_key)
 
 
 def consume_analysis_records(
@@ -228,6 +158,7 @@ def execute_record_analysis(
     corpus: PreparedCorpus,
     text: str,
     publication: RecordArtifactSessionFactory,
+    analysis_records: AnalysisRecordProvider,
     cache_stats: AnalysisCacheStatsCollector,
 ) -> RecordAnalysisResult:
     artifacts = context.artifact_plan
@@ -246,7 +177,13 @@ def execute_record_analysis(
         trace_write_truncation_marker=trace_config.write_truncation_marker,
     )
     with publication(request) as record_session:
-        with obtain_analysis_records(context=context, text=text) as source:
+        record_request = AnalysisRecordRequest(
+            text=text,
+            backend=context.session.backend,
+            extraction_policy=context.session.extraction_policy,
+            cache=analysis_record_cache_settings(context),
+        )
+        with analysis_records(record_request) as source:
             consumed = consume_analysis_records(
                 records=source.records,
                 options=build_analysis_options(context=context, corpus=corpus),

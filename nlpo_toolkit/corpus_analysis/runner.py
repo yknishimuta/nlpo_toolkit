@@ -19,7 +19,11 @@ def run(
         request,
         dependencies=dependencies,
     )
-    analysis = analyze_corpora(context, publication=dependencies.publication)
+    analysis = analyze_corpora(
+        context,
+        analysis_records=dependencies.analysis_records,
+        publication=dependencies.publication,
+    )
     partitions = post_analysis.execute_partition_validations(
         context=context,
         analysis=analysis,

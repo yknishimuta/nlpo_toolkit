@@ -3,14 +3,20 @@ from __future__ import annotations
 from tests.corpus_analysis.fake_nlp import FakeNLPBackend, corpus_request
 
 from collections import Counter
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
-from typing import cast
+from typing import cast, Iterator
+
+import pytest
 
 from nlpo_toolkit.nlp.contracts import BuiltNLPBackend, NLPBackendInfo
 from nlpo_toolkit.corpus_analysis.analysis_orchestration import analyze_corpora
-from nlpo_toolkit.corpus_analysis.analysis_cache.stats import AnalysisCacheStatsCollector
+from nlpo_toolkit.corpus_analysis.analysis_cache_stats import AnalysisCacheStatsCollector
 from nlpo_toolkit.corpus_analysis.analysis_results import AnalysisResults, GroupAnalysisResult
+from nlpo_toolkit.corpus_analysis.analysis_cache_results import AnalysisRecordCacheStatus
+from nlpo_toolkit.corpus_analysis.analysis_records import NLPAnalysisRecord
+from nlpo_toolkit.corpus_analysis.ports import AnalysisRecordRequest, AnalysisRecordSource
 from nlpo_toolkit.corpus_analysis.postprocessing.lemma_normalization import apply_lemma_normalization
 from nlpo_toolkit.corpus_analysis.postprocessing.dictionary import classify_dictionary_entries
 from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
@@ -48,6 +54,42 @@ class FakeBackend:
                     ],
                 )
             ],
+        )
+
+
+class RecordingAnalysisRecordProvider:
+    def __init__(self, status: AnalysisRecordCacheStatus) -> None:
+        self.status = status
+        self.requests: list[AnalysisRecordRequest] = []
+        self.iterations = 0
+
+    @contextmanager
+    def __call__(
+        self, request: AnalysisRecordRequest
+    ) -> Iterator[AnalysisRecordSource]:
+        self.requests.append(request)
+
+        def records():
+            self.iterations += 1
+            yield NLPAnalysisRecord(
+                chunk_index=0,
+                sentence_index=0,
+                token_index=0,
+                global_token_index=0,
+                char_start_in_chunk=0,
+                char_end_in_chunk=len(request.text),
+                char_start_in_text=0,
+                char_end_in_text=len(request.text),
+                sentence=request.text,
+                token="Rosa",
+                lemma="rosa",
+                upos="NOUN",
+            )
+
+        yield AnalysisRecordSource(
+            records=records(),
+            cache_status=self.status,
+            cache_key="fake-cache-key",
         )
 
 
@@ -166,6 +208,7 @@ def test_analyze_corpora_writes_expected_outputs_from_record_pipeline(tmp_path: 
                 corpus=replace(context.session.corpus, corpora=(corpus,)),
             ),
         ),
+        analysis_records=deps.analysis_records,
         publication=deps.publication,
     ).groups["group_a"]
 
@@ -216,7 +259,11 @@ def test_count_passes_prepared_text_unchanged_to_its_only_nlp_backend(
     )
     prepared_text = context.session.corpus.corpora[0].prepared_text
 
-    analyze_corpora(context, publication=dependencies.publication)
+    analyze_corpora(
+        context,
+        analysis_records=dependencies.analysis_records,
+        publication=dependencies.publication,
+    )
 
     assert prepared_text == text
     assert backend.calls == [prepared_text]
@@ -237,6 +284,69 @@ def test_count_passes_prepared_text_unchanged_to_its_only_nlp_backend(
         "Marcus",
         "venit.",
     ]
+
+
+@pytest.mark.parametrize(
+    "status,enabled,expected",
+    (
+        ("hit", True, (1, 0, 1, 0)),
+        ("miss", True, (0, 1, 0, 1)),
+        ("disabled", False, (0, 0, 0, 0)),
+    ),
+)
+def test_application_uses_typed_record_provider_and_tracks_cache_status(
+    tmp_path: Path,
+    status: AnalysisRecordCacheStatus,
+    enabled: bool,
+    expected: tuple[int, int, int, int],
+) -> None:
+    text = "Rosa amat.\n\n  Marcus venit."
+    (tmp_path / "input").mkdir()
+    (tmp_path / "input" / "a.txt").write_text(text, encoding="utf-8")
+    config_path = tmp_path / "config.yml"
+    config_path.write_text("dummy", encoding="utf-8")
+
+    def load_config(_path: Path):
+        return ensure_app_config(
+            {
+                "groups": {"group_a": {"files": ["input/a.txt"]}},
+                "normalization": {"enabled": False},
+                "analysis_cache": {
+                    "enabled": enabled,
+                    "dir": "cache/analysis",
+                    "lock_timeout_sec": 12.5,
+                },
+            }
+        )
+
+    dependencies = runner_dependencies(load_config, _backend_factory)
+    provider = RecordingAnalysisRecordProvider(status)
+    dependencies = replace(dependencies, analysis_records=provider)
+    context = prepare_run_context(
+        corpus_request(tmp_path, config_path), dependencies=dependencies
+    )
+    result = analyze_corpora(
+        context,
+        analysis_records=dependencies.analysis_records,
+        publication=recording_publication_dependencies(),
+    )
+
+    assert len(provider.requests) == 1
+    request = provider.requests[0]
+    assert request.text == context.session.corpus.corpora[0].prepared_text == text
+    assert request.backend is context.session.backend
+    assert request.extraction_policy is context.session.extraction_policy
+    assert request.cache.enabled is enabled
+    assert request.cache.directory == (tmp_path / "cache/analysis").resolve()
+    assert request.cache.lock_timeout_sec == 12.5
+    assert provider.iterations == 1
+    assert (
+        result.cache_stats.hits,
+        result.cache_stats.misses,
+        result.cache_stats.records_read,
+        result.cache_stats.records_written,
+    ) == expected
+    assert result.cache_stats.groups[0].status == status
 
 
 def test_summary_lines_and_metadata_include_existing_fields(tmp_path: Path) -> None:

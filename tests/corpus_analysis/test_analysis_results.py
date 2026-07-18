@@ -5,7 +5,7 @@ from dataclasses import fields
 
 import pytest
 
-from nlpo_toolkit.corpus_analysis.analysis_cache.stats import AnalysisCacheStatsCollector
+from nlpo_toolkit.corpus_analysis.analysis_cache_stats import AnalysisCacheStatsCollector
 from nlpo_toolkit.corpus_analysis.analysis_results import (
     AnalysisResults,
     GroupAnalysisResult,

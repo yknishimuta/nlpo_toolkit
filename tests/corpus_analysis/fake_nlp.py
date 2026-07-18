@@ -37,6 +37,7 @@ from nlpo_toolkit.corpus_analysis.artifacts.publication_adapters import (
 )
 from nlpo_toolkit.corpus_analysis.reporting.publication_adapter import publish_run_report
 from nlpo_toolkit.corpus_analysis.publication_ports import CountPublicationDependencies
+from nlpo_toolkit.corpus_analysis.analysis_cache.provider import provide_analysis_records
 
 
 TokenSpec = tuple[str, str | None, str]
@@ -150,6 +151,7 @@ def runner_dependencies(
             backend_factory=backend_factory,
             extraction_policy=extraction_policy,
         ),
+        analysis_records=provide_analysis_records,
         publication=CountPublicationDependencies(
             group_artifacts=publish_group_artifacts,
             partition_artifacts=publish_partition_artifacts,

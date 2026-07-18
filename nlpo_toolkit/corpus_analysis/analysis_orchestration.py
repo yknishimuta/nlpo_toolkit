@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from . import analysis_execution
-from .analysis_cache.stats import AnalysisCacheStatsCollector
+from .analysis_cache_stats import AnalysisCacheStatsCollector
 from .analysis_results import AnalysisResults, GroupAnalysisResult
 from .corpus import PreparedCorpus
 from .count_context import CountRunContext
 from .publication_models import GroupArtifactPublication
 from .publication_ports import CountPublicationDependencies
+from .ports import AnalysisRecordProvider
 from .postprocessing.service import (
     PostprocessingResources,
     load_postprocessing_resources,
@@ -22,6 +23,7 @@ def _analyze_one_corpus(
     corpus: PreparedCorpus,
     postprocessing: PostprocessingResources,
     cache_stats: AnalysisCacheStatsCollector,
+    analysis_records: AnalysisRecordProvider,
     publication: CountPublicationDependencies,
 ) -> tuple[str, GroupAnalysisResult]:
     record_result = analysis_execution.execute_record_analysis(
@@ -29,6 +31,7 @@ def _analyze_one_corpus(
         corpus=corpus,
         text=corpus.prepared_text,
         publication=publication.record_artifacts,
+        analysis_records=analysis_records,
         cache_stats=cache_stats,
     )
     definition = context.session.corpus.plan.definition
@@ -59,17 +62,25 @@ def _analyze_one_corpus(
 
 
 def analyze_corpora(
-    context: CountRunContext, *, publication: CountPublicationDependencies
+    context: CountRunContext,
+    *,
+    analysis_records: AnalysisRecordProvider,
+    publication: CountPublicationDependencies,
 ) -> AnalysisResults:
     definition = context.session.corpus.plan.definition
     postprocessing = load_postprocessing_resources(definition)
-    cache_stats = analysis_execution.create_analysis_cache_stats(context)
+    cache_settings = analysis_execution.analysis_record_cache_settings(context)
+    cache_stats = AnalysisCacheStatsCollector(
+        enabled=cache_settings.enabled,
+        directory=str(cache_settings.directory),
+    )
     groups = tuple(
         _analyze_one_corpus(
             context=context,
             corpus=corpus,
             postprocessing=postprocessing,
             cache_stats=cache_stats,
+            analysis_records=analysis_records,
             publication=publication,
         )
         for corpus in context.session.corpus.corpora
