@@ -79,9 +79,10 @@ def test_sampling_options_are_strict(kwargs, message: str) -> None:
 
 
 def test_window_ranges_cover_full_overlap_and_one_partial() -> None:
-    assert tuple(
-        iter_feature_window_ranges(5, options=FeatureSamplingOptions(2))
-    ) == ((0, 2, "full"), (2, 4, "full"))
+    assert tuple(iter_feature_window_ranges(5, options=FeatureSamplingOptions(2))) == (
+        (0, 2, "full"),
+        (2, 4, "full"),
+    )
     assert tuple(
         iter_feature_window_ranges(
             5, options=FeatureSamplingOptions(2, include_partial=True)
@@ -109,7 +110,11 @@ def test_sample_uses_raw_span_and_half_open_filtered_offsets() -> None:
     assert first.sentence_count == 2
     assert first.char_count == 6
     assert first.sample is not None
-    assert (first.sample.sample_index, first.sample.start_token, first.sample.end_token) == (
+    assert (
+        first.sample.sample_index,
+        first.sample.start_token,
+        first.sample.end_token,
+    ) == (
         1,
         0,
         2,
@@ -154,7 +159,9 @@ def _prepared(text: str) -> PreparedCorpus:
     return PreparedCorpus("g", (Path("a.txt"),), text, text, Counter())
 
 
-def test_matrix_filters_once_samples_without_repeating_nlp_and_shares_population() -> None:
+def test_matrix_filters_once_samples_without_repeating_nlp_and_shares_population() -> (
+    None
+):
     backend = TokenNLP()
     rows = build_feature_matrix(
         corpora=(_prepared("aa . bb cc dd ee"),),
@@ -185,6 +192,53 @@ def test_matrix_filters_once_samples_without_repeating_nlp_and_shares_population
     assert {key for key in rows[0] if key.startswith("mfw_")} == {"mfw_aa", "mfw_bb"}
     assert rows[0]["mfw_aa"] == 0.5
     assert rows[0]["mfw_bb"] == 0.5
+    assert rows[0]["sentence_length_median"] == 2.0
+    assert rows[0]["token_length_median"] == 2.0
+
+
+def test_window_length_statistics_use_only_each_sample_population() -> None:
+    rows = build_feature_matrix(
+        corpora=(_prepared("a bb ccc dddd eeeee"),),
+        nlp=TokenNLP(),
+        extraction_policy=AnalysisExtractionPolicy(),
+        options=FeatureOptions(
+            sampling=FeatureSamplingOptions(2, 2, include_partial=True),
+        ),
+    )
+
+    assert [row["word_token_count"] for row in rows] == [2, 2, 1]
+    assert [row["mean_sentence_length"] for row in rows] == [2.0, 2.0, 1.0]
+    assert [row["token_length_median"] for row in rows] == [1.5, 3.5, 5.0]
+    assert [row["token_length_variance"] for row in rows] == [0.25, 0.25, 0.0]
+
+
+def test_new_length_columns_follow_basic_feature_selection_and_order() -> None:
+    basic_row = build_feature_matrix(
+        corpora=(_prepared("a bb"),),
+        nlp=TokenNLP(),
+        extraction_policy=AnalysisExtractionPolicy(),
+        options=FeatureOptions(include_upos=False),
+    )[0]
+    non_basic_row = build_feature_matrix(
+        corpora=(_prepared("a bb"),),
+        nlp=TokenNLP(),
+        extraction_policy=AnalysisExtractionPolicy(),
+        options=FeatureOptions(include_basic=False, include_upos=True),
+    )[0]
+    new_columns = (
+        "sentence_length_variance",
+        "sentence_length_median",
+        "sentence_length_q25",
+        "sentence_length_q75",
+        "token_length_variance",
+        "token_length_median",
+        "token_length_q25",
+        "token_length_q75",
+    )
+
+    assert all(column in basic_row for column in new_columns)
+    assert all(column not in non_basic_row for column in new_columns)
+    assert tuple(column for column in basic_row if column in new_columns) == new_columns
 
 
 def test_mfw_columns_are_selected_before_overlap_sampling() -> None:

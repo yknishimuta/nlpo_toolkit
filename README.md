@@ -705,6 +705,18 @@ corpus before windows are created, so overlap does not bias the MFW vocabulary.
 Without `--window-tokens`, the existing one-row-per-corpus schema and values are
 unchanged.
 
+Basic features describe both sentence-length and surface-token-length
+distributions. For each distribution the output includes the mean, population
+variance (dividing by `N`), median, and linearly interpolated 25th and 75th
+percentiles. A sentence is identified by both chunk index and sentence index;
+its length is the number of tokens that pass the Features eligibility filter,
+and a raw sentence with no eligible lexical tokens contributes a length of
+zero. Token length is the Python string length of the stripped, lowercased
+surface token, never the lemma. Empty distributions produce `0.0` for every
+statistic. With fixed windows, these values are calculated independently from
+each sample's raw and lexical records, including sentences cut by a window
+boundary.
+
 When using `grouping.mode: auto_single_cleaned` or `--auto-single-cleaned`,
 features uses the same single-cleaned-file safety check as `count`:
 exactly one cleaned `.txt` file must be present, otherwise the command fails.

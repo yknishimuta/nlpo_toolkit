@@ -43,8 +43,7 @@ def compute_basic_features(
     token_summary = summarize_distribution(token_lengths)
     word_token_count = len(lexical_records)
     lemmas = [
-        (record.lemma or record.token).strip().lower()
-        for record in lexical_records
+        (record.lemma or record.token).strip().lower() for record in lexical_records
     ]
     tokens = [record.token.strip().lower() for record in lexical_records]
     lemma_counts = Counter(lemmas)
@@ -71,7 +70,9 @@ def compute_basic_features(
         "lemma_type_count": lemma_type_count,
         "token_type_count": token_type_count,
         "hapax_lemma_count": hapax_lemma_count,
-        "hapax_lemma_ratio": hapax_lemma_count / lemma_type_count if lemma_type_count else 0.0,
+        "hapax_lemma_ratio": hapax_lemma_count / lemma_type_count
+        if lemma_type_count
+        else 0.0,
         "mean_sentence_length": mean_sentence_length,
         "sentence_length_variance": sentence_summary.variance,
         "sentence_length_median": sentence_summary.median,
@@ -82,6 +83,10 @@ def compute_basic_features(
         "token_length_median": token_summary.median,
         "token_length_q25": token_summary.q25,
         "token_length_q75": token_summary.q75,
-        "type_token_ratio": token_type_count / word_token_count if word_token_count else 0.0,
-        "lemma_type_token_ratio": lemma_type_count / word_token_count if word_token_count else 0.0,
+        "type_token_ratio": token_type_count / word_token_count
+        if word_token_count
+        else 0.0,
+        "lemma_type_token_ratio": lemma_type_count / word_token_count
+        if word_token_count
+        else 0.0,
     }

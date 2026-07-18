@@ -65,6 +65,7 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.corpus_analysis.analysis_cache_results",
             "nlpo_toolkit.corpus_analysis.features",
             "nlpo_toolkit.corpus_analysis.features.engine",
+            "nlpo_toolkit.corpus_analysis.features.descriptive",
             "nlpo_toolkit.corpus_analysis.features.filtering",
             "nlpo_toolkit.corpus_analysis.features.lexical",
             "nlpo_toolkit.corpus_analysis.features.mfw",
@@ -222,6 +223,7 @@ PURE_MODULES = (
     f"{CA}.analysis_results",
     f"{CA}.analysis_cache_results",
     f"{CA}.features.engine",
+    f"{CA}.features.descriptive",
     f"{CA}.features.filtering",
     f"{CA}.features.lexical",
     f"{CA}.features.mfw",
@@ -332,7 +334,14 @@ DEPENDENCY_RULES = (
     DependencyRule(
         "ports-inward-only",
         (PORTS,),
-        (CLI, COMPOSITION, "nlpo_toolkit.backends", "nlpo_toolkit.latin.cleaners", f"{CA}.archive", f"{CA}.artifacts.writers"),
+        (
+            CLI,
+            COMPOSITION,
+            "nlpo_toolkit.backends",
+            "nlpo_toolkit.latin.cleaners",
+            f"{CA}.archive",
+            f"{CA}.artifacts.writers",
+        ),
         allowed_target_prefixes=(f"{CA}.archive.contracts",),
         explanation="Ports contain contracts and immutable dependency containers, never concrete adapters.",
     ),
@@ -357,31 +366,54 @@ DEPENDENCY_RULES = (
     DependencyRule(
         "comparison-config-inward",
         ("nlpo_toolkit.comparison.config",),
-        ("nlpo_toolkit.comparison.engine", "nlpo_toolkit.comparison.results", "nlpo_toolkit.comparison.services"),
+        (
+            "nlpo_toolkit.comparison.engine",
+            "nlpo_toolkit.comparison.results",
+            "nlpo_toolkit.comparison.services",
+        ),
         explanation="Comparison configuration is a lower-level contract.",
     ),
     DependencyRule(
         "comparison-core-no-services",
         ("nlpo_toolkit.comparison.engine", "nlpo_toolkit.comparison.metrics"),
-        ("nlpo_toolkit.comparison.config", "nlpo_toolkit.comparison.frequency_io", "nlpo_toolkit.comparison.services", CLI),
+        (
+            "nlpo_toolkit.comparison.config",
+            "nlpo_toolkit.comparison.frequency_io",
+            "nlpo_toolkit.comparison.services",
+            CLI,
+        ),
         explanation="Comparison calculations do not depend on configuration, adapters, or services.",
     ),
     DependencyRule(
         "comparison-results-no-services",
         ("nlpo_toolkit.comparison.results",),
-        ("nlpo_toolkit.comparison.frequency_io", "nlpo_toolkit.comparison.services", CLI),
+        (
+            "nlpo_toolkit.comparison.frequency_io",
+            "nlpo_toolkit.comparison.services",
+            CLI,
+        ),
         explanation="Comparison results may own configured result values but do not depend on adapters or services.",
     ),
     DependencyRule(
         "planning-models-inward",
         (f"{CA}.planning.models",),
-        (f"{CA}.planning.build", f"{CA}.planning.resolve", f"{CA}.planning.validate", f"{CA}.preprocessing"),
+        (
+            f"{CA}.planning.build",
+            f"{CA}.planning.resolve",
+            f"{CA}.planning.validate",
+            f"{CA}.preprocessing",
+        ),
         explanation="Planning models are independent values shared by planning stages.",
     ),
     DependencyRule(
         "planning-validate-pure",
         (f"{CA}.planning.validate",),
-        (f"{CA}.planning.build", f"{CA}.planning.resolve", f"{CA}.preprocessing", "nlpo_toolkit.configuration"),
+        (
+            f"{CA}.planning.build",
+            f"{CA}.planning.resolve",
+            f"{CA}.preprocessing",
+            "nlpo_toolkit.configuration",
+        ),
         explanation="Validation checks plans without resolving files or executing preprocessing.",
     ),
     DependencyRule(
@@ -399,7 +431,11 @@ DEPENDENCY_RULES = (
     DependencyRule(
         "token-artifact-core-inward",
         (f"{CA}.token_artifact.schema", f"{CA}.token_artifact.codec"),
-        (f"{CA}.token_artifact.reader", f"{CA}.token_artifact.writer", f"{CA}.token_artifact.validation"),
+        (
+            f"{CA}.token_artifact.reader",
+            f"{CA}.token_artifact.writer",
+            f"{CA}.token_artifact.validation",
+        ),
         explanation="Token artifact schemas and codecs are independent of I/O adapters and validation workflows.",
     ),
     DependencyRule(
@@ -417,7 +453,13 @@ DEPENDENCY_RULES = (
     DependencyRule(
         "token-sequences-reusable",
         (f"{CA}.token_sequences",),
-        (f"{CA}.ngram", f"{CA}.concordance", CLI, f"{CA}.token_artifact.reader", f"{CA}.corpus"),
+        (
+            f"{CA}.ngram",
+            f"{CA}.concordance",
+            CLI,
+            f"{CA}.token_artifact.reader",
+            f"{CA}.corpus",
+        ),
         explanation="Token sequence consumers depend on the common sequence domain, never the reverse.",
     ),
     DependencyRule(
@@ -434,7 +476,11 @@ DEPENDENCY_RULES = (
     ),
     DependencyRule(
         "reporting-models-inward",
-        (f"{CA}.reporting.models", f"{CA}.reporting.metadata", f"{CA}.reporting.summary"),
+        (
+            f"{CA}.reporting.models",
+            f"{CA}.reporting.metadata",
+            f"{CA}.reporting.summary",
+        ),
         (f"{CA}.reporting.service", f"{CA}.artifacts.writers"),
         explanation="Reporting values, metadata construction, and rendering are independent of publication orchestration.",
     ),
