@@ -14,6 +14,7 @@ from .stylometry_rendering import write_burrows_delta_result
 from .stylometry_evaluate_lowo import register_evaluate_lowo
 from .stylometry_evaluate_lowo_corpus import register_evaluate_lowo_corpus
 from .stylometry_neighbors import register_neighbors
+from .stylometry_verify import register_verify
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:
@@ -22,6 +23,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     register_evaluate_lowo(commands)
     register_evaluate_lowo_corpus(commands)
     register_neighbors(commands)
+    register_verify(commands)
     delta = commands.add_parser("delta")
     delta.add_argument("--features", type=Path, required=True)
     delta.add_argument("--input-format", choices=("csv", "tsv"), default="csv")

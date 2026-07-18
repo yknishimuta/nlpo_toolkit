@@ -1055,6 +1055,55 @@ vocabulary fixed from an external reference corpus, or a future fold-specific
 MFW-selection workflow. The command evaluates the supplied feature matrix and
 does not reject `mfw_` columns automatically.
 
+### Stylometry / Candidate Authorship Verification
+
+`stylometry verify` asks whether one query work is statistically consistent
+with one candidate author's known works. Unlike closed-set attribution, it can
+return `accept`, `reject`, or `inconclusive`; accept does not prove authenticity
+and reject does not prove forgery.
+
+```bash
+nlpo stylometry verify \
+  --features output/features_windows.csv \
+  --metadata config/authorship_metadata.csv \
+  --candidate-author virgil \
+  --query-work ciris \
+  --id-column sample_id \
+  --feature-prefix fw_ \
+  --genuine-quantile 0.95 \
+  --impostor-quantile 0.05 \
+  --out output/verification_ciris.json \
+  --calibration-out output/verification_ciris_calibration.csv
+```
+
+Metadata has one row per Features observation, using the same
+`sample_id,author,work` format shown above. The query metadata author is only a
+required label placeholder and is not used in the decision. Samples are first
+averaged within works, so every candidate, background, and query work has equal
+weight regardless of its window count.
+
+The query is completely excluded while the reference-only z-score model,
+zero-variance feature set, and calibration thresholds are built. Genuine
+distances use leave-one-reference-work-out candidate centroids. Impostor
+distances compare each background work with the full candidate centroid. The
+configured genuine and impostor linear-interpolation quantiles form two
+boundaries; their minimum is the accept threshold and their maximum is the
+reject threshold. Values between the thresholds, including either boundary,
+are inconclusive. JSON also reports the nearest background work as diagnostics,
+but that distance does not determine the decision.
+
+At least three candidate reference works and two background works are required.
+Small reference collections can still produce unstable thresholds, and the
+choice of background authors materially affects the result. Use the same
+edition, cleaning, feature families, and window settings throughout.
+
+This table-input command cannot undo upstream feature-selection leakage. If
+MFW, character n-gram, or UPOS n-gram columns were selected using the query,
+prefer a pre-registered function-word list, vocabulary fixed from an external
+reference corpus, a vocabulary fitted without the query, or a corpus-input
+training-only vocabulary workflow. Verification measures consistency with a
+candidate model in a closed feature space; it is not proof of authorship.
+
 ### Corpus-input LOWO with fold-fitted vocabularies
 
 `evaluate-lowo-corpus` starts from configured corpora rather than an already

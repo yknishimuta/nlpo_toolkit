@@ -113,6 +113,9 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.stylometry.ranking",
             "nlpo_toolkit.stylometry.neighbor_models",
             "nlpo_toolkit.stylometry.neighbor_results",
+            "nlpo_toolkit.stylometry.verification",
+            "nlpo_toolkit.stylometry.verification_models",
+            "nlpo_toolkit.stylometry.verification_results",
             "nlpo_toolkit.corpus_analysis.features.character_text",
             "nlpo_toolkit.corpus_analysis.features.character_ngrams",
             "nlpo_toolkit.corpus_analysis.features.upos_ngrams",
@@ -155,6 +158,7 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.stylometry.service",
             "nlpo_toolkit.stylometry.evaluation_service",
             "nlpo_toolkit.stylometry.neighbor_service",
+            "nlpo_toolkit.stylometry.verification_service",
             "nlpo_toolkit.corpus_analysis.features.corpus_lowo_service",
         ),
         recursive_packages=("nlpo_toolkit.comparison.services",),
@@ -243,6 +247,7 @@ APPLICATION_MODULES = (
     "nlpo_toolkit.stylometry.service",
     "nlpo_toolkit.stylometry.evaluation_service",
     "nlpo_toolkit.stylometry.neighbor_service",
+    "nlpo_toolkit.stylometry.verification_service",
 )
 
 PURE_MODULES = (
@@ -294,6 +299,9 @@ PURE_MODULES = (
     "nlpo_toolkit.stylometry.ranking",
     "nlpo_toolkit.stylometry.neighbor_models",
     "nlpo_toolkit.stylometry.neighbor_results",
+    "nlpo_toolkit.stylometry.verification",
+    "nlpo_toolkit.stylometry.verification_models",
+    "nlpo_toolkit.stylometry.verification_results",
 )
 
 INFRASTRUCTURE_MODULES = (
@@ -442,6 +450,9 @@ DEPENDENCY_RULES = (
             "nlpo_toolkit.stylometry.ranking",
             "nlpo_toolkit.stylometry.neighbor_models",
             "nlpo_toolkit.stylometry.neighbor_results",
+            "nlpo_toolkit.stylometry.verification",
+            "nlpo_toolkit.stylometry.verification_models",
+            "nlpo_toolkit.stylometry.verification_results",
         ),
         (
             "csv",
@@ -458,6 +469,7 @@ DEPENDENCY_RULES = (
             "nlpo_toolkit.stylometry.service",
             "nlpo_toolkit.stylometry.evaluation_service",
             "nlpo_toolkit.stylometry.neighbor_service",
+            "nlpo_toolkit.stylometry.verification_service",
             f"{CA}.features.corpus_lowo_service",
         ),
         (
