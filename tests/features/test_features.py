@@ -22,6 +22,7 @@ from nlpo_toolkit.corpus_analysis.features.models import (
     FunctionWordOptions,
     FunctionWordSource,
     FunctionWordVocabulary,
+    UposNgramOptions,
 )
 from nlpo_toolkit.corpus_analysis.features.engine import build_feature_matrix
 from nlpo_toolkit.corpus_analysis.features.filtering import (
@@ -969,6 +970,69 @@ def test_cli_character_ngram_top_requires_size_and_duplicates_fail() -> None:
     assert "duplicate character n-gram size: 3" in stderr.getvalue()
 
 
+def test_cli_upos_ngram_arguments_build_one_options_model(monkeypatch) -> None:
+    import nlpo_toolkit.corpus_analysis.cli.features as feature_cli
+
+    requests: list[FeatureRequest] = []
+
+    def execute(request, *, dependencies):
+        requests.append(request)
+        return FeatureCommandResult(())
+
+    monkeypatch.setattr(feature_cli, "execute_feature_command", execute)
+    monkeypatch.setattr(
+        feature_cli, "default_feature_command_dependencies", lambda: object()
+    )
+    assert (
+        cli.main(
+            [
+                "features",
+                "--upos-ngram-size",
+                "3",
+                "--upos-ngram-size",
+                "2",
+            ],
+            stdout=io.StringIO(),
+            stderr=io.StringIO(),
+        )
+        == 0
+    )
+    assert requests[0].upos_ngrams == UposNgramOptions((3, 2), 100)
+
+
+def test_cli_upos_ngram_top_requires_size_and_duplicates_fail() -> None:
+    stderr = io.StringIO()
+    assert (
+        cli.main(
+            ["features", "--upos-ngram-top", "10"],
+            stdout=io.StringIO(),
+            stderr=stderr,
+        )
+        == 1
+    )
+    assert "requires --upos-ngram-size" in stderr.getvalue()
+    stderr = io.StringIO()
+    assert (
+        cli.main(
+            ["features", "--upos-ngram-size", "2", "--upos-ngram-size", "2"],
+            stdout=io.StringIO(),
+            stderr=stderr,
+        )
+        == 1
+    )
+    assert "duplicate UPOS n-gram size: 2" in stderr.getvalue()
+    stderr = io.StringIO()
+    assert (
+        cli.main(
+            ["features", "--upos-ngram-size", "4"],
+            stdout=io.StringIO(),
+            stderr=stderr,
+        )
+        == 1
+    )
+    assert "--upos-ngram-size must be 2 or 3" in stderr.getvalue()
+
+
 def test_cli_function_word_validation_failure_does_not_create_output(
     tmp_path: Path,
 ) -> None:
@@ -1108,6 +1172,56 @@ def test_character_ngrams_use_prepared_text_and_precede_mfw() -> None:
     assert len(character_columns) == 4
     assert keys.index(character_columns[-1]) < keys.index("mfw_amat")
     assert any("_u00002c_" in key for key in character_columns)
+
+
+def test_upos_ngrams_follow_unigrams_and_precede_other_vocabularies() -> None:
+    rows = build_feature_matrix(
+        corpora=(_prepared("g", Path("a.txt"), "rosa amat et puella"),),
+        nlp=DummyNLP(),
+        extraction_policy=AnalysisExtractionPolicy(),
+        options=FeatureOptions(
+            mfw=1,
+            field="token",
+            upos_ngrams=UposNgramOptions((2, 3), top=2),
+            function_words=FunctionWordOptions(
+                FunctionWordVocabulary(("et",)), field="token"
+            ),
+        ),
+    )
+    keys = tuple(rows[0])
+    upos2 = tuple(key for key in keys if key.startswith("upos2_"))
+    upos3 = tuple(key for key in keys if key.startswith("upos3_"))
+    assert len(upos2) == len(upos3) == 2
+    assert keys.index("function_word_ratio") < keys.index(upos2[0])
+    assert keys.index(upos3[-1]) < keys.index("fw_et")
+    assert keys.index("fw_et") < keys.index("mfw_amat")
+
+
+def test_upos_vocabulary_is_selected_before_overlapping_samples() -> None:
+    corpus = (_prepared("g", Path("a.txt"), "rosa amat et puella"),)
+    first = build_feature_matrix(
+        corpora=corpus,
+        nlp=DummyNLP(),
+        extraction_policy=AnalysisExtractionPolicy(),
+        options=FeatureOptions(
+            sampling=FeatureSamplingOptions(3, 1, include_partial=True),
+            upos_ngrams=UposNgramOptions((2,), top=3),
+        ),
+    )
+    second = build_feature_matrix(
+        corpora=corpus,
+        nlp=DummyNLP(),
+        extraction_policy=AnalysisExtractionPolicy(),
+        options=FeatureOptions(
+            sampling=FeatureSamplingOptions(2, 2, include_partial=True),
+            upos_ngrams=UposNgramOptions((2,), top=3),
+        ),
+    )
+
+    def columns(row: FeatureRow) -> tuple[str, ...]:
+        return tuple(key for key in row if key.startswith("upos2_"))
+
+    assert columns(first[0]) == columns(second[0])
 
 
 def test_character_file_boundary_failure_precedes_backend_start(tmp_path: Path) -> None:

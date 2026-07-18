@@ -115,6 +115,7 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.stylometry.neighbor_results",
             "nlpo_toolkit.corpus_analysis.features.character_text",
             "nlpo_toolkit.corpus_analysis.features.character_ngrams",
+            "nlpo_toolkit.corpus_analysis.features.upos_ngrams",
         ),
         recursive_packages=(
             "nlpo_toolkit.corpus_analysis.token_sequences",
@@ -251,6 +252,7 @@ PURE_MODULES = (
     f"{CA}.features.engine",
     f"{CA}.features.character_text",
     f"{CA}.features.character_ngrams",
+    f"{CA}.features.upos_ngrams",
     f"{CA}.features.descriptive",
     f"{CA}.features.filtering",
     f"{CA}.features.lexical",

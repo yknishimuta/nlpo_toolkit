@@ -12,6 +12,7 @@ from ..features.models import (
     FeatureSamplingOptions,
     FunctionWordSource,
     LexicalDiversityOptions,
+    UposNgramOptions,
 )
 from ..features.service import execute_feature_command
 from .common import (
@@ -147,6 +148,19 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         default=None,
         help="Maximum selected character n-grams per size; default: 500.",
     )
+    parser.add_argument(
+        "--upos-ngram-size",
+        type=int,
+        action="append",
+        default=[],
+        help="UPOS n-gram size (2 or 3); repeat to enable both sizes.",
+    )
+    parser.add_argument(
+        "--upos-ngram-top",
+        type=int,
+        default=None,
+        help="Maximum selected UPOS n-grams per size; default: 100.",
+    )
     add_grouping_override_arguments(parser)
     add_empty_group_argument(parser)
     set_handler(parser, execute)
@@ -158,6 +172,8 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
             raise FeatureError("--function-word-field requires --function-words")
         if args.char_ngram_top is not None and not args.char_ngram_size:
             raise FeatureError("--char-ngram-top requires --char-ngram-size")
+        if args.upos_ngram_top is not None and not args.upos_ngram_size:
+            raise FeatureError("--upos-ngram-top requires --upos-ngram-size")
         lexical_diversity = None
         if args.lexical_diversity or any(
             value is not None
@@ -207,6 +223,16 @@ def execute(args: argparse.Namespace, context: CLIContext) -> int:
                         else 500,
                     )
                     if args.char_ngram_size
+                    else None
+                ),
+                upos_ngrams=(
+                    UposNgramOptions(
+                        sizes=tuple(args.upos_ngram_size),
+                        top=args.upos_ngram_top
+                        if args.upos_ngram_top is not None
+                        else 100,
+                    )
+                    if args.upos_ngram_size
                     else None
                 ),
             ),

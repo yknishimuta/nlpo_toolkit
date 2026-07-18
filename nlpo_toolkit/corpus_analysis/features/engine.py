@@ -28,6 +28,10 @@ from .models import (
 )
 from .sampling import sample_feature_corpus
 from .upos import compute_upos_features
+from .upos_ngrams import (
+    compute_upos_ngram_features,
+    select_upos_ngram_vocabulary,
+)
 
 
 def analyze_feature_corpus(
@@ -93,6 +97,11 @@ def build_feature_matrix(
         )
         for corpus in corpora
     )
+    upos_ngram_vocabulary = (
+        select_upos_ngram_vocabulary(analyzed, options=options.upos_ngrams)
+        if options.upos_ngrams is not None
+        else None
+    )
     terms = select_mfw_terms(analyzed, count=options.mfw, field=options.field)
     units = tuple(
         unit
@@ -129,6 +138,13 @@ def build_feature_matrix(
             )
         if options.include_upos:
             values.update(compute_upos_features(corpus.lexical_records))
+        if upos_ngram_vocabulary is not None:
+            values.update(
+                compute_upos_ngram_features(
+                    corpus.lexical_records,
+                    vocabulary=upos_ngram_vocabulary,
+                )
+            )
         if options.function_words is not None:
             values.update(
                 compute_function_word_features(

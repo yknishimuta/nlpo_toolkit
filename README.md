@@ -798,6 +798,58 @@ character columns were selected. LOWO still prevents leakage in z-score fit
 and centroids, but strict evaluation needs a vocabulary fixed externally or
 selected inside each training fold in a future workflow.
 
+UPOS n-gram features describe short syntactic tag sequences while preserving
+the existing UPOS unigram counts and ratios. Enable 2-grams alone or repeat the
+option for both supported sizes:
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --group-by-file \
+  --upos-ngram-size 2 \
+  --upos-ngram-top 100 \
+  --out output/features_upos2.csv
+
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --group-by-file \
+  --window-tokens 1000 \
+  --upos-ngram-size 2 \
+  --upos-ngram-size 3 \
+  --upos-ngram-top 100 \
+  --out output/features_windows.csv
+```
+
+`--upos-ngram-top` is applied separately to each size. Vocabulary selection
+pools occurrence counts from every unsampled corpus after the shared Features
+eligibility filter, orders terms by decreasing frequency and then tag-tuple
+lexical order, and fixes the columns before window generation. Longer works
+therefore contribute more positions, while overlap and partial windows do not
+receive additional selection weight.
+
+Tags are stripped and uppercased. Sequences use lexical-record order and never
+cross `(chunk_index, sentence_index)` boundaries. A missing or empty UPOS value
+also breaks the sequence rather than joining its neighbors or creating an
+invented `UNK` tag. Punctuation and all other records excluded by the Features
+filter are absent. No BOS or EOS markers are added.
+
+Each `upos2_...` or `upos3_...` value is its occurrence count divided by all
+valid positions of that size in the row, including positions belonging to
+unselected terms. Fixed windows use only the lexical records inside that
+sample, so neither a sample boundary nor a sentence boundary is crossed.
+These columns are emitted immediately after UPOS unigram features and can be
+selected normally by Stylometry using `--feature-prefix upos2_` or
+`--feature-prefix upos3_`.
+
+All comparison inputs should use the same NLP backend, model, preprocessing,
+and Features filter because tagging errors and model differences directly
+affect these features. As with automatically selected MFW and character
+vocabularies, LOWO cannot undo upstream leakage from selecting UPOS n-gram
+columns over all works. Strict evaluation requires an externally fixed list or
+future training-fold-only vocabulary selection.
+
 One row per input file:
 
 ```bash

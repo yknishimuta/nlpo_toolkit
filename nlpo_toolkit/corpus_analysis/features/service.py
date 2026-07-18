@@ -71,6 +71,7 @@ def execute_feature_command(
         lexical_diversity=request.lexical_diversity,
         function_words=function_words,
         character_ngrams=request.character_ngrams,
+        upos_ngrams=request.upos_ngrams,
     )
     return FeatureCommandResult(
         rows=build_feature_matrix(

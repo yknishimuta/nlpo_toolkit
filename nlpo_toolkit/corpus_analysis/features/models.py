@@ -37,6 +37,29 @@ class CharacterNgramOptions:
 
 
 @dataclass(frozen=True)
+class UposNgramOptions:
+    sizes: tuple[int, ...]
+    top: int = 100
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "sizes", tuple(self.sizes))
+        if not self.sizes:
+            raise FeatureError("--upos-ngram-size must be specified")
+        for size in self.sizes:
+            if (
+                isinstance(size, bool)
+                or not isinstance(size, int)
+                or size not in (2, 3)
+            ):
+                raise FeatureError("--upos-ngram-size must be 2 or 3")
+        if len(self.sizes) != len(set(self.sizes)):
+            duplicate = next(size for size in self.sizes if self.sizes.count(size) > 1)
+            raise FeatureError(f"duplicate UPOS n-gram size: {duplicate}")
+        if isinstance(self.top, bool) or not isinstance(self.top, int) or self.top <= 0:
+            raise FeatureError("--upos-ngram-top must be a positive integer")
+
+
+@dataclass(frozen=True)
 class LexicalDiversityOptions:
     window_size: int = 100
     mtld_threshold: float = 0.72
@@ -160,6 +183,7 @@ class FeatureOptions:
     lexical_diversity: LexicalDiversityOptions | None = None
     function_words: FunctionWordOptions | None = None
     character_ngrams: CharacterNgramOptions | None = None
+    upos_ngrams: UposNgramOptions | None = None
 
 
 def validate_feature_options(options: FeatureOptions) -> None:
@@ -180,6 +204,7 @@ class FeatureRequest:
     lexical_diversity: LexicalDiversityOptions | None = None
     function_words: FunctionWordSource | None = None
     character_ngrams: CharacterNgramOptions | None = None
+    upos_ngrams: UposNgramOptions | None = None
 
 
 @dataclass(frozen=True)
