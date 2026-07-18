@@ -857,6 +857,56 @@ by distance. Rigorous unknown-work evaluation will require a future workflow
 that fits the standardization model on reference works only; the fit and
 transform calculations are already separated internally for that extension.
 
+### Leave-one-work-out evaluation
+
+`evaluate-lowo` holds out one entire known work at a time. All fixed-window
+samples from that work stay together, so no window from the test work can enter
+training. Metadata contains one row per Features observation:
+
+```csv
+sample_id,author,work
+aeneid__sample_0001,virgil,aeneid
+aeneid__sample_0002,virgil,aeneid
+georgics__sample_0001,virgil,georgics
+thebaid__sample_0001,statius,thebaid
+silvae__sample_0001,statius,silvae
+```
+
+```bash
+nlpo stylometry evaluate-lowo \
+  --features output/features_windows.csv \
+  --metadata config/authorship_metadata.csv \
+  --id-column sample_id \
+  --feature-prefix fw_ \
+  --out output/lowo_folds.csv \
+  --summary-out output/lowo_summary.json
+```
+
+Each author must have at least two distinct works. Samples are first averaged
+within each work, giving every work one equal-weight profile regardless of its
+window count. In every fold, z-score fit and zero-variance detection use only
+training work profiles. Standardized training works are averaged by author,
+again by work rather than sample count, and the held-out work is assigned to
+the nearest author centroid using Burrows's Delta.
+
+The fold table has one row per work. The JSON summary contains overall work
+accuracy, per-author work accuracy, and macro author accuracy—the unweighted
+mean of author accuracies. This is closed-set evaluation: it cannot reject an
+author outside the candidates, and high accuracy alone cannot establish
+authorship or authenticity. Use identical Features settings for every work.
+For fixed windows, prefer a common `window_tokens`, consistent overlap step,
+and consistent partial-window policy; partial and full windows receive the same
+sample weight in the initial work mean.
+
+LOWO prevents a held-out work from entering z-score fit, zero-variance checks,
+author centroids, or training through another window. It cannot audit feature
+selection performed before the table was created. In particular, an MFW
+vocabulary selected from all works may already reflect the held-out work.
+Strict experiments should use a pre-registered function-word list, an MFW
+vocabulary fixed from an external reference corpus, or a future fold-specific
+MFW-selection workflow. The command evaluates the supplied feature matrix and
+does not reject `mfw_` columns automatically.
+
 ## N-Gram CLI
 
 Use `nlpo ngram` to build n-gram frequency tables from a complete token artifact

@@ -39,7 +39,12 @@ def test_service_reads_once_and_returns_feature_metadata(tmp_path: Path) -> None
     )
     result = execute_burrows_delta(
         request,
-        dependencies=StylometryCommandDependencies(read_feature_dataset=reader),
+        dependencies=StylometryCommandDependencies(
+            read_feature_dataset=reader,
+            read_authorship_metadata=lambda *args, **kwargs: pytest.fail(
+                "metadata reader must not be called"
+            ),
+        ),
     )
 
     assert calls == [(request.features_path, "csv", request.selection)]

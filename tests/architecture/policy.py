@@ -105,6 +105,10 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.stylometry.models",
             "nlpo_toolkit.stylometry.results",
             "nlpo_toolkit.stylometry.standardization",
+            "nlpo_toolkit.stylometry.authorship",
+            "nlpo_toolkit.stylometry.evaluation",
+            "nlpo_toolkit.stylometry.evaluation_models",
+            "nlpo_toolkit.stylometry.evaluation_results",
         ),
         recursive_packages=(
             "nlpo_toolkit.corpus_analysis.token_sequences",
@@ -140,6 +144,7 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.latin.cleaners.service",
             "nlpo_toolkit.latin.latin_wordlist.service",
             "nlpo_toolkit.stylometry.service",
+            "nlpo_toolkit.stylometry.evaluation_service",
         ),
         recursive_packages=("nlpo_toolkit.comparison.services",),
     ),
@@ -184,6 +189,7 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.latin.latin_wordlist.config",
             "nlpo_toolkit.latin.latin_wordlist.publication",
             "nlpo_toolkit.stylometry.csv_reader",
+            "nlpo_toolkit.stylometry.metadata_reader",
         ),
         recursive_packages=(
             "nlpo_toolkit.backends",
@@ -224,6 +230,7 @@ APPLICATION_MODULES = (
     "nlpo_toolkit.latin.cleaners.service",
     "nlpo_toolkit.latin.latin_wordlist.service",
     "nlpo_toolkit.stylometry.service",
+    "nlpo_toolkit.stylometry.evaluation_service",
 )
 
 PURE_MODULES = (
@@ -262,6 +269,10 @@ PURE_MODULES = (
     "nlpo_toolkit.stylometry.models",
     "nlpo_toolkit.stylometry.results",
     "nlpo_toolkit.stylometry.standardization",
+    "nlpo_toolkit.stylometry.authorship",
+    "nlpo_toolkit.stylometry.evaluation",
+    "nlpo_toolkit.stylometry.evaluation_models",
+    "nlpo_toolkit.stylometry.evaluation_results",
 )
 
 INFRASTRUCTURE_MODULES = (
@@ -284,6 +295,7 @@ INFRASTRUCTURE_MODULES = (
     "nlpo_toolkit.latin.latin_wordlist.config",
     "nlpo_toolkit.latin.latin_wordlist.publication",
     "nlpo_toolkit.stylometry.csv_reader",
+    "nlpo_toolkit.stylometry.metadata_reader",
 )
 
 DEPENDENCY_RULES = (
@@ -401,6 +413,10 @@ DEPENDENCY_RULES = (
             "nlpo_toolkit.stylometry.results",
             "nlpo_toolkit.stylometry.standardization",
             "nlpo_toolkit.stylometry.delta",
+            "nlpo_toolkit.stylometry.authorship",
+            "nlpo_toolkit.stylometry.evaluation",
+            "nlpo_toolkit.stylometry.evaluation_models",
+            "nlpo_toolkit.stylometry.evaluation_results",
         ),
         (
             "csv",
@@ -413,9 +429,13 @@ DEPENDENCY_RULES = (
     ),
     DependencyRule(
         "stylometry-service-ports-only",
-        ("nlpo_toolkit.stylometry.service",),
+        (
+            "nlpo_toolkit.stylometry.service",
+            "nlpo_toolkit.stylometry.evaluation_service",
+        ),
         (
             "nlpo_toolkit.stylometry.csv_reader",
+            "nlpo_toolkit.stylometry.metadata_reader",
             "nlpo_toolkit.stylometry.composition",
             CLI,
         ),
