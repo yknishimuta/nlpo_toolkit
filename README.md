@@ -965,9 +965,10 @@ proximity, but distance alone does not establish authorship or authenticity.
 Features with exactly zero sample variance are excluded and reported on stderr;
 the command fails if none remain. Output is a long-form table containing each
 unordered sample pair once as `sample_a`, `sample_b`, and `burrows_delta`, sorted
-by distance. Rigorous unknown-work evaluation will require a future workflow
-that fits the standardization model on reference works only; the fit and
-transform calculations are already separated internally for that extension.
+by distance. For corpus-based evaluation that also fits automatically selected
+feature vocabularies without the held-out work, use `evaluate-lowo-corpus` as
+described below. The CSV command cannot reconstruct candidates omitted when the
+Features table was originally generated.
 
 ### Nearest-neighbor metrics
 
@@ -1053,6 +1054,57 @@ Strict experiments should use a pre-registered function-word list, an MFW
 vocabulary fixed from an external reference corpus, or a future fold-specific
 MFW-selection workflow. The command evaluates the supplied feature matrix and
 does not reject `mfw_` columns automatically.
+
+### Corpus-input LOWO with fold-fitted vocabularies
+
+`evaluate-lowo-corpus` starts from configured corpora rather than an already
+reduced Features table. It analyzes each prepared corpus exactly once, then in
+every fold selects MFW, character n-gram, and UPOS n-gram vocabularies using
+training works only. The frozen fold vocabulary transforms both training and
+held-out works into the same columns before work profiles, z-score fitting, and
+Burrows's Delta attribution:
+
+```bash
+nlpo stylometry evaluate-lowo-corpus \
+  --project-root . \
+  --config config/groups.config.yml \
+  --metadata config/authorship_works.csv \
+  --mfw 500 \
+  --field lemma \
+  --window-tokens 1000 \
+  --char-ngram-size 3 \
+  --char-ngram-top 300 \
+  --upos-ngram-size 2 \
+  --upos-ngram-top 100 \
+  --out output/lowo_corpus_folds.csv \
+  --summary-out output/lowo_corpus_summary.json \
+  --vocabulary-audit-out output/lowo_vocabularies.json
+```
+
+Metadata is work-level and must match every prepared-corpus group exactly:
+
+```csv
+group,author,work
+aeneid,virgil,aeneid
+georgics,virgil,georgics
+eclogues,virgil,eclogues
+thebaid,statius,thebaid
+silvae,statius,silvae
+```
+
+All windows belonging to a work remain in the same fold. NLP and the shared
+Features eligibility filter run once per prepared corpus; only vocabulary fit,
+row transformation, work averaging, and evaluation repeat by fold. Explicit
+fixed features such as reviewed function-word columns remain common, while
+automatically selected columns and fold-specific zero-variance exclusions may
+differ. The vocabulary audit records every selected term and a deterministic
+SHA-256 for each fold.
+
+The existing `evaluate-lowo` remains appropriate for evaluating a published
+Features CSV, but it cannot remove upstream leakage if that CSV selected MFW or
+n-gram columns using all works. The corpus-input command closes that selection
+leak for MFW, character n-grams, and UPOS n-grams. It remains closed-set
+attribution: it does not reject unknown authors or prove authenticity.
 
 ## N-Gram CLI
 

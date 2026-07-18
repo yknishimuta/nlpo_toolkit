@@ -67,48 +67,12 @@ def evaluate_lowo(
 ) -> LeaveOneWorkOutEvaluationResult:
     results = []
     for fold in build_leave_one_work_out_folds(profiles):
-        training_dataset = work_feature_dataset(feature_names, fold.training_works)
-        try:
-            model = fit_zscore_model(training_dataset)
-        except StylometryError as exc:
-            if "all selected features have zero variance" in str(exc):
-                raise StylometryError(
-                    "all selected features have zero variance in training fold "
-                    f"for held-out work {fold.test_work.work_id!r}"
-                ) from exc
-            raise
-        standardized_training = transform_feature_dataset(training_dataset, model=model)
-        test_dataset = work_feature_dataset(feature_names, (fold.test_work,))
-        standardized_test = transform_feature_dataset(test_dataset, model=model)
-        test_observation = standardized_test.observations[0]
-        author_profiles = build_author_profiles(
-            fold.training_works, standardized_training
-        )
-        candidates = tuple(
-            sorted(
-                (
-                    AuthorCandidateDistance(
-                        author=profile.author,
-                        distance=burrows_delta(
-                            test_observation,
-                            StandardizedObservation(profile.author, profile.values),
-                        ),
-                    )
-                    for profile in author_profiles
-                ),
-                key=lambda item: (item.distance, item.author),
-            )
-        )
         results.append(
-            LeaveOneWorkOutFoldResult(
+            evaluate_lowo_fold(
+                feature_names,
+                training_work_profiles=fold.training_works,
+                test_work_profile=fold.test_work,
                 fold_index=fold.fold_index,
-                work_id=fold.test_work.work_id,
-                actual_author=fold.test_work.author,
-                test_observation_ids=fold.test_work.observation_ids,
-                training_work_ids=tuple(work.work_id for work in fold.training_works),
-                retained_feature_names=model.retained_feature_names,
-                dropped_zero_variance_features=model.dropped_zero_variance_features,
-                candidates=candidates,
             )
         )
     folds = tuple(results)
@@ -128,3 +92,55 @@ def evaluate_lowo(
     )
     summary = LeaveOneWorkOutSummary(per_author=per_author, folds=folds)
     return LeaveOneWorkOutEvaluationResult(feature_names, folds, summary)
+
+
+def evaluate_lowo_fold(
+    feature_names: tuple[str, ...],
+    *,
+    training_work_profiles: tuple[WorkProfile, ...],
+    test_work_profile: WorkProfile,
+    fold_index: int,
+) -> LeaveOneWorkOutFoldResult:
+    training_dataset = work_feature_dataset(feature_names, training_work_profiles)
+    try:
+        model = fit_zscore_model(training_dataset)
+    except StylometryError as exc:
+        if "all selected features have zero variance" in str(exc):
+            raise StylometryError(
+                "all selected features have zero variance in training fold "
+                f"for held-out work {test_work_profile.work_id!r}"
+            ) from exc
+        raise
+    standardized_training = transform_feature_dataset(training_dataset, model=model)
+    test_dataset = work_feature_dataset(feature_names, (test_work_profile,))
+    test_observation = transform_feature_dataset(
+        test_dataset, model=model
+    ).observations[0]
+    author_profiles = build_author_profiles(
+        training_work_profiles, standardized_training
+    )
+    candidates = tuple(
+        sorted(
+            (
+                AuthorCandidateDistance(
+                    author=profile.author,
+                    distance=burrows_delta(
+                        test_observation,
+                        StandardizedObservation(profile.author, profile.values),
+                    ),
+                )
+                for profile in author_profiles
+            ),
+            key=lambda item: (item.distance, item.author),
+        )
+    )
+    return LeaveOneWorkOutFoldResult(
+        fold_index=fold_index,
+        work_id=test_work_profile.work_id,
+        actual_author=test_work_profile.author,
+        test_observation_ids=test_work_profile.observation_ids,
+        training_work_ids=tuple(work.work_id for work in training_work_profiles),
+        retained_feature_names=model.retained_feature_names,
+        dropped_zero_variance_features=model.dropped_zero_variance_features,
+        candidates=candidates,
+    )

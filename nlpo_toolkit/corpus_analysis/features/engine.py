@@ -32,6 +32,7 @@ from .upos_ngrams import (
     compute_upos_ngram_features,
     select_upos_ngram_vocabulary,
 )
+from .vocabulary import FeatureVocabulary
 
 
 def analyze_feature_corpus(
@@ -54,6 +55,24 @@ def analyze_feature_corpus(
         raw_records=raw_records,
         lexical_records=lexical_records,
         text=corpus.prepared_text,
+    )
+
+
+def analyze_feature_corpora(
+    corpora: tuple[PreparedCorpus, ...],
+    *,
+    nlp: NLPBackend,
+    extraction_policy: AnalysisExtractionPolicy,
+    filter_policy: FeatureFilterPolicy,
+) -> tuple[AnalyzedFeatureCorpus, ...]:
+    return tuple(
+        analyze_feature_corpus(
+            corpus,
+            nlp=nlp,
+            extraction_policy=extraction_policy,
+            filter_policy=filter_policy,
+        )
+        for corpus in corpora
     )
 
 
@@ -84,25 +103,49 @@ def build_feature_matrix(
     character_vocabulary: CharacterNgramVocabulary | None = None,
 ) -> tuple[FeatureRow, ...]:
     validate_feature_options(options)
+    analyzed = analyze_feature_corpora(
+        corpora,
+        nlp=nlp,
+        extraction_policy=extraction_policy,
+        filter_policy=options.filter_policy,
+    )
+    vocabulary = fit_feature_vocabulary(
+        analyzed,
+        options=options,
+        character_vocabulary=character_vocabulary,
+    )
+    return build_feature_rows(analyzed, options=options, vocabulary=vocabulary)
+
+
+def fit_feature_vocabulary(
+    corpora: tuple[AnalyzedFeatureCorpus, ...],
+    *,
+    options: FeatureOptions,
+    character_vocabulary: CharacterNgramVocabulary | None = None,
+) -> FeatureVocabulary:
     if options.character_ngrams is not None and character_vocabulary is None:
         character_vocabulary = prepare_character_ngram_vocabulary(
-            corpora, options=options.character_ngrams
+            tuple(corpus.source for corpus in corpora),
+            options=options.character_ngrams,
         )
-    analyzed = tuple(
-        analyze_feature_corpus(
-            corpus,
-            nlp=nlp,
-            extraction_policy=extraction_policy,
-            filter_policy=options.filter_policy,
-        )
-        for corpus in corpora
-    )
-    upos_ngram_vocabulary = (
-        select_upos_ngram_vocabulary(analyzed, options=options.upos_ngrams)
+    upos_vocabulary = (
+        select_upos_ngram_vocabulary(corpora, options=options.upos_ngrams)
         if options.upos_ngrams is not None
         else None
     )
-    terms = select_mfw_terms(analyzed, count=options.mfw, field=options.field)
+    return FeatureVocabulary(
+        mfw_terms=select_mfw_terms(corpora, count=options.mfw, field=options.field),
+        character_ngrams=character_vocabulary,
+        upos_ngrams=upos_vocabulary,
+    )
+
+
+def build_feature_rows(
+    analyzed: tuple[AnalyzedFeatureCorpus, ...],
+    *,
+    options: FeatureOptions,
+    vocabulary: FeatureVocabulary,
+) -> tuple[FeatureRow, ...]:
     units = tuple(
         unit
         for corpus in analyzed
@@ -138,11 +181,11 @@ def build_feature_matrix(
             )
         if options.include_upos:
             values.update(compute_upos_features(corpus.lexical_records))
-        if upos_ngram_vocabulary is not None:
+        if vocabulary.upos_ngrams is not None:
             values.update(
                 compute_upos_ngram_features(
                     corpus.lexical_records,
-                    vocabulary=upos_ngram_vocabulary,
+                    vocabulary=vocabulary.upos_ngrams,
                 )
             )
         if options.function_words is not None:
@@ -152,17 +195,19 @@ def build_feature_matrix(
                     options=options.function_words,
                 )
             )
-        if character_vocabulary is not None:
+        if vocabulary.character_ngrams is not None:
             values.update(
                 compute_character_ngram_features(
                     feature_unit_character_text(corpus),
-                    vocabulary=character_vocabulary,
+                    vocabulary=vocabulary.character_ngrams,
                 )
             )
-        if terms:
+        if vocabulary.mfw_terms:
             values.update(
                 compute_mfw_features(
-                    corpus.lexical_records, terms=terms, field=options.field
+                    corpus.lexical_records,
+                    terms=vocabulary.mfw_terms,
+                    field=options.field,
                 )
             )
         rows.append(FeatureRow.from_mapping(values))

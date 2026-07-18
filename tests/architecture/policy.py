@@ -116,6 +116,8 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.corpus_analysis.features.character_text",
             "nlpo_toolkit.corpus_analysis.features.character_ngrams",
             "nlpo_toolkit.corpus_analysis.features.upos_ngrams",
+            "nlpo_toolkit.corpus_analysis.features.vocabulary",
+            "nlpo_toolkit.corpus_analysis.features.corpus_lowo_models",
         ),
         recursive_packages=(
             "nlpo_toolkit.corpus_analysis.token_sequences",
@@ -153,6 +155,7 @@ MODULE_ROLE_POLICIES: tuple[ModuleRolePolicy, ...] = (
             "nlpo_toolkit.stylometry.service",
             "nlpo_toolkit.stylometry.evaluation_service",
             "nlpo_toolkit.stylometry.neighbor_service",
+            "nlpo_toolkit.corpus_analysis.features.corpus_lowo_service",
         ),
         recursive_packages=("nlpo_toolkit.comparison.services",),
     ),
@@ -253,6 +256,8 @@ PURE_MODULES = (
     f"{CA}.features.character_text",
     f"{CA}.features.character_ngrams",
     f"{CA}.features.upos_ngrams",
+    f"{CA}.features.vocabulary",
+    f"{CA}.features.corpus_lowo_models",
     f"{CA}.features.descriptive",
     f"{CA}.features.filtering",
     f"{CA}.features.lexical",
@@ -453,6 +458,7 @@ DEPENDENCY_RULES = (
             "nlpo_toolkit.stylometry.service",
             "nlpo_toolkit.stylometry.evaluation_service",
             "nlpo_toolkit.stylometry.neighbor_service",
+            f"{CA}.features.corpus_lowo_service",
         ),
         (
             "nlpo_toolkit.stylometry.csv_reader",
