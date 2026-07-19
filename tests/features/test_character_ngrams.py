@@ -11,6 +11,7 @@ from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
 from nlpo_toolkit.corpus_analysis.features.character_ngrams import (
     CharacterNgramTerm,
     CharacterNgramVocabulary,
+    character_ngram_column_name,
     compute_character_ngram_features,
     iter_character_ngrams,
     select_character_ngram_vocabulary,
@@ -26,6 +27,7 @@ from nlpo_toolkit.corpus_analysis.features.engine import (
 from nlpo_toolkit.corpus_analysis.features.errors import FeatureError
 from nlpo_toolkit.corpus_analysis.features.models import (
     AnalyzedFeatureCorpus,
+    CharacterNgramMode,
     CharacterNgramOptions,
     FeatureSamplingOptions,
 )
@@ -53,6 +55,7 @@ def test_character_options_are_frozen_ordered_and_strict() -> None:
     options = CharacterNgramOptions([3, 5], 12)
     assert options.sizes == (3, 5)
     assert options.top == 12
+    assert options.modes == (CharacterNgramMode.FULL,)
     with pytest.raises(FrozenInstanceError):
         options.top = 2  # type: ignore[misc]
     for sizes in ((), (0,), (-1,), (True,), (3, 3)):
@@ -61,6 +64,21 @@ def test_character_options_are_frozen_ordered_and_strict() -> None:
     for top in (0, -1, True):
         with pytest.raises(FeatureError):
             CharacterNgramOptions((3,), top)
+    modes = CharacterNgramOptions(
+        (3,), 12, [CharacterNgramMode.LETTERS_ONLY, CharacterNgramMode.FULL]
+    )
+    assert modes.modes == (
+        CharacterNgramMode.LETTERS_ONLY,
+        CharacterNgramMode.FULL,
+    )
+    for invalid_modes in (
+        (),
+        (CharacterNgramMode.FULL, CharacterNgramMode.FULL),
+        ("full",),
+        (True,),
+    ):
+        with pytest.raises(FeatureError):
+            CharacterNgramOptions((3,), 12, invalid_modes)  # type: ignore[arg-type]
 
 
 def test_normalize_character_stream_preserves_non_whitespace() -> None:
@@ -68,6 +86,39 @@ def test_normalize_character_stream_preserves_non_whitespace() -> None:
     assert normalize_character_stream(source) == "rosa, amat. x1"
     assert source == "  Rosa,\n\tAMAT.\u2003X1  "
     assert normalize_character_stream("") == ""
+
+
+def test_character_normalization_modes_are_explicit_and_unicode_aware() -> None:
+    source = "  Rōsa,\nAMAT—X1! æst  "
+    assert normalize_character_stream(source) == "rōsa, amat—x1! æst"
+    assert normalize_character_stream(
+        source, mode=CharacterNgramMode.NO_PUNCTUATION
+    ) == "rōsa amat x1 æst"
+    assert normalize_character_stream(
+        source, mode=CharacterNgramMode.LETTERS_SPACES
+    ) == "rōsa amat x æst"
+    assert normalize_character_stream(
+        source, mode=CharacterNgramMode.LETTERS_ONLY
+    ) == "rōsaamatxæst"
+    punctuation = ",.—“”（）・"
+    assert (
+        normalize_character_stream(
+            f"a{punctuation}b", mode=CharacterNgramMode.NO_PUNCTUATION
+        )
+        == "a b"
+    )
+    assert normalize_character_stream(
+        "a\u0304", mode=CharacterNgramMode.LETTERS_SPACES
+    ) == "a\u0304"
+    assert normalize_character_stream(
+        "a\u0304", mode=CharacterNgramMode.LETTERS_ONLY
+    ) == "a\u0304"
+    assert normalize_character_stream(
+        "arma,virum", mode=CharacterNgramMode.NO_PUNCTUATION
+    ) == "arma virum"
+    assert normalize_character_stream(
+        "ab cd", mode=CharacterNgramMode.LETTERS_ONLY
+    ) == "abcd"
 
 
 def test_character_ngram_iteration_boundaries() -> None:
@@ -108,6 +159,69 @@ def test_vocabulary_uses_pooled_counts_size_order_and_tie_break() -> None:
     assert texts == ["aaaa", "aabb"]
     with pytest.raises(FeatureError, match="no character 10-grams"):
         select_character_ngram_vocabulary(texts, options=CharacterNgramOptions((10,)))
+
+
+def test_modes_have_independent_vocabularies_names_and_order() -> None:
+    options = CharacterNgramOptions(
+        (2, 3),
+        2,
+        (CharacterNgramMode.LETTERS_ONLY, CharacterNgramMode.FULL),
+    )
+    vocabulary = select_character_ngram_vocabulary(("ab, cd",), options=options)
+    assert len(vocabulary.terms) == 8
+    assert [(term.mode, term.size) for term in vocabulary.terms] == [
+        (CharacterNgramMode.LETTERS_ONLY, 2),
+        (CharacterNgramMode.LETTERS_ONLY, 2),
+        (CharacterNgramMode.LETTERS_ONLY, 3),
+        (CharacterNgramMode.LETTERS_ONLY, 3),
+        (CharacterNgramMode.FULL, 2),
+        (CharacterNgramMode.FULL, 2),
+        (CharacterNgramMode.FULL, 3),
+        (CharacterNgramMode.FULL, 3),
+    ]
+    assert vocabulary.terms[0].column_name.startswith("char_letters_only2_")
+    assert vocabulary.terms[4].column_name.startswith("char2_")
+    assert CharacterNgramTerm(3, "que", "char3_que").mode is CharacterNgramMode.FULL
+    same_value = CharacterNgramVocabulary(
+        (
+            CharacterNgramTerm(3, "que", "char3_que"),
+            CharacterNgramTerm(
+                3,
+                "que",
+                character_ngram_column_name(
+                    mode=CharacterNgramMode.LETTERS_ONLY, size=3, value="que"
+                ),
+                CharacterNgramMode.LETTERS_ONLY,
+            ),
+        )
+    )
+    assert len(same_value.terms) == 2
+
+
+def test_mode_specific_denominators_and_empty_transform() -> None:
+    vocabulary = CharacterNgramVocabulary(
+        (
+            CharacterNgramTerm(2, "a,", "char2_a_u00002c_"),
+            CharacterNgramTerm(
+                2,
+                "ab",
+                "char_letters_only2_ab",
+                CharacterNgramMode.LETTERS_ONLY,
+            ),
+        )
+    )
+    result = compute_character_ngram_features("a,b", vocabulary=vocabulary)
+    assert result["char2_a_u00002c_"] == pytest.approx(1 / 2)
+    assert result["char_letters_only2_ab"] == 1.0
+    empty = compute_character_ngram_features("123!", vocabulary=vocabulary)
+    assert empty["char_letters_only2_ab"] == 0.0
+    with pytest.raises(FeatureError, match="mode 'letters-only'"):
+        select_character_ngram_vocabulary(
+            ("123!",),
+            options=CharacterNgramOptions(
+                (2,), 10, (CharacterNgramMode.LETTERS_ONLY,)
+            ),
+        )
 
 
 def test_row_relative_frequencies_use_possible_positions() -> None:

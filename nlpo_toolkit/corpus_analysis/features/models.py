@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import math
 from pathlib import Path
 from typing import Literal
+from enum import Enum
 
 from ..analysis_records import NLPAnalysisRecord
 from ..corpus import PreparedCorpus
@@ -15,6 +16,13 @@ from nlpo_toolkit.immutable_collections import freeze_mapping
 
 FeatureField = Literal["lemma", "token"]
 FeatureScalar = str | int | float
+
+
+class CharacterNgramMode(str, Enum):
+    FULL = "full"
+    NO_PUNCTUATION = "no-punctuation"
+    LETTERS_SPACES = "letters-spaces"
+    LETTERS_ONLY = "letters-only"
 
 
 @dataclass(frozen=True)
@@ -45,6 +53,7 @@ class MorphologyOptions:
 class CharacterNgramOptions:
     sizes: tuple[int, ...]
     top: int = 500
+    modes: tuple[CharacterNgramMode, ...] = (CharacterNgramMode.FULL,)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "sizes", tuple(self.sizes))
@@ -58,6 +67,15 @@ class CharacterNgramOptions:
             raise FeatureError(f"duplicate character n-gram size: {duplicate}")
         if isinstance(self.top, bool) or not isinstance(self.top, int) or self.top <= 0:
             raise FeatureError("--char-ngram-top must be a positive integer")
+        modes = tuple(self.modes)
+        if not modes:
+            raise FeatureError("character n-gram modes must not be empty")
+        if any(isinstance(mode, bool) or not isinstance(mode, CharacterNgramMode) for mode in modes):
+            raise FeatureError("character n-gram modes must use CharacterNgramMode")
+        if len(modes) != len(set(modes)):
+            duplicate = next(mode for mode in modes if modes.count(mode) > 1)
+            raise FeatureError(f"duplicate character n-gram mode: {duplicate.value}")
+        object.__setattr__(self, "modes", modes)
 
 
 @dataclass(frozen=True)

@@ -12,6 +12,7 @@ from nlpo_toolkit.corpus_analysis import cli
 from nlpo_toolkit.corpus_analysis.features.errors import FeatureError
 from nlpo_toolkit.corpus_analysis.features.models import (
     AnalyzedFeatureCorpus,
+    CharacterNgramMode,
     CharacterNgramOptions,
     FeatureCommandResult,
     FeatureFilterPolicy,
@@ -942,13 +943,21 @@ def test_cli_character_ngram_arguments_build_one_options_model(monkeypatch) -> N
                 "3",
                 "--char-ngram-size",
                 "5",
+                "--char-ngram-mode",
+                "letters-only",
+                "--char-ngram-mode",
+                "full",
             ],
             stdout=io.StringIO(),
             stderr=io.StringIO(),
         )
         == 0
     )
-    assert requests[0].character_ngrams == CharacterNgramOptions((3, 5), 500)
+    assert requests[0].character_ngrams == CharacterNgramOptions(
+        (3, 5),
+        500,
+        (CharacterNgramMode.LETTERS_ONLY, CharacterNgramMode.FULL),
+    )
 
 
 def test_cli_character_ngram_top_requires_size_and_duplicates_fail() -> None:
@@ -972,6 +981,37 @@ def test_cli_character_ngram_top_requires_size_and_duplicates_fail() -> None:
         == 1
     )
     assert "duplicate character n-gram size: 3" in stderr.getvalue()
+
+
+def test_cli_character_ngram_mode_requires_size_and_rejects_duplicates() -> None:
+    stderr = io.StringIO()
+    assert (
+        cli.main(
+            ["features", "--char-ngram-mode", "letters-only"],
+            stdout=io.StringIO(),
+            stderr=stderr,
+        )
+        == 1
+    )
+    assert "--char-ngram-mode requires --char-ngram-size" in stderr.getvalue()
+    stderr = io.StringIO()
+    assert (
+        cli.main(
+            [
+                "features",
+                "--char-ngram-size",
+                "3",
+                "--char-ngram-mode",
+                "full",
+                "--char-ngram-mode",
+                "full",
+            ],
+            stdout=io.StringIO(),
+            stderr=stderr,
+        )
+        == 1
+    )
+    assert "duplicate --char-ngram-mode: full" in stderr.getvalue()
 
 
 def test_cli_upos_ngram_arguments_build_one_options_model(monkeypatch) -> None:

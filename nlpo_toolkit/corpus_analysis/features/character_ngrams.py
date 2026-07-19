@@ -8,7 +8,23 @@ from nlpo_toolkit.immutable_collections import freeze_mapping
 
 from .character_text import encode_character_ngram, normalize_character_stream
 from .errors import FeatureError
-from .models import CharacterNgramOptions, FeatureScalar
+from .models import CharacterNgramMode, CharacterNgramOptions, FeatureScalar
+
+
+def character_ngram_column_prefix(*, mode: CharacterNgramMode, size: int) -> str:
+    prefixes = {
+        CharacterNgramMode.FULL: f"char{size}_",
+        CharacterNgramMode.NO_PUNCTUATION: f"char_nopunct{size}_",
+        CharacterNgramMode.LETTERS_SPACES: f"char_letters_spaces{size}_",
+        CharacterNgramMode.LETTERS_ONLY: f"char_letters_only{size}_",
+    }
+    return prefixes[mode]
+
+
+def character_ngram_column_name(
+    *, mode: CharacterNgramMode, size: int, value: str
+) -> str:
+    return character_ngram_column_prefix(mode=mode, size=size) + encode_character_ngram(value)
 
 
 @dataclass(frozen=True)
@@ -16,6 +32,7 @@ class CharacterNgramTerm:
     size: int
     value: str
     column_name: str
+    mode: CharacterNgramMode = CharacterNgramMode.FULL
 
     def __post_init__(self) -> None:
         if (
@@ -28,7 +45,11 @@ class CharacterNgramTerm:
             raise FeatureError("character n-gram value must match its size")
         if not self.column_name:
             raise FeatureError("character n-gram column name must not be empty")
-        expected = f"char{self.size}_{encode_character_ngram(self.value)}"
+        if not isinstance(self.mode, CharacterNgramMode):
+            raise FeatureError("character n-gram term mode is invalid")
+        expected = character_ngram_column_name(
+            mode=self.mode, size=self.size, value=self.value
+        )
         if self.column_name != expected or not self.column_name.isascii():
             raise FeatureError("character n-gram column name is not canonical")
 
@@ -41,7 +62,7 @@ class CharacterNgramVocabulary:
         object.__setattr__(self, "terms", tuple(self.terms))
         if not self.terms:
             raise FeatureError("character n-gram vocabulary must not be empty")
-        keys = tuple((term.size, term.value) for term in self.terms)
+        keys = tuple((term.mode, term.size, term.value) for term in self.terms)
         columns = tuple(term.column_name for term in self.terms)
         if len(keys) != len(set(keys)):
             raise FeatureError("duplicate character n-gram vocabulary term")
@@ -64,27 +85,32 @@ def select_character_ngram_vocabulary(
     *,
     options: CharacterNgramOptions,
 ) -> CharacterNgramVocabulary:
-    streams = tuple(normalize_character_stream(text) for text in texts)
     terms = []
-    for size in options.sizes:
-        frequencies: Counter[str] = Counter()
-        for stream in streams:
-            frequencies.update(iter_character_ngrams(stream, size=size))
-        if not frequencies:
-            raise FeatureError(
-                f"no character {size}-grams can be generated from the prepared corpora"
+    for mode in options.modes:
+        streams = tuple(normalize_character_stream(text, mode=mode) for text in texts)
+        for size in options.sizes:
+            frequencies: Counter[str] = Counter()
+            for stream in streams:
+                frequencies.update(iter_character_ngrams(stream, size=size))
+            if not frequencies:
+                raise FeatureError(
+                    f"no character {size}-grams can be generated for mode "
+                    f"{mode.value!r} from the prepared corpora"
+                )
+            selected = sorted(
+                frequencies, key=lambda value: (-frequencies[value], value)
+            )[: options.top]
+            terms.extend(
+                CharacterNgramTerm(
+                    size=size,
+                    value=value,
+                    column_name=character_ngram_column_name(
+                        mode=mode, size=size, value=value
+                    ),
+                    mode=mode,
+                )
+                for value in selected
             )
-        selected = sorted(frequencies, key=lambda value: (-frequencies[value], value))[
-            : options.top
-        ]
-        terms.extend(
-            CharacterNgramTerm(
-                size=size,
-                value=value,
-                column_name=f"char{size}_{encode_character_ngram(value)}",
-            )
-            for value in selected
-        )
     return CharacterNgramVocabulary(tuple(terms))
 
 
@@ -93,15 +119,22 @@ def compute_character_ngram_features(
     *,
     vocabulary: CharacterNgramVocabulary,
 ) -> Mapping[str, FeatureScalar]:
-    stream = normalize_character_stream(text)
-    sizes = tuple(dict.fromkeys(term.size for term in vocabulary.terms))
-    counts = {size: Counter(iter_character_ngrams(stream, size=size)) for size in sizes}
-    denominators = {size: max(len(stream) - size + 1, 0) for size in sizes}
+    modes = tuple(dict.fromkeys(term.mode for term in vocabulary.terms))
+    streams = {mode: normalize_character_stream(text, mode=mode) for mode in modes}
+    keys = tuple(dict.fromkeys((term.mode, term.size) for term in vocabulary.terms))
+    counts = {
+        key: Counter(iter_character_ngrams(streams[key[0]], size=key[1]))
+        for key in keys
+    }
+    denominators = {
+        key: max(len(streams[key[0]]) - key[1] + 1, 0) for key in keys
+    }
     return freeze_mapping(
         {
             term.column_name: float(
-                counts[term.size].get(term.value, 0) / denominators[term.size]
-                if denominators[term.size]
+                counts[(term.mode, term.size)].get(term.value, 0)
+                / denominators[(term.mode, term.size)]
+                if denominators[(term.mode, term.size)]
                 else 0.0
             )
             for term in vocabulary.terms

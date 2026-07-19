@@ -1,13 +1,36 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 
 from .errors import FeatureError
-from .models import AnalyzedFeatureCorpus
+from .models import AnalyzedFeatureCorpus, CharacterNgramMode
 
 
-def normalize_character_stream(text: str) -> str:
-    return re.sub(r"\s+", " ", text.lower()).strip()
+def normalize_character_stream(
+    text: str, *, mode: CharacterNgramMode = CharacterNgramMode.FULL
+) -> str:
+    if not isinstance(mode, CharacterNgramMode):
+        raise FeatureError("character n-gram mode must be CharacterNgramMode")
+    lowered = text.lower()
+    if mode is CharacterNgramMode.FULL:
+        return re.sub(r"\s+", " ", lowered).strip()
+    if mode is CharacterNgramMode.LETTERS_ONLY:
+        return "".join(
+            character
+            for character in lowered
+            if unicodedata.category(character).startswith(("L", "M"))
+        )
+    normalized = []
+    for character in lowered:
+        category = unicodedata.category(character)
+        keep = (
+            not category.startswith("P")
+            if mode is CharacterNgramMode.NO_PUNCTUATION
+            else category.startswith(("L", "M"))
+        )
+        normalized.append(character if keep and not character.isspace() else " ")
+    return re.sub(r" +", " ", "".join(normalized)).strip()
 
 
 def encode_character_ngram(value: str) -> str:

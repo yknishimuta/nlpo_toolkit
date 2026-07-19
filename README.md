@@ -748,6 +748,7 @@ nlpo features \
   --config config/groups.config.yml \
   --group-by-file \
   --char-ngram-size 3 \
+  --char-ngram-mode full \
   --char-ngram-top 500 \
   --out output/features_char3.csv
 
@@ -758,21 +759,40 @@ nlpo features \
   --char-ngram-size 3 \
   --char-ngram-size 4 \
   --char-ngram-size 5 \
+  --char-ngram-mode full \
+  --char-ngram-mode letters-spaces \
+  --char-ngram-mode letters-only \
   --char-ngram-top 300 \
   --out output/features_char345.csv
 ```
 
-`--char-ngram-top` is a per-size limit, so the second example can add up to
-900 columns. Vocabulary selection pools raw character n-gram counts from each
+The default mode is `full`, exactly matching the original behavior. Four modes
+are available and may be repeated in CLI order:
+
+- `full` retains spaces, punctuation, digits, symbols, letters, and combining
+  marks after lowercasing and whitespace collapse.
+- `no-punctuation` replaces every Unicode `P*` punctuation character with a
+  space, preserving word separation, digits, and symbols.
+- `letters-spaces` retains Unicode letters and combining marks and preserves
+  boundaries as collapsed spaces.
+- `letters-only` concatenates only Unicode letters and combining marks. Word
+  boundaries disappear, so n-grams intentionally cross former boundaries.
+
+For a punctuation-insensitive table, use `--char-ngram-mode no-punctuation`.
+`--char-ngram-top` is a per-mode, per-size limit. Thus three modes, three sizes,
+and top 300 can add up to 2,700 columns. Each mode selects independently.
+Vocabulary selection pools raw character n-gram counts from each
 unsampled source corpus, orders them by decreasing frequency and then lexical
 tie-break, and only then generates rows. Consequently overlap and window size
 do not change the selected columns, although longer works contribute more raw
 positions to selection.
 
 The input is the prepared text after Cleaner processing, text normalization,
-and reference-tag removal—not reconstructed NLP tokens. It is lowercased,
-Unicode whitespace runs are collapsed to one ASCII space, and outer whitespace
-is stripped. Spaces, punctuation, digits, and other Unicode characters remain;
+and reference-tag removal—not reconstructed NLP tokens. Every mode uses
+`str.lower()` without adding Unicode normalization. It does not perform u/v or
+i/j unification, ligature expansion, accent removal, or macron removal. In
+default `full` mode, Unicode whitespace runs collapse to one ASCII space and
+outer whitespace is stripped while all non-whitespace characters remain;
 n-grams may cross word and sentence boundaries but never a Feature-unit or
 source-file boundary. Character features require exactly one source file per
 prepared corpus, so use per-file grouping.
@@ -780,15 +800,19 @@ prepared corpus, so use per-file grouping.
 Each value is the occurrence count divided by all possible positions of that
 size in the row text. Fixed-token rows use the exact prepared-text slice from
 the first lexical token start through the final lexical token end, retaining
-intervening whitespace, punctuation, excluded tokens, and line breaks before
-whitespace normalization. Missing exact offsets are an error; token joining is
+intervening whitespace, punctuation, excluded tokens, and line breaks. This
+raw span is sliced before mode normalization. Missing exact offsets are an
+error; token joining is
 not used as a fallback. Character features are independent of lemma choice,
 UPOS, minimum token length, Roman filtering, function words, and MFW.
 
-Columns use `char<size>_...`. ASCII letters and digits remain literal, spaces
+Full columns retain `char<size>_...` for backward compatibility. Other modes
+use `char_nopunct<size>_...`, `char_letters_spaces<size>_...`, and
+`char_letters_only<size>_...`. ASCII letters and digits remain literal, spaces
 become `_sp_`, and every other code point becomes six-digit lowercase hex such
 as `_u00002c_`. Thus punctuation and whitespace remain unambiguous. Stylometry
-can select these columns with prefixes such as `char3_` or `char5_`.
+can select modes independently with prefixes such as `char3_`,
+`char_nopunct3_`, or `char_letters_only3_`; multiple prefixes combine modes.
 
 Punctuation patterns can reflect an editor or edition as well as an author, so
 all compared texts should use the same edition, cleaning, and normalization.
@@ -796,7 +820,9 @@ The automatically selected vocabulary also creates upstream leakage when a
 Features table is later used for LOWO: held-out works may influence which
 character columns were selected. LOWO still prevents leakage in z-score fit
 and centroids, but strict evaluation needs a vocabulary fixed externally or
-selected inside each training fold in a future workflow.
+selected inside each training fold. The corpus-input LOWO workflow performs
+that training-only fit for every requested mode. CSV-input LOWO cannot undo
+upstream feature selection already present in its table.
 
 UPOS n-gram features describe short syntactic tag sequences while preserving
 the existing UPOS unigram counts and ratios. Enable 2-grams alone or repeat the

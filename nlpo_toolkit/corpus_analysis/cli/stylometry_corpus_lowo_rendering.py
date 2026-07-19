@@ -87,6 +87,7 @@ def write_vocabulary_audit(result: CorpusLowoResult, *, path: Path) -> None:
                     "mfw_terms": list(item.vocabulary.mfw_terms),
                     "character_ngrams": [
                         {
+                            "mode": term.mode.value,
                             "size": term.size,
                             "value": term.value,
                             "column_name": term.column_name,

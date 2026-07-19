@@ -61,7 +61,8 @@ class FoldVocabularyAudit:
         parts = [f"mfw:{len(self.mfw_terms)}"]
         parts.extend(f"m:{len(term)}:{term}" for term in self.mfw_terms)
         parts.extend(
-            f"c:{term.size}:{len(term.value)}:{term.value}:{term.column_name}"
+            f"c:{term.mode.value}:{term.size}:{len(term.value)}:"
+            f"{term.value}:{term.column_name}"
             for term in self.character_ngrams
         )
         if self.morphology is not None:
