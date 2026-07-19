@@ -1188,6 +1188,59 @@ reference corpus, a vocabulary fitted without the query, or a corpus-input
 training-only vocabulary workflow. Verification measures consistency with a
 candidate model in a closed feature space; it is not proof of authorship.
 
+#### Corpus-input verification with reference-fitted vocabularies
+
+`stylometry verify-corpus` starts from configured corpora instead of an
+existing Features CSV. It analyzes every prepared corpus once, identifies all
+groups assigned to the query work, and excludes every one of them while fitting
+MFW, character n-gram, UPOS n-gram, morphology value, and morphology bundle
+vocabularies. The resulting fixed columns then transform reference and query
+corpora in their original order. The existing verification calculation also
+excludes the query from z-score fitting, zero-variance detection, candidate
+centroids, calibration distributions, and thresholds.
+
+```bash
+nlpo stylometry verify-corpus \
+  --project-root . \
+  --config config/groups.config.yml \
+  --metadata config/authorship_works.csv \
+  --candidate-author virgil \
+  --query-work ciris \
+  --mfw 500 \
+  --field lemma \
+  --window-tokens 1000 \
+  --char-ngram-size 3 \
+  --char-ngram-top 300 \
+  --upos-ngram-size 2 \
+  --upos-ngram-top 100 \
+  --genuine-quantile 0.95 \
+  --impostor-quantile 0.05 \
+  --out output/verification_ciris.json \
+  --calibration-out output/verification_ciris_calibration.csv \
+  --vocabulary-audit-out output/verification_ciris_vocabulary.json
+```
+
+Metadata is work-level; the query author is a required placeholder but is not
+used in the decision:
+
+```csv
+group,author,work
+aeneid,virgil,aeneid
+georgics,virgil,georgics
+eclogues,virgil,eclogues
+thebaid,statius,thebaid
+silvae,statius,silvae
+ciris,unknown,ciris
+```
+
+Use table-input `verify` to evaluate a prebuilt feature space and
+`verify-corpus` when automatic vocabulary selection itself must be isolated
+from the query. Explicit function-word lists and other fixed feature families
+remain shared. The vocabulary audit records the reference-only fit and its
+deterministic SHA-256. Neither accept nor reject proves authenticity or
+forgery. Background selection, genre, period, edition, cleaning, NLP model, and
+window settings can materially affect the result and should be controlled.
+
 ### Verification Stability and Resampling
 
 `verify-stability` first calculates the ordinary `verify` result using all

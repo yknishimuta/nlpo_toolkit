@@ -18,6 +18,10 @@ def add_verification_input_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--work-column", default="work")
     parser.add_argument("--feature-prefix", action="append", default=[])
     parser.add_argument("--feature-column", action="append", default=[])
+    add_verification_decision_arguments(parser)
+
+
+def add_verification_decision_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--candidate-author", required=True)
     parser.add_argument("--query-work", required=True)
     parser.add_argument("--genuine-quantile", type=float, default=0.95)

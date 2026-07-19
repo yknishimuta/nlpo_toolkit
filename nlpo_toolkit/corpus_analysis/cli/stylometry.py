@@ -15,6 +15,7 @@ from .stylometry_evaluate_lowo import register_evaluate_lowo
 from .stylometry_evaluate_lowo_corpus import register_evaluate_lowo_corpus
 from .stylometry_neighbors import register_neighbors
 from .stylometry_verify import register_verify
+from .stylometry_verify_corpus import register_verify_corpus
 from .stylometry_verify_stability import register_verify_stability
 
 
@@ -25,6 +26,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     register_evaluate_lowo_corpus(commands)
     register_neighbors(commands)
     register_verify(commands)
+    register_verify_corpus(commands)
     register_verify_stability(commands)
     delta = commands.add_parser("delta")
     delta.add_argument("--features", type=Path, required=True)

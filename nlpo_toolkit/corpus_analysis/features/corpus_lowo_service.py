@@ -1,30 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from collections.abc import Mapping
 
 from nlpo_toolkit.stylometry.authorship import (
     build_work_profiles,
     validate_lowo_dataset,
 )
 from nlpo_toolkit.stylometry.evaluation import evaluate_lowo_fold
-from nlpo_toolkit.stylometry.evaluation_models import (
-    AuthorshipMetadata,
-    LabeledFeatureDataset,
-    LabeledFeatureObservation,
-)
 from nlpo_toolkit.stylometry.evaluation_results import (
     AuthorEvaluationSummary,
     LeaveOneWorkOutSummary,
 )
 from nlpo_toolkit.stylometry.ports import AuthorshipMetadataReader
 
-from ...nlp.roman_numerals import RomanExceptionsError
-from ..config_references import ConfigReferenceError
-from ..execution_session import (
-    prepare_analysis_corpus_session,
-    start_nlp_execution_session,
-)
 from ..ports import FeatureCommandDependencies
 from .corpus_lowo_models import (
     CorpusLowoFoldResult,
@@ -32,10 +20,11 @@ from .corpus_lowo_models import (
     CorpusLowoResult,
     FoldVocabularyAudit,
 )
-from .engine import analyze_feature_corpora, build_feature_rows, fit_feature_vocabulary
-from .errors import FeatureError
-from .function_words import build_function_word_columns
-from .models import FeatureFilterPolicy, FeatureOptions, FeatureRow, FunctionWordOptions
+from .corpus_stylometry_support import (
+    build_labeled_feature_dataset,
+    prepare_corpus_stylometry_data,
+)
+from .engine import build_feature_rows, fit_feature_vocabulary
 
 
 @dataclass(frozen=True)
@@ -44,81 +33,9 @@ class CorpusLowoDependencies:
     read_metadata: AuthorshipMetadataReader
 
 
-_ROW_METADATA = frozenset(
-    {
-        "group",
-        "source_file",
-        "sample_id",
-        "sample_index",
-        "sample_start_token",
-        "sample_end_token",
-        "sample_kind",
-    }
-)
-
-
-def _validate_metadata(
-    labels: tuple[str, ...], metadata: AuthorshipMetadata
-) -> dict[str, tuple[str, str]]:
-    assignments = {
-        item.observation_id: (item.author, item.work_id)
-        for item in metadata.assignments
-    }
-    label_set = set(labels)
-    missing = tuple(label for label in labels if label not in assignments)
-    unknown = tuple(
-        identifier for identifier in assignments if identifier not in label_set
-    )
-    if missing:
-        raise FeatureError(
-            f"prepared corpus has no authorship metadata: {missing[0]!r}"
-        )
-    if unknown:
-        raise FeatureError(
-            f"authorship metadata contains unknown group: {unknown[0]!r}"
-        )
-    return assignments
-
-
-def _labeled_rows(
-    rows: tuple[FeatureRow, ...],
-    assignments: Mapping[str, tuple[str, str]],
-) -> LabeledFeatureDataset:
-    if not rows:
-        raise FeatureError("feature transformation produced no rows")
-    feature_names = tuple(
-        name
-        for name, value in rows[0].items()
-        if name not in _ROW_METADATA and isinstance(value, (int, float))
-    )
-    observations = []
-    for row in rows:
-        group = str(row["group"])
-        author, work = assignments[group]
-        identifier = str(row.values.get("sample_id", group))
-        observations.append(
-            LabeledFeatureObservation(
-                identifier,
-                author,
-                work,
-                tuple(float(row[name]) for name in feature_names),
-            )
-        )
-    return LabeledFeatureDataset(feature_names, tuple(observations))
-
-
 def execute_corpus_lowo(
     request: CorpusLowoRequest, *, dependencies: CorpusLowoDependencies
 ) -> CorpusLowoResult:
-    source = request.features.function_words
-    function_words = None
-    if source is not None:
-        root = request.corpus.project_root.expanduser().resolve()
-        path = source.path.expanduser()
-        resolved = (root / path).resolve() if not path.is_absolute() else path.resolve()
-        vocabulary = dependencies.features.load_function_words(resolved)
-        build_function_word_columns(vocabulary)
-        function_words = FunctionWordOptions(vocabulary, source.field)
     metadata = dependencies.read_metadata(
         request.metadata_path,
         input_format=request.metadata_format,
@@ -126,48 +43,13 @@ def execute_corpus_lowo(
         author_column=request.author_column,
         work_column=request.work_column,
     )
-    try:
-        session = prepare_analysis_corpus_session(
-            request.corpus, dependencies=dependencies.features.corpus
-        )
-    except (ConfigReferenceError, FileNotFoundError, RomanExceptionsError) as exc:
-        raise FeatureError(str(exc)) from exc
-    labels = tuple(corpus.label for corpus in session.corpora)
-    assignments = _validate_metadata(labels, metadata)
-    if request.features.character_ngrams is not None:
-        for corpus in session.corpora:
-            if len(corpus.files) != 1:
-                raise FeatureError(
-                    "character n-gram features require one source file per prepared corpus; "
-                    "use --group-by-file or grouping.mode: per_file"
-                )
-    nlp_session = start_nlp_execution_session(
-        session, dependencies=dependencies.features.nlp
+    prepared = prepare_corpus_stylometry_data(
+        request.features, metadata=metadata, dependencies=dependencies.features
     )
-    config = session.plan.definition.config
-    options = FeatureOptions(
-        field=request.features.field,
-        mfw=request.features.mfw,
-        include_upos=request.features.include_upos,
-        include_basic=request.features.include_basic,
-        filter_policy=FeatureFilterPolicy(
-            min_token_length=config.filters.min_token_length,
-            drop_roman_numerals=config.filters.drop_roman_numerals,
-            roman_exceptions=nlp_session.roman_exceptions,
-        ),
-        sampling=request.features.sampling,
-        lexical_diversity=request.features.lexical_diversity,
-        function_words=function_words,
-        character_ngrams=request.features.character_ngrams,
-        upos_ngrams=request.features.upos_ngrams,
-        morphology=request.features.morphology,
-    )
-    analyzed = analyze_feature_corpora(
-        session.corpora,
-        nlp=nlp_session.backend.backend,
-        extraction_policy=nlp_session.extraction_policy,
-        filter_policy=options.filter_policy,
-    )
+    labels = prepared.labels
+    assignments = prepared.assignments
+    options = prepared.options
+    analyzed = prepared.analyzed
     work_order = []
     for label in labels:
         work = assignments[label][1]
@@ -189,7 +71,7 @@ def execute_corpus_lowo(
         rows = build_feature_rows(
             training + testing, options=options, vocabulary=vocabulary
         )
-        labeled = _labeled_rows(rows, assignments)
+        labeled = build_labeled_feature_dataset(rows, assignments)
         validate_lowo_dataset(labeled)
         profiles = build_work_profiles(labeled)
         test_profile = next(

@@ -92,3 +92,39 @@ def test_verify_cli_file_output_help_and_same_path_guard(
     ) == 1
     assert "must be different paths" in stderr.getvalue()
     assert not same.exists()
+
+
+def test_verify_corpus_help_and_output_collision(tmp_path: Path, capsys) -> None:
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["stylometry", "verify-corpus", "--help"])
+    assert exc.value.code == 0
+    help_text = capsys.readouterr().out
+    assert "--candidate-author" in help_text
+    assert "--query-work" in help_text
+    assert "--vocabulary-audit-out" in help_text
+
+    same = tmp_path / "same.json"
+    stderr = io.StringIO()
+    assert (
+        cli.main(
+            [
+                "stylometry",
+                "verify-corpus",
+                "--metadata",
+                str(tmp_path / "metadata.csv"),
+                "--candidate-author",
+                "A",
+                "--query-work",
+                "Q",
+                "--out",
+                str(same),
+                "--vocabulary-audit-out",
+                str(same),
+            ],
+            stdout=io.StringIO(),
+            stderr=stderr,
+        )
+        == 1
+    )
+    assert "outputs must differ" in stderr.getvalue()
+    assert not same.exists()
