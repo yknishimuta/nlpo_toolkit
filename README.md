@@ -1241,6 +1241,48 @@ deterministic SHA-256. Neither accept nor reject proves authenticity or
 forgery. Background selection, genre, period, edition, cleaning, NLP model, and
 window settings can materially affect the result and should be controlled.
 
+### Pseudo-unknown-work verification evaluation
+
+`evaluate-verification-corpus` evaluates the verification procedure itself by
+treating every labeled work once as a pseudo-unknown query. Candidate-author
+works are genuine tests, while all other works are impostor tests. At least four
+candidate works and three background works are required, leaving the ordinary
+verification minimum of three candidate and two background references after
+each holdout.
+
+```bash
+nlpo stylometry evaluate-verification-corpus \
+  --project-root . \
+  --config config/groups.config.yml \
+  --metadata config/authorship_works.csv \
+  --candidate-author virgil \
+  --mfw 500 \
+  --window-tokens 1000 \
+  --char-ngram-size 3 \
+  --upos-ngram-size 2 \
+  --out output/verification_evaluation_folds.csv \
+  --summary-out output/verification_evaluation_summary.json \
+  --vocabulary-audit-out output/verification_evaluation_vocabularies.json \
+  --calibration-out output/verification_evaluation_calibration.csv
+```
+
+The work-level metadata uses `group,author,work`, and all works must have known
+labels. Corpus preparation, NLP, eligibility filtering, and function-word list
+loading happen once per corpus. In every outer fold the complete pseudo-query
+work is excluded from automatic vocabulary fitting, reference z-scores,
+zero-variance detection, calibration, and threshold derivation.
+
+False accept rate is the fraction of background works accepted as the candidate;
+false reject rate counts genuine works explicitly rejected. Inconclusive results
+remain separate. Coverage is the fraction receiving accept or reject, decisive
+accuracy uses only those covered folds, overall correct rate treats inconclusive
+as not correct, and balanced correct rate averages genuine accept and impostor
+reject rates. Quantiles must not be tuned on these evaluation outcomes.
+
+High rates do not prove authenticity for a real disputed work. Small work sets
+produce unstable rates, and genre, period, edition, cleaning, NLP configuration,
+windowing, and background-corpus choice can materially affect the results.
+
 ### Verification Stability and Resampling
 
 `verify-stability` first calculates the ordinary `verify` result using all

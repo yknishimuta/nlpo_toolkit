@@ -5,9 +5,11 @@ from dataclasses import dataclass
 from nlpo_toolkit.stylometry.authorship import build_work_profiles
 from nlpo_toolkit.stylometry.ports import AuthorshipMetadataReader
 from nlpo_toolkit.stylometry.verification import evaluate_verification
+from nlpo_toolkit.stylometry.verification_models import VerificationThresholdSettings
 
 from ..ports import FeatureCommandDependencies
 from .corpus_stylometry_support import (
+    PreparedCorpusStylometryData,
     build_labeled_feature_dataset,
     prepare_corpus_stylometry_data,
 )
@@ -41,18 +43,33 @@ def execute_corpus_verification(
     prepared = prepare_corpus_stylometry_data(
         request.features, metadata=metadata, dependencies=dependencies.features
     )
+    return evaluate_prepared_corpus_verification(
+        prepared,
+        candidate_author=request.candidate_author,
+        query_work=request.query_work,
+        thresholds=request.thresholds,
+    )
+
+
+def evaluate_prepared_corpus_verification(
+    prepared: PreparedCorpusStylometryData,
+    *,
+    candidate_author: str,
+    query_work: str,
+    thresholds: VerificationThresholdSettings,
+) -> CorpusVerificationResult:
     reference_corpora = tuple(
         corpus
         for corpus in prepared.analyzed
-        if prepared.assignments[corpus.source.label][1] != request.query_work
+        if prepared.assignments[corpus.source.label][1] != query_work
     )
     query_corpora = tuple(
         corpus
         for corpus in prepared.analyzed
-        if prepared.assignments[corpus.source.label][1] == request.query_work
+        if prepared.assignments[corpus.source.label][1] == query_work
     )
     if not query_corpora:
-        raise FeatureError(f"query work not found in prepared corpora: {request.query_work!r}")
+        raise FeatureError(f"query work not found in prepared corpora: {query_work!r}")
     if not reference_corpora:
         raise FeatureError("verification reference corpus is empty after excluding query work")
     vocabulary = fit_feature_vocabulary(reference_corpora, options=prepared.options)
@@ -65,12 +82,12 @@ def execute_corpus_verification(
     verification = evaluate_verification(
         labeled.feature_names,
         build_work_profiles(labeled),
-        candidate_author=request.candidate_author,
-        query_work=request.query_work,
-        settings=request.thresholds,
+        candidate_author=candidate_author,
+        query_work=query_work,
+        settings=thresholds,
     )
     audit = CorpusVerificationVocabularyAudit(
-        request.query_work,
+        query_work,
         vocabulary.mfw_terms,
         vocabulary.character_ngrams.terms if vocabulary.character_ngrams else (),
         vocabulary.upos_ngrams.terms if vocabulary.upos_ngrams else (),

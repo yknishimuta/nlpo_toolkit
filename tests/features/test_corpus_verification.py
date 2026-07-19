@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
+import pytest
+
 from nlpo_toolkit.corpus_analysis.analysis_records import NLPAnalysisRecord
 from nlpo_toolkit.corpus_analysis.corpus import PreparedCorpus
 from nlpo_toolkit.corpus_analysis.features.corpus_stylometry_support import (
@@ -15,6 +17,13 @@ from nlpo_toolkit.corpus_analysis.features.corpus_verification_service import (
     CorpusVerificationDependencies,
     execute_corpus_verification,
 )
+from nlpo_toolkit.corpus_analysis.features.corpus_verification_evaluation_models import (
+    CorpusVerificationEvaluationRequest,
+)
+from nlpo_toolkit.corpus_analysis.features.corpus_verification_evaluation_service import (
+    CorpusVerificationEvaluationDependencies,
+    execute_corpus_verification_evaluation,
+)
 from nlpo_toolkit.corpus_analysis.features.models import (
     AnalyzedFeatureCorpus,
     CharacterNgramOptions,
@@ -26,6 +35,12 @@ from nlpo_toolkit.corpus_analysis.features.models import (
 from nlpo_toolkit.corpus_analysis.requests import CorpusPreparationRequest
 from nlpo_toolkit.nlp.contracts import UDMorphFeature
 from nlpo_toolkit.stylometry.evaluation_models import AuthorshipMetadata
+from nlpo_toolkit.stylometry.verification_evaluation_models import (
+    VerificationEvaluationOutcome,
+    VerificationExpectedClass,
+    classify_verification_evaluation_outcome,
+)
+from nlpo_toolkit.stylometry.verification_models import VerificationDecision
 
 
 def _corpus(
@@ -190,3 +205,67 @@ def test_query_changes_do_not_change_vocabulary_calibration_or_thresholds(
         == second.verification.dropped_zero_variance_features
     )
     assert first.verification.query_distance != second.verification.query_distance
+
+
+@pytest.mark.parametrize(
+    ("expected", "decision", "outcome"),
+    (
+        (VerificationExpectedClass.GENUINE, VerificationDecision.ACCEPT, VerificationEvaluationOutcome.CORRECT_ACCEPT),
+        (VerificationExpectedClass.GENUINE, VerificationDecision.REJECT, VerificationEvaluationOutcome.FALSE_REJECT),
+        (VerificationExpectedClass.GENUINE, VerificationDecision.INCONCLUSIVE, VerificationEvaluationOutcome.GENUINE_INCONCLUSIVE),
+        (VerificationExpectedClass.IMPOSTOR, VerificationDecision.REJECT, VerificationEvaluationOutcome.CORRECT_REJECT),
+        (VerificationExpectedClass.IMPOSTOR, VerificationDecision.ACCEPT, VerificationEvaluationOutcome.FALSE_ACCEPT),
+        (VerificationExpectedClass.IMPOSTOR, VerificationDecision.INCONCLUSIVE, VerificationEvaluationOutcome.IMPOSTOR_INCONCLUSIVE),
+    ),
+)
+def test_verification_evaluation_outcomes(expected, decision, outcome) -> None:
+    assert classify_verification_evaluation_outcome(expected, decision) is outcome
+
+
+def test_corpus_verification_evaluation_visits_each_work_once(monkeypatch) -> None:
+    import nlpo_toolkit.corpus_analysis.features.corpus_verification_evaluation_service as service
+
+    analyzed = (
+        _corpus("a1", ("et", "arma", "cano"), ("NOUN", "VERB", "NOUN"), "Nom"),
+        _corpus("a2", ("et", "virum", "cano"), ("NOUN", "VERB", "NOUN"), "Acc"),
+        _corpus("a3", ("et", "arma", "virum"), ("NOUN", "NOUN", "VERB"), "Nom"),
+        _corpus("a4", ("cano", "musa", "arma"), ("VERB", "NOUN", "NOUN"), "Gen"),
+        _corpus("b1", ("longe", "alia", "verba"), ("ADJ", "NOUN", "NOUN"), "Abl"),
+        _corpus("b2", ("diversa", "multa", "sunt"), ("ADJ", "ADJ", "VERB"), "Dat"),
+        _corpus("b3", ("procul", "nova", "dicit"), ("ADV", "ADJ", "VERB"), "Voc"),
+    )
+    assignments = {
+        label: ("A" if label.startswith("a") else "B", label.upper())
+        for label in (item.source.label for item in analyzed)
+    }
+    prepared = PreparedCorpusStylometryData(
+        analyzed,
+        FeatureOptions(
+            mfw=2,
+            character_ngrams=CharacterNgramOptions((3,), 4),
+            upos_ngrams=UposNgramOptions((2,), 2),
+        ),
+        assignments,
+        tuple(assignments),
+    )
+    monkeypatch.setattr(
+        service, "prepare_corpus_stylometry_data", lambda *args, **kwargs: prepared
+    )
+    result = execute_corpus_verification_evaluation(
+        CorpusVerificationEvaluationRequest(
+            FeatureRequest(CorpusPreparationRequest(Path("."), Path("config.yml"))),
+            Path("metadata.csv"),
+            "A",
+        ),
+        dependencies=CorpusVerificationEvaluationDependencies(
+            object(),  # type: ignore[arg-type]
+            lambda *args, **kwargs: AuthorshipMetadata(()),
+        ),
+    )
+    assert len(result.folds) == 7
+    assert tuple(item.fold_index for item in result.folds) == tuple(range(1, 8))
+    assert tuple(item.query_work for item in result.folds) == tuple(assignments[label][1] for label in assignments)
+    assert [item.expected_class for item in result.folds[:4]] == [VerificationExpectedClass.GENUINE] * 4
+    assert [item.expected_class for item in result.folds[4:]] == [VerificationExpectedClass.IMPOSTOR] * 3
+    assert all(item.verification.candidate_reference_work_count == 3 for item in result.folds[:4])
+    assert all(item.verification.background_work_count == 2 for item in result.folds[4:])

@@ -98,8 +98,20 @@ def write_verification_calibration(
     with path.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.writer(stream, delimiter="," if output_format == "csv" else "\t")
         writer.writerow(CALIBRATION_COLUMNS)
-        for score in result.calibration_scores:
-            writer.writerow((
-                score.kind.value, score.work_id, score.author, score.distance,
-                len(score.centroid_work_ids), "|".join(score.centroid_work_ids),
-            ))
+        writer.writerows(verification_calibration_rows(result))
+
+
+def verification_calibration_rows(
+    result: VerificationResult,
+) -> tuple[tuple[str | int | float, ...], ...]:
+    return tuple(
+        (
+            score.kind.value,
+            score.work_id,
+            score.author,
+            score.distance,
+            len(score.centroid_work_ids),
+            "|".join(score.centroid_work_ids),
+        )
+        for score in result.calibration_scores
+    )

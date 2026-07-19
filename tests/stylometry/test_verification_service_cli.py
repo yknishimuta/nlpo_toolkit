@@ -128,3 +128,39 @@ def test_verify_corpus_help_and_output_collision(tmp_path: Path, capsys) -> None
     )
     assert "outputs must differ" in stderr.getvalue()
     assert not same.exists()
+
+
+def test_evaluate_verification_corpus_help_and_output_collision(
+    tmp_path: Path, capsys
+) -> None:
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["stylometry", "evaluate-verification-corpus", "--help"])
+    assert exc.value.code == 0
+    help_text = capsys.readouterr().out
+    assert "--candidate-author" in help_text
+    assert "--out" in help_text
+    assert "--summary-out" in help_text
+
+    same = tmp_path / "same.csv"
+    stderr = io.StringIO()
+    assert (
+        cli.main(
+            [
+                "stylometry",
+                "evaluate-verification-corpus",
+                "--metadata",
+                str(tmp_path / "metadata.csv"),
+                "--candidate-author",
+                "A",
+                "--out",
+                str(same),
+                "--summary-out",
+                str(same),
+            ],
+            stdout=io.StringIO(),
+            stderr=stderr,
+        )
+        == 1
+    )
+    assert "outputs must all use different paths" in stderr.getvalue()
+    assert not same.exists()
