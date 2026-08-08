@@ -7,10 +7,13 @@ from pathlib import Path
 from typing import TextIO
 
 from ..features.corpus_verification_models import CorpusVerificationResult
+from ..features.content_masking import CONTENT_MASK_POLICY_ID
 from .stylometry_verification_rendering import verification_json_value
 
 
-def corpus_verification_json_value(result: CorpusVerificationResult) -> dict[str, object]:
+def corpus_verification_json_value(
+    result: CorpusVerificationResult,
+) -> dict[str, object]:
     value = verification_json_value(result.verification)
     value["input_mode"] = "corpus"
     value["feature_vocabulary"] = {
@@ -20,6 +23,15 @@ def corpus_verification_json_value(result: CorpusVerificationResult) -> dict[str
         "selected_feature_count": result.selected_feature_count,
         "selected_mfw_count": result.vocabulary.selected_mfw_count,
         "selected_character_ngram_count": result.vocabulary.selected_character_ngram_count,
+        **(
+            {
+                "selected_content_masked_character_ngram_count": (
+                    result.vocabulary.selected_content_masked_character_ngram_count
+                )
+            }
+            if result.vocabulary.content_masked_character_ngrams
+            else {}
+        ),
         "selected_upos_ngram_count": result.vocabulary.selected_upos_ngram_count,
         "selected_morphology_count": result.vocabulary.selected_morphology_count,
         "sha256": result.vocabulary.sha256,
@@ -80,6 +92,23 @@ def write_corpus_verification_vocabulary_audit(
                 }
                 for term in audit.character_ngrams
             ],
+            **(
+                {
+                    "content_masked_character_ngrams": {
+                        "policy_id": CONTENT_MASK_POLICY_ID,
+                        "terms": [
+                            {
+                                "size": term.size,
+                                "value": term.value,
+                                "column_name": term.column_name,
+                            }
+                            for term in audit.content_masked_character_ngrams
+                        ],
+                    }
+                }
+                if audit.content_masked_character_ngrams
+                else {}
+            ),
             "upos_ngrams": [
                 {
                     "size": term.size,
@@ -108,6 +137,15 @@ def write_corpus_verification_vocabulary_audit(
             ),
             "selected_mfw_count": audit.selected_mfw_count,
             "selected_character_ngram_count": audit.selected_character_ngram_count,
+            **(
+                {
+                    "selected_content_masked_character_ngram_count": (
+                        audit.selected_content_masked_character_ngram_count
+                    )
+                }
+                if audit.content_masked_character_ngrams
+                else {}
+            ),
             "selected_upos_ngram_count": audit.selected_upos_ngram_count,
             "selected_morphology_count": audit.selected_morphology_count,
             "sha256": audit.sha256,

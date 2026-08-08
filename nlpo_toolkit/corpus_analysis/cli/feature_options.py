@@ -7,6 +7,7 @@ from ..features.errors import FeatureError
 from ..features.models import (
     CharacterNgramMode,
     CharacterNgramOptions,
+    ContentMaskedCharacterNgramOptions,
     FeatureRequest,
     FeatureSamplingOptions,
     FunctionWordSource,
@@ -42,6 +43,10 @@ def add_feature_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--char-ngram-size", type=int, action="append", default=[])
     parser.add_argument("--char-ngram-top", type=int, default=None)
     parser.add_argument(
+        "--content-masked-char-ngram-size", type=int, action="append", default=[]
+    )
+    parser.add_argument("--content-masked-char-ngram-top", type=int, default=None)
+    parser.add_argument(
         "--char-ngram-mode",
         choices=tuple(mode.value for mode in CharacterNgramMode),
         action="append",
@@ -65,9 +70,18 @@ def build_feature_request(
         raise FeatureError("--char-ngram-mode requires --char-ngram-size")
     if len(args.char_ngram_mode) != len(set(args.char_ngram_mode)):
         duplicate = next(
-            mode for mode in args.char_ngram_mode if args.char_ngram_mode.count(mode) > 1
+            mode
+            for mode in args.char_ngram_mode
+            if args.char_ngram_mode.count(mode) > 1
         )
         raise FeatureError(f"duplicate --char-ngram-mode: {duplicate}")
+    if (
+        args.content_masked_char_ngram_top is not None
+        and not args.content_masked_char_ngram_size
+    ):
+        raise FeatureError(
+            "--content-masked-char-ngram-top requires --content-masked-char-ngram-size"
+        )
     if args.upos_ngram_top is not None and not args.upos_ngram_size:
         raise FeatureError("--upos-ngram-top requires --upos-ngram-size")
     lexical_diversity = None
@@ -107,6 +121,14 @@ def build_feature_request(
                 or (CharacterNgramMode.FULL,),
             )
             if args.char_ngram_size
+            else None
+        ),
+        content_masked_character_ngrams=(
+            ContentMaskedCharacterNgramOptions(
+                tuple(args.content_masked_char_ngram_size),
+                args.content_masked_char_ngram_top or 300,
+            )
+            if args.content_masked_char_ngram_size
             else None
         ),
         upos_ngrams=(

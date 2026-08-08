@@ -70,12 +70,40 @@ class CharacterNgramOptions:
         modes = tuple(self.modes)
         if not modes:
             raise FeatureError("character n-gram modes must not be empty")
-        if any(isinstance(mode, bool) or not isinstance(mode, CharacterNgramMode) for mode in modes):
+        if any(
+            isinstance(mode, bool) or not isinstance(mode, CharacterNgramMode)
+            for mode in modes
+        ):
             raise FeatureError("character n-gram modes must use CharacterNgramMode")
         if len(modes) != len(set(modes)):
             duplicate = next(mode for mode in modes if modes.count(mode) > 1)
             raise FeatureError(f"duplicate character n-gram mode: {duplicate.value}")
         object.__setattr__(self, "modes", modes)
+
+
+@dataclass(frozen=True)
+class ContentMaskedCharacterNgramOptions:
+    sizes: tuple[int, ...]
+    top: int = 300
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "sizes", tuple(self.sizes))
+        if not self.sizes:
+            raise FeatureError("--content-masked-char-ngram-size must be specified")
+        for size in self.sizes:
+            if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
+                raise FeatureError(
+                    "--content-masked-char-ngram-size must be a positive integer"
+                )
+        if len(self.sizes) != len(set(self.sizes)):
+            duplicate = next(size for size in self.sizes if self.sizes.count(size) > 1)
+            raise FeatureError(
+                f"duplicate content-masked character n-gram size: {duplicate}"
+            )
+        if isinstance(self.top, bool) or not isinstance(self.top, int) or self.top <= 0:
+            raise FeatureError(
+                "--content-masked-char-ngram-top must be a positive integer"
+            )
 
 
 @dataclass(frozen=True)
@@ -225,6 +253,7 @@ class FeatureOptions:
     lexical_diversity: LexicalDiversityOptions | None = None
     function_words: FunctionWordOptions | None = None
     character_ngrams: CharacterNgramOptions | None = None
+    content_masked_character_ngrams: ContentMaskedCharacterNgramOptions | None = None
     upos_ngrams: UposNgramOptions | None = None
     morphology: MorphologyOptions | None = None
 
@@ -247,6 +276,7 @@ class FeatureRequest:
     lexical_diversity: LexicalDiversityOptions | None = None
     function_words: FunctionWordSource | None = None
     character_ngrams: CharacterNgramOptions | None = None
+    content_masked_character_ngrams: ContentMaskedCharacterNgramOptions | None = None
     upos_ngrams: UposNgramOptions | None = None
     morphology: MorphologyOptions | None = None
 

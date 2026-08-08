@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .character_ngrams import CharacterNgramVocabulary
+from .content_masked_character_ngrams import ContentMaskedCharacterNgramVocabulary
 from .upos_ngrams import UposNgramVocabulary
 from .morphology import MorphologyVocabulary
 
@@ -11,6 +12,7 @@ from .morphology import MorphologyVocabulary
 class FeatureVocabulary:
     mfw_terms: tuple[str, ...] = ()
     character_ngrams: CharacterNgramVocabulary | None = None
+    content_masked_character_ngrams: ContentMaskedCharacterNgramVocabulary | None = None
     upos_ngrams: UposNgramVocabulary | None = None
     morphology: MorphologyVocabulary | None = None
 

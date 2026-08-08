@@ -12,6 +12,10 @@ from .character_ngrams import (
     select_character_ngram_vocabulary,
 )
 from .character_text import feature_unit_character_text
+from .content_masked_character_ngrams import (
+    compute_content_masked_character_ngram_features,
+    select_content_masked_character_ngram_vocabulary,
+)
 from .filtering import filter_feature_records
 from .function_words import compute_function_word_features
 from .lexical import compute_basic_features
@@ -95,6 +99,19 @@ def prepare_character_ngram_vocabulary(
     )
 
 
+def validate_content_masked_character_ngram_sources(
+    corpora: tuple[PreparedCorpus, ...], *, enabled: bool
+) -> None:
+    if not enabled:
+        return
+    for corpus in corpora:
+        if len(corpus.files) != 1:
+            raise FeatureError(
+                "content-masked character n-gram features require one source file "
+                "per prepared corpus; use --group-by-file or grouping.mode: per_file"
+            )
+
+
 def build_feature_matrix(
     *,
     corpora: tuple[PreparedCorpus, ...],
@@ -104,6 +121,9 @@ def build_feature_matrix(
     character_vocabulary: CharacterNgramVocabulary | None = None,
 ) -> tuple[FeatureRow, ...]:
     validate_feature_options(options)
+    validate_content_masked_character_ngram_sources(
+        corpora, enabled=options.content_masked_character_ngrams is not None
+    )
     analyzed = analyze_feature_corpora(
         corpora,
         nlp=nlp,
@@ -134,9 +154,17 @@ def fit_feature_vocabulary(
         if options.upos_ngrams is not None
         else None
     )
+    content_masked_vocabulary = (
+        select_content_masked_character_ngram_vocabulary(
+            corpora, options=options.content_masked_character_ngrams
+        )
+        if options.content_masked_character_ngrams is not None
+        else None
+    )
     return FeatureVocabulary(
         mfw_terms=select_mfw_terms(corpora, count=options.mfw, field=options.field),
         character_ngrams=character_vocabulary,
+        content_masked_character_ngrams=content_masked_vocabulary,
         upos_ngrams=upos_vocabulary,
         morphology=(
             fit_morphology_vocabulary(corpora, options=options.morphology)
@@ -213,6 +241,13 @@ def build_feature_rows(
                 compute_character_ngram_features(
                     feature_unit_character_text(corpus),
                     vocabulary=vocabulary.character_ngrams,
+                )
+            )
+        if vocabulary.content_masked_character_ngrams is not None:
+            values.update(
+                compute_content_masked_character_ngram_features(
+                    corpus,
+                    vocabulary=vocabulary.content_masked_character_ngrams,
                 )
             )
         if vocabulary.mfw_terms:

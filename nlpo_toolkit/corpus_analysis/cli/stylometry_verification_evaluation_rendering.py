@@ -10,6 +10,7 @@ from typing import TextIO
 from ..features.corpus_verification_evaluation_models import (
     CorpusVerificationEvaluationResult,
 )
+from ..features.content_masking import CONTENT_MASK_POLICY_ID
 from .stylometry_verification_rendering import (
     CALIBRATION_COLUMNS,
     verification_calibration_rows,
@@ -17,16 +18,35 @@ from .stylometry_verification_rendering import (
 
 
 FOLD_COLUMNS = (
-    "fold_index", "query_work", "query_author", "expected_class", "decision",
-    "outcome", "is_decisive", "is_correct", "query_sample_count",
-    "query_distance", "genuine_boundary", "impostor_boundary",
-    "accept_threshold", "reject_threshold", "candidate_reference_work_count",
-    "background_work_count", "background_author_count", "input_feature_count",
-    "retained_feature_count", "dropped_zero_variance_feature_count",
-    "selected_feature_count", "selected_mfw_count",
-    "selected_character_ngram_count", "selected_upos_ngram_count",
-    "selected_morphology_count", "vocabulary_sha256", "nearest_background_work",
-    "nearest_background_author", "nearest_background_distance",
+    "fold_index",
+    "query_work",
+    "query_author",
+    "expected_class",
+    "decision",
+    "outcome",
+    "is_decisive",
+    "is_correct",
+    "query_sample_count",
+    "query_distance",
+    "genuine_boundary",
+    "impostor_boundary",
+    "accept_threshold",
+    "reject_threshold",
+    "candidate_reference_work_count",
+    "background_work_count",
+    "background_author_count",
+    "input_feature_count",
+    "retained_feature_count",
+    "dropped_zero_variance_feature_count",
+    "selected_feature_count",
+    "selected_mfw_count",
+    "selected_character_ngram_count",
+    "selected_upos_ngram_count",
+    "selected_morphology_count",
+    "vocabulary_sha256",
+    "nearest_background_work",
+    "nearest_background_author",
+    "nearest_background_distance",
     "candidate_vs_background_margin",
 )
 
@@ -46,20 +66,35 @@ def write_verification_evaluation_folds(
         nearest = verification.nearest_background
         writer.writerow(
             (
-                fold.fold_index, fold.query_work, fold.query_author,
-                fold.expected_class.value, verification.decision.value,
-                fold.outcome.value, "true" if fold.is_decisive else "false",
-                "true" if fold.is_correct else "false", verification.query_sample_count,
-                verification.query_distance, thresholds.genuine_boundary,
-                thresholds.impostor_boundary, thresholds.accept_threshold,
-                thresholds.reject_threshold, verification.candidate_reference_work_count,
-                verification.background_work_count, verification.background_author_count,
-                len(verification.input_feature_names), len(verification.retained_feature_names),
+                fold.fold_index,
+                fold.query_work,
+                fold.query_author,
+                fold.expected_class.value,
+                verification.decision.value,
+                fold.outcome.value,
+                "true" if fold.is_decisive else "false",
+                "true" if fold.is_correct else "false",
+                verification.query_sample_count,
+                verification.query_distance,
+                thresholds.genuine_boundary,
+                thresholds.impostor_boundary,
+                thresholds.accept_threshold,
+                thresholds.reject_threshold,
+                verification.candidate_reference_work_count,
+                verification.background_work_count,
+                verification.background_author_count,
+                len(verification.input_feature_names),
+                len(verification.retained_feature_names),
                 len(verification.dropped_zero_variance_features),
                 fold.corpus_verification.selected_feature_count,
-                audit.selected_mfw_count, audit.selected_character_ngram_count,
-                audit.selected_upos_ngram_count, audit.selected_morphology_count,
-                audit.sha256, nearest.work_id, nearest.author, nearest.distance,
+                audit.selected_mfw_count,
+                audit.selected_character_ngram_count,
+                audit.selected_upos_ngram_count,
+                audit.selected_morphology_count,
+                audit.sha256,
+                nearest.work_id,
+                nearest.author,
+                nearest.distance,
                 nearest.candidate_vs_background_margin,
             )
         )
@@ -147,24 +182,69 @@ def _vocabulary_value(fold) -> dict[str, object]:
         "selected_feature_count": fold.corpus_verification.selected_feature_count,
         "selected_mfw_count": audit.selected_mfw_count,
         "selected_character_ngram_count": audit.selected_character_ngram_count,
+        **(
+            {
+                "selected_content_masked_character_ngram_count": (
+                    audit.selected_content_masked_character_ngram_count
+                )
+            }
+            if audit.content_masked_character_ngrams
+            else {}
+        ),
         "selected_upos_ngram_count": audit.selected_upos_ngram_count,
         "selected_morphology_count": audit.selected_morphology_count,
         "mfw_terms": list(audit.mfw_terms),
         "character_ngrams": [
-            {"mode": term.mode.value, "size": term.size, "value": term.value, "column_name": term.column_name}
+            {
+                "mode": term.mode.value,
+                "size": term.size,
+                "value": term.value,
+                "column_name": term.column_name,
+            }
             for term in audit.character_ngrams
         ],
+        **(
+            {
+                "content_masked_character_ngrams": {
+                    "policy_id": CONTENT_MASK_POLICY_ID,
+                    "terms": [
+                        {
+                            "size": term.size,
+                            "value": term.value,
+                            "column_name": term.column_name,
+                        }
+                        for term in audit.content_masked_character_ngrams
+                    ],
+                }
+            }
+            if audit.content_masked_character_ngrams
+            else {}
+        ),
         "upos_ngrams": [
-            {"size": term.size, "values": list(term.tags), "column_name": term.column_name}
+            {
+                "size": term.size,
+                "values": list(term.tags),
+                "column_name": term.column_name,
+            }
             for term in audit.upos_ngrams
         ],
         "morphology": (
             {
                 "attributes": list(audit.morphology.attributes),
-                "values": [{"attribute": item.attribute, "value": item.value} for item in audit.morphology.values],
-                "bundles": [[{"attribute": item.attribute, "value": item.value} for item in bundle.features] for bundle in audit.morphology.bundles],
+                "values": [
+                    {"attribute": item.attribute, "value": item.value}
+                    for item in audit.morphology.values
+                ],
+                "bundles": [
+                    [
+                        {"attribute": item.attribute, "value": item.value}
+                        for item in bundle.features
+                    ]
+                    for bundle in audit.morphology.bundles
+                ],
             }
-            if audit.morphology is not None else None
+            if audit.morphology is not None
+            else None
         ),
         "sha256": audit.sha256,
     }
@@ -173,7 +253,14 @@ def _vocabulary_value(fold) -> dict[str, object]:
 def write_verification_evaluation_vocabulary_audit(
     result: CorpusVerificationEvaluationResult, *, path: Path
 ) -> None:
-    _atomic_json(path, {"schema_version": 1, "method": "pseudo_unknown_work_verification_evaluation", "folds": [_vocabulary_value(fold) for fold in result.folds]})
+    _atomic_json(
+        path,
+        {
+            "schema_version": 1,
+            "method": "pseudo_unknown_work_verification_evaluation",
+            "folds": [_vocabulary_value(fold) for fold in result.folds],
+        },
+    )
 
 
 def write_verification_evaluation_calibration(
@@ -182,7 +269,17 @@ def write_verification_evaluation_calibration(
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.writer(stream, delimiter="," if output_format == "csv" else "\t")
-        writer.writerow(("fold_index", "query_work", "query_author", "expected_class") + CALIBRATION_COLUMNS)
+        writer.writerow(
+            ("fold_index", "query_work", "query_author", "expected_class")
+            + CALIBRATION_COLUMNS
+        )
         for fold in result.folds:
-            prefix = (fold.fold_index, fold.query_work, fold.query_author, fold.expected_class.value)
-            writer.writerows(prefix + row for row in verification_calibration_rows(fold.verification))
+            prefix = (
+                fold.fold_index,
+                fold.query_work,
+                fold.query_author,
+                fold.expected_class.value,
+            )
+            writer.writerows(
+                prefix + row for row in verification_calibration_rows(fold.verification)
+            )

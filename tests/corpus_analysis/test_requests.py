@@ -84,6 +84,7 @@ def test_command_requests_compose_corpus_without_duplicate_fields() -> None:
         "lexical_diversity",
         "function_words",
         "character_ngrams",
+        "content_masked_character_ngrams",
         "upos_ngrams",
         "morphology",
     }

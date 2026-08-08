@@ -9,6 +9,7 @@ from nlpo_toolkit.stylometry.verification_results import VerificationResult
 
 from ..requests import CorpusPreparationRequest
 from .character_ngrams import CharacterNgramTerm
+from .content_masked_character_ngrams import ContentMaskedCharacterNgramTerm
 from .models import FeatureRequest
 from .morphology import MorphologyVocabulary
 from .upos_ngrams import UposNgramTerm
@@ -55,6 +56,7 @@ class CorpusVerificationVocabularyAudit:
     upos_ngrams: tuple[UposNgramTerm, ...]
     morphology: MorphologyVocabulary | None = None
     fit_scope: str = "reference_works_only"
+    content_masked_character_ngrams: tuple[ContentMaskedCharacterNgramTerm, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.query_work.strip():
@@ -64,6 +66,11 @@ class CorpusVerificationVocabularyAudit:
         object.__setattr__(self, "mfw_terms", tuple(self.mfw_terms))
         object.__setattr__(self, "character_ngrams", tuple(self.character_ngrams))
         object.__setattr__(self, "upos_ngrams", tuple(self.upos_ngrams))
+        object.__setattr__(
+            self,
+            "content_masked_character_ngrams",
+            tuple(self.content_masked_character_ngrams),
+        )
 
     @property
     def sha256(self) -> str:
@@ -72,6 +79,7 @@ class CorpusVerificationVocabularyAudit:
             character_ngrams=self.character_ngrams,
             upos_ngrams=self.upos_ngrams,
             morphology=self.morphology,
+            content_masked_character_ngrams=self.content_masked_character_ngrams,
         )
 
     @property
@@ -87,9 +95,15 @@ class CorpusVerificationVocabularyAudit:
         return len(self.upos_ngrams)
 
     @property
+    def selected_content_masked_character_ngram_count(self) -> int:
+        return len(self.content_masked_character_ngrams)
+
+    @property
     def selected_morphology_count(self) -> int:
-        return 0 if self.morphology is None else len(self.morphology.values) + len(
-            self.morphology.bundles
+        return (
+            0
+            if self.morphology is None
+            else len(self.morphology.values) + len(self.morphology.bundles)
         )
 
 

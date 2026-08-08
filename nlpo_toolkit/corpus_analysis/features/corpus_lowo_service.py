@@ -93,6 +93,9 @@ def execute_corpus_lowo(
             vocabulary.character_ngrams.terms if vocabulary.character_ngrams else (),
             vocabulary.upos_ngrams.terms if vocabulary.upos_ngrams else (),
             vocabulary.morphology,
+            vocabulary.content_masked_character_ngrams.terms
+            if vocabulary.content_masked_character_ngrams
+            else (),
         )
         folds.append(
             CorpusLowoFoldResult(evaluation, len(labeled.feature_names), audit)

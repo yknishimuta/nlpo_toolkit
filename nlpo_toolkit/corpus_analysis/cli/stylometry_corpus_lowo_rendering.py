@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TextIO
 
 from ..features.corpus_lowo_models import CorpusLowoResult
+from ..features.content_masking import CONTENT_MASK_POLICY_ID
 
 
 FOLD_COLUMNS = (
@@ -94,6 +95,23 @@ def write_vocabulary_audit(result: CorpusLowoResult, *, path: Path) -> None:
                         }
                         for term in item.vocabulary.character_ngrams
                     ],
+                    **(
+                        {
+                            "content_masked_character_ngrams": {
+                                "policy_id": CONTENT_MASK_POLICY_ID,
+                                "terms": [
+                                    {
+                                        "size": term.size,
+                                        "value": term.value,
+                                        "column_name": term.column_name,
+                                    }
+                                    for term in item.vocabulary.content_masked_character_ngrams
+                                ],
+                            }
+                        }
+                        if item.vocabulary.content_masked_character_ngrams
+                        else {}
+                    ),
                     "upos_ngrams": [
                         {
                             "size": term.size,

@@ -71,7 +71,9 @@ def evaluate_prepared_corpus_verification(
     if not query_corpora:
         raise FeatureError(f"query work not found in prepared corpora: {query_work!r}")
     if not reference_corpora:
-        raise FeatureError("verification reference corpus is empty after excluding query work")
+        raise FeatureError(
+            "verification reference corpus is empty after excluding query work"
+        )
     vocabulary = fit_feature_vocabulary(reference_corpora, options=prepared.options)
     rows = build_feature_rows(
         prepared.analyzed,
@@ -92,5 +94,10 @@ def evaluate_prepared_corpus_verification(
         vocabulary.character_ngrams.terms if vocabulary.character_ngrams else (),
         vocabulary.upos_ngrams.terms if vocabulary.upos_ngrams else (),
         vocabulary.morphology,
+        content_masked_character_ngrams=(
+            vocabulary.content_masked_character_ngrams.terms
+            if vocabulary.content_masked_character_ngrams
+            else ()
+        ),
     )
     return CorpusVerificationResult(verification, len(labeled.feature_names), audit)

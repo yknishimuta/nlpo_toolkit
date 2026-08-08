@@ -11,6 +11,7 @@ from nlpo_toolkit.stylometry.models import InputFormat
 
 from ..requests import CorpusPreparationRequest
 from .character_ngrams import CharacterNgramTerm
+from .content_masked_character_ngrams import ContentMaskedCharacterNgramTerm
 from .models import FeatureRequest
 from .upos_ngrams import UposNgramTerm
 from .morphology import MorphologyVocabulary
@@ -50,11 +51,17 @@ class FoldVocabularyAudit:
     character_ngrams: tuple[CharacterNgramTerm, ...]
     upos_ngrams: tuple[UposNgramTerm, ...]
     morphology: MorphologyVocabulary | None = None
+    content_masked_character_ngrams: tuple[ContentMaskedCharacterNgramTerm, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "mfw_terms", tuple(self.mfw_terms))
         object.__setattr__(self, "character_ngrams", tuple(self.character_ngrams))
         object.__setattr__(self, "upos_ngrams", tuple(self.upos_ngrams))
+        object.__setattr__(
+            self,
+            "content_masked_character_ngrams",
+            tuple(self.content_masked_character_ngrams),
+        )
 
     @property
     def sha256(self) -> str:
@@ -63,6 +70,7 @@ class FoldVocabularyAudit:
             character_ngrams=self.character_ngrams,
             upos_ngrams=self.upos_ngrams,
             morphology=self.morphology,
+            content_masked_character_ngrams=self.content_masked_character_ngrams,
         )
 
 
@@ -83,6 +91,10 @@ class CorpusLowoFoldResult:
     @property
     def selected_upos_ngram_count(self) -> int:
         return len(self.vocabulary.upos_ngrams)
+
+    @property
+    def selected_content_masked_character_ngram_count(self) -> int:
+        return len(self.vocabulary.content_masked_character_ngrams)
 
     @property
     def selected_morphology_count(self) -> int:

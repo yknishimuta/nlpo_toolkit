@@ -12,9 +12,15 @@ from nlpo_toolkit.stylometry.evaluation_models import (
 
 from ...nlp.roman_numerals import RomanExceptionsError
 from ..config_references import ConfigReferenceError
-from ..execution_session import prepare_analysis_corpus_session, start_nlp_execution_session
+from ..execution_session import (
+    prepare_analysis_corpus_session,
+    start_nlp_execution_session,
+)
 from ..ports import FeatureCommandDependencies
-from .engine import analyze_feature_corpora
+from .engine import (
+    analyze_feature_corpora,
+    validate_content_masked_character_ngram_sources,
+)
 from .errors import FeatureError
 from .function_words import build_function_word_columns
 from .models import (
@@ -62,11 +68,17 @@ def validate_corpus_authorship_metadata(
     }
     label_set = set(labels)
     missing = tuple(label for label in labels if label not in assignments)
-    unknown = tuple(identifier for identifier in assignments if identifier not in label_set)
+    unknown = tuple(
+        identifier for identifier in assignments if identifier not in label_set
+    )
     if missing:
-        raise FeatureError(f"prepared corpus has no authorship metadata: {missing[0]!r}")
+        raise FeatureError(
+            f"prepared corpus has no authorship metadata: {missing[0]!r}"
+        )
     if unknown:
-        raise FeatureError(f"authorship metadata contains unknown group: {unknown[0]!r}")
+        raise FeatureError(
+            f"authorship metadata contains unknown group: {unknown[0]!r}"
+        )
     return freeze_mapping(assignments)
 
 
@@ -100,6 +112,10 @@ def prepare_corpus_stylometry_data(
                     "character n-gram features require one source file per prepared corpus; "
                     "use --group-by-file or grouping.mode: per_file"
                 )
+    validate_content_masked_character_ngram_sources(
+        session.corpora,
+        enabled=features.content_masked_character_ngrams is not None,
+    )
     nlp_session = start_nlp_execution_session(session, dependencies=dependencies.nlp)
     config = session.plan.definition.config
     options = FeatureOptions(
@@ -116,6 +132,7 @@ def prepare_corpus_stylometry_data(
         lexical_diversity=features.lexical_diversity,
         function_words=function_words,
         character_ngrams=features.character_ngrams,
+        content_masked_character_ngrams=features.content_masked_character_ngrams,
         upos_ngrams=features.upos_ngrams,
         morphology=features.morphology,
     )
@@ -145,7 +162,9 @@ def build_labeled_feature_dataset(
         try:
             author, work = assignments[group]
         except KeyError as exc:
-            raise FeatureError(f"feature row has no authorship metadata: {group!r}") from exc
+            raise FeatureError(
+                f"feature row has no authorship metadata: {group!r}"
+            ) from exc
         identifier = str(row.values.get("sample_id", group))
         observations.append(
             LabeledFeatureObservation(

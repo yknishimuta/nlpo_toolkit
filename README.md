@@ -806,6 +806,49 @@ error; token joining is
 not used as a fallback. Character features are independent of lemma choice,
 UPOS, minimum token length, Roman filtering, function words, and MFW.
 
+### Content-masked character n-grams
+
+Content-masked character n-grams are a separate, UPOS-dependent family that
+weakens topic and genre vocabulary signals. They mask `NOUN`, `PROPN`, `VERB`,
+`ADJ`, `ADV`, `NUM`, and `X`, while retaining the surface forms of `AUX`,
+`PRON`, `ADP`, `CCONJ`, `SCONJ`, `PART`, and `DET`; punctuation is retained.
+A word-like token with missing UPOS is masked on the safe side, while a
+punctuation-only missing-UPOS token is retained.
+
+Each Unicode letter (`L*`), combining mark (`M*`), and number (`N*`) in a
+masked token's exact prepared-text span becomes one `*`. Internal punctuation,
+whitespace, token boundaries, and code-point length remain visible. The result
+then reuses regular `full` mode lowercasing and whitespace collapse. Lemmas are
+never used. Mask decisions use raw NLP records, independently of lexical
+Features filters, `--field`, function-word settings, and MFW.
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --group-by-file \
+  --window-tokens 1000 \
+  --content-masked-char-ngram-size 3 \
+  --content-masked-char-ngram-size 4 \
+  --content-masked-char-ngram-size 5 \
+  --content-masked-char-ngram-top 300 \
+  --out output/features_masked.csv
+```
+
+The top limit applies independently to each size. Columns use prefixes such as
+`char_masked3_`, selectable by table-input Stylometry as ordinary numeric
+features. Exact token offsets are required. Fixed windows mask only their
+exact slice, converting source-absolute offsets to sample-relative offsets;
+vocabulary selection still uses unsampled corpora. Ordinary Features fits from
+all inputs, corpus-input LOWO fits from training works only, and
+`verify-corpus` excludes the query. Table-input workflows cannot undo upstream
+feature-selection leakage already present in a table.
+
+This is useful for cross-genre questions such as *De dialectica*, but does not
+completely remove genre effects. UPOS tagging errors directly become masking
+errors. Attached Latin `-que`, `-ve`, and `-ne` are not split; if the backend
+returns the whole form as one content token, its whole span is masked.
+
 Full columns retain `char<size>_...` for backward compatibility. Other modes
 use `char_nopunct<size>_...`, `char_letters_spaces<size>_...`, and
 `char_letters_only<size>_...`. ASCII letters and digits remain literal, spaces
