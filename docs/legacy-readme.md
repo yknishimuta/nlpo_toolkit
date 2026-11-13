@@ -1,0 +1,1781 @@
+# nlpo_toolkit
+
+`nlpo_toolkit` is the canonical Python package for Latin corpus cleaning,
+NLP-backed vocabulary counting, and reproducible frequency-table workflows.
+
+Corpus analysis functionality lives in `nlpo_toolkit.corpus_analysis` and is
+exposed through the `nlpo` command.
+
+CLI subcommands are implemented under `nlpo_toolkit.corpus_analysis.cli`.
+Each command module defines its parser registration and execution handler.
+
+## What Is Included
+
+- Latin corpus cleaning utilities under `nlpo_toolkit.latin.cleaners`
+- Low-level chunking, normalization, Roman-numeral policy, and vocabulary
+  loading utilities under `nlpo_toolkit.nlp`; backend construction lives under
+  `nlpo_toolkit.backends`
+- Vocabulary counting CLI:
+  - `nlpo count`
+- Config-driven grouping, preprocessing, normalization, dictionary checks,
+  reference-tag handling, trace output, and run metadata
+- Docker setup with cached Stanza resources
+
+## Install
+
+Normal installation:
+
+```bash
+python -m pip install .
+```
+
+Editable development installation:
+
+```bash
+python -m pip install -e ".[dev]"
+nlpo --help
+```
+
+Runtime and development dependencies are declared in `pyproject.toml`.
+
+Dependency boundaries for corpus analysis are explicit: `ports.py` defines the
+interfaces and frozen containers required by application services, while
+`composition.py` selects production implementations. Application services import
+only ports, CLI/bootstrap code creates production dependencies, and unit tests
+normally construct port containers directly.
+
+Backend-independent NLP models, protocols, backend metadata, and backend build
+specifications are owned by `nlpo_toolkit.nlp.contracts`. Backend modules
+implement those contracts without importing `corpus_analysis`; application code
+depends on the contracts and its ports. `corpus_analysis/composition.py` is the
+production boundary that converts the Pydantic `NLPConfig` into an
+`NLPBackendSpec` and assembles the selected backend.
+
+Stanza model download is required for real NLP runs unless you use Docker:
+
+```bash
+python -c "import stanza; stanza.download('la', package='perseus')"
+```
+
+## Count CLI
+
+Use `nlpo count` when you want the full vocabulary-counting workflow:
+optional cleaning, input grouping, NLP processing, frequency CSV output,
+dictionary checks, tracing, and run metadata.
+
+Run with an explicit project root and config:
+
+```bash
+nlpo count --project-root . --config config/groups.config.yml
+```
+
+To write one frequency table per input file, add `--group-by-file`:
+
+```bash
+nlpo count \
+  --project-root . \
+  --config config/groups.config.yml \
+  --group-by-file
+```
+
+`--group-by-file` and `--auto-single-cleaned` are mutually exclusive.
+
+Internally, Count, Features, config-input N-gram, and dry-run share the frozen
+`CorpusPreparationRequest` DTO. Command requests compose this DTO, and its
+single `grouping_override` value represents CLI grouping overrides. Config-input
+N-grams always use tokens; dry-run is an independent use case rather than a
+Count request mode.
+
+Corpus preparation is split across a one-way `planning` package. Immutable
+models live in `planning.models`; `planning.build` validates configuration,
+paths, Cleaner configuration, and referenced files and returns a static plan
+without running the Cleaner or resolving corpus globs. Pure Count structure and
+resolved-group checks live in `planning.validate`.
+`planning.resolve.inspect_analysis_plan()` resolves currently existing inputs
+for dry-run and never runs the Cleaner. Count, Features, and config-input N-gram
+use `planning.resolve.prepare_analysis_plan()`, which runs the Cleaner first and
+then resolves inputs from the resulting filesystem state. Finally,
+`prepare_corpora()` reads those resolved inputs and applies normalization and
+reference-tag removal. `ResolvedAnalysisPlan` contains its static
+`AnalysisPlan` as `definition`; it does not duplicate static values through
+proxy fields or properties. The dependency direction is models to validation
+to build or resolve, with resolve alone calling preprocessing.
+
+Cleaner execution is a typed application-service call to
+`latin.cleaners.service.execute_cleaner()`, not an invocation of the standalone
+Cleaner CLI. The `CleanerConfigInspection` produced during corpus planning is
+passed directly to execution, so Count, Features, and config-input N-gram do not
+reload the Cleaner config. The Cleaner program is built once per run. The CLI
+adapter only converts its config argument to a request, presents the typed
+result, and maps domain errors to a process exit code. For directory inputs, a
+configured `output_filename_template` is always used exactly as configured.
+
+Execution commands compose these stages through two typed sessions.
+`CorpusExecutionSession` owns the resolved plan and prepared corpora shared by
+Count, Features, and config-input N-gram. `NLPExecutionSession` adds the built
+backend, extraction policy, and Roman-numeral exceptions shared by Count and
+Features. Both pass each prepared corpus string unchanged to the common chunked
+analysis-record extraction path. Sentence splitting is the responsibility of the
+selected main NLP backend and that shared extraction path; Count has no dedicated
+pre-tokenization backend. Config-input N-gram uses only the corpus session and
+starts no NLP backend.
+
+Count application services depend only on typed publication ports and frozen
+publication requests. Production filesystem adapters implement the group,
+partition, comparison, run-report, token-artifact, and diagnostic-trace
+publication boundaries by delegating to the concrete serializers and writers.
+The production composition root injects all of these publication dependencies;
+application orchestration neither selects concrete writers nor serializes CSV,
+JSON, TSV, or text output.
+
+Count also obtains NLP analysis records only through the typed
+`AnalysisRecordProvider` port. The production composition root injects the
+cached provider, which owns both cache-enabled and cache-disabled extraction.
+Cache fingerprints and keys, repositories, locking, codecs, hit/miss checks,
+and atomic cache writes remain inside the Analysis Cache infrastructure; Count
+application orchestration does not construct or import them.
+
+Features keeps application orchestration separate from calculation:
+`features.service` connects the execution sessions to `features.engine`, while
+the engine extracts analysis records once per prepared corpus and applies the
+eligibility filter once. Lexical, UPOS, and MFW modules then calculate their
+columns from that shared filtered record population.
+
+The canonical token-analysis path is
+`iter_nlp_analysis_records_from_text()` followed by
+`evaluate_analysis_record()`. Reference tags are removed and counted during
+corpus preparation before prepared text reaches NLP; token evaluation does not
+repeat reference-tag detection.
+
+Group analysis data has one canonical store: the immutable
+`AnalysisResults.groups` mapping. Generated-file inventory is separate and has
+one canonical store of its own: Count builds an immutable `ArtifactPlan` after
+corpus preparation has established the final group labels and before starting
+the NLP backend or creating the output directory. The plan contains the typed,
+absolute paths for frequency, dictcheck, reference-tag, diagnostic trace, token
+artifact and metadata, partition validation, group comparison, summary, and run
+metadata outputs. Every planned path is checked together for collisions before
+any output is written.
+
+Count postprocessing applies lemma normalization and dictionary classification
+to immutable count mappings and returns typed results. The lemma-normalization
+TSV loader is an infrastructure boundary owned by the postprocessing package.
+Artifact writers
+receive a `PlannedArtifact`, validate its `ArtifactKind`, and publish UTF-8
+output through a same-directory temporary file; writers never reconstruct
+filenames. Reporting is split into typed report models, a pure summary renderer,
+a pure run-metadata builder/serializer, and a publication service. The service
+publishes `summary.txt` before `run_meta.json`, and metadata
+`generated_outputs` comes directly from `ArtifactPlan`, including
+`run_meta.json` itself. Analysis, partition, and comparison results do not carry
+generated-path inventories; `CountRunResult` exposes only read-only views derived
+from its single `artifact_plan` field.
+
+Archive request/result contracts are owned by `corpus_analysis.archive`; Count
+and archive adapters depend on that package-level contract rather than a generic
+top-level types module.
+
+Count execution state is owned by `count_context`, and the final Count result is
+owned by `count_result`. Partition-validation and configured-comparison run-level
+results live in their own application-result modules, independently of the
+services that construct them. Archive consumes `CountRunResult` but does not own
+or redefine it.
+
+To validate the config without running preprocessing or NLP, use `--dry-run`:
+
+```bash
+nlpo count \
+  --dry-run \
+  --project-root . \
+  --config config/groups.config.yml
+```
+
+Example output:
+
+```text
+[OK] config loaded
+[OK] preprocess cleaner config found: config/cleaner.yml
+[OK] input files: 3
+[OK] cleaned output dir: cleaned
+[OK] group text matched files: 3
+[OK] dictcheck wordlist found
+[OK] ref_tags patterns found
+[OK] output dir: output
+```
+
+If `--config` is omitted, the CLI uses:
+
+```text
+<project-root>/config/groups.config.yml
+```
+
+Relative paths in the YAML config are resolved from `--project-root`, not from
+the location of Python source files.
+
+The groups configuration is validated by Pydantic v2. Unknown keys are errors
+at every level, and YAML scalar values are not implicitly coerced (for example,
+`enabled: "true"` is not accepted as a boolean). File paths remain relative to
+the project root, and referenced-file existence is checked during planning.
+
+All production YAML configuration files use the same strict loader. Files must
+be UTF-8 and their top level must be a mapping whose keys are strings. Duplicate
+mapping keys are errors at every depth, including mappings nested in sequences;
+a later value never silently overwrites an earlier value. Dry-run and normal
+execution use the same single configuration read and therefore accept or reject
+the same YAML document.
+
+### Frequency Output Naming
+
+Frequency outputs are named `frequency_<label>.csv`. Dictionary-check outputs
+are named `frequency_<label>.known.csv` and
+`frequency_<label>.unknown.csv`.
+
+## Cache Management
+
+Use `analysis_cache` to cache NLP token analysis records. The cache stores
+ordered, filter-before NLP records, not final frequency Counters. This lets runs
+reuse NLP output when changing `analysis_unit`, UPOS targets, minimum length,
+Roman numeral filtering, diagnostic trace, token artifact output, dictcheck, or
+archive settings. The cache is invalidated when the prepared text, backend,
+language, model/package, chunking strategy, schema version, or analysis behavior
+version changes.
+
+```yaml
+analysis_cache:
+  enabled: true
+  dir: .analysis_cache
+  lock_timeout_sec: 300.0
+```
+
+The cache is an internal optimization and is not copied into run archives or
+listed in `generated_outputs`. Use token artifacts for stable research outputs.
+Internally, the production `AnalysisRecordProvider` coordinates cache keys and
+paths, fingerprinting, record codecs, writers, repositories, and hit/miss
+handling. It returns a context-managed record stream, so locks are released and
+interrupted consumers cannot publish incomplete cache objects. Cache statistics
+snapshots and their application-side collector are independent of the
+filesystem cache package; reporting consumes only those typed result models.
+
+Use `nlpo cache clear` to remove the configured analysis cache for a project
+instead of running `rm -rf .analysis_cache` manually.
+
+```bash
+nlpo cache clear
+```
+
+By default, the current directory is treated as the project root. If
+`config/groups.config.yml` exists, the command reads `analysis_cache.dir` from
+that config and clears that directory. If no cache directory is configured, it
+clears `.analysis_cache` under the project root.
+
+Use an explicit project root:
+
+```bash
+nlpo cache clear --project-root /path/to/project
+```
+
+Use an explicit config file:
+
+```bash
+nlpo cache clear --project-root . --config config/groups.config.yml
+```
+
+The resolved cache directory must stay inside the project root. The command
+refuses to delete paths such as `../cache`, absolute paths outside the project,
+or the project root itself.
+
+### Minimal Workflow
+
+1. Put UTF-8 text files under `input/`.
+
+```text
+input/
+  text1.txt
+  text2.txt
+```
+
+2. Create `config/groups.config.yml`.
+
+```yaml
+groups:
+  text:
+    files:
+      - input/*.txt
+
+out_dir: output
+nlp:
+  backend: stanza
+  language: la
+  stanza_package: perseus
+  cpu_only: true
+analysis_unit: lemma
+```
+
+3. Run the counter.
+
+```bash
+nlpo count --project-root . --config config/groups.config.yml
+```
+
+4. Read the generated files.
+
+```text
+output/
+  frequency_text.csv
+  summary.txt
+  run_meta.json
+```
+
+### One Output Per Input File
+
+Use this when you do not want multiple input files combined into one frequency
+table.
+
+CLI option:
+
+```bash
+nlpo count \
+  --project-root . \
+  --config config/groups.config.yml \
+  --group-by-file
+```
+
+YAML option:
+
+```yaml
+grouping:
+  mode: per_file
+
+groups:
+  all:
+    files:
+      - input/*.txt
+
+out_dir: output
+nlp:
+  backend: stanza
+  language: la
+  stanza_package: perseus
+  cpu_only: true
+analysis_unit: lemma
+```
+
+Each expanded input file is counted independently:
+
+```text
+input/
+  virgil-aeneis.txt
+  file2.txt
+  file3.txt
+
+output/
+  frequency_virgil_aeneis.csv
+  frequency_file2.csv
+  frequency_file3.csv
+  summary.txt
+  run_meta.json
+```
+
+The output label is derived from the input file stem. Non-alphanumeric
+characters are converted to underscores. If two files have the same stem, a
+numeric suffix is added to keep output names unique.
+
+### Group Partition Validation
+
+Use `validations.partitions` to verify additive consistency between one
+configured whole group and two or more configured part groups. The check compares
+the final frequency `Counter` used for the base `frequency_<group>.csv`
+files, after analysis unit selection, POS/token filters, Roman numeral filtering,
+text normalization, reference tag removal, and `dictcheck.lemma_normalize`.
+
+```yaml
+groups:
+  full:
+    files:
+      - input/full.txt
+  part_a:
+    files:
+      - input/part_a.txt
+  part_b:
+    files:
+      - input/part_b.txt
+
+validations:
+  partitions:
+    - name: full_split
+      whole: full
+      parts:
+        - part_a
+        - part_b
+      on_mismatch: error   # "warn" or "error"; default: "warn"
+      report: mismatches   # "mismatches" or "all"; default: "mismatches"
+```
+
+Each partition writes `output/partition_validation_<name>.csv`, and all
+partition summaries are written to `output/partition_validation.json`,
+`summary.txt`, and `run_meta.json`. `on_mismatch: warn` reports a mismatch but
+keeps exit code `0`; `on_mismatch: error` writes all validation outputs and then
+returns exit code `1`.
+
+`target_tokens` means the number of tokens accepted into the final frequency
+table. It is not the raw Stanza token count.
+
+The `whole` and `parts` groups are currently sent to Stanza independently, so a
+perfect textual split can still produce different lemma or POS decisions near
+section boundaries or chunk boundaries. This feature verifies additive
+consistency of the final frequency Counters; it does not prove that the source
+text was perfectly split as strings. For strict checks, use the same
+preprocessing settings for all groups and split as much as possible at sentence
+or clause boundaries.
+
+Partition validation cannot be combined with `grouping.mode: per_file` or
+`--group-by-file`, because configured group names no longer match output labels.
+
+### Group Comparison / Keyness Analysis
+
+Use top-level `comparisons` to compare the vocabulary distribution of any two
+configured groups. This is separate from partition validation: the two groups do
+not need to be whole/part relations, and the comparison uses the same final
+frequency `Counter` that is written to `frequency_<group>.csv`.
+
+```yaml
+groups:
+  corpus_a:
+    files:
+      - input/corpus_a.txt
+
+  corpus_b:
+    files:
+      - input/corpus_b.txt
+
+comparisons:
+  - name: corpus_a_vs_corpus_b
+    group_a: corpus_a
+    group_b: corpus_b
+    scale: 10000
+    zero_correction: 0.5
+    min_total_count: 2
+```
+
+Each comparison writes `output/group_comparison_<name>.csv`, and the overview is
+written to `output/group_comparisons.json`, `summary.txt`, and `run_meta.json`.
+The feature works with both `analysis_unit: lemma` and `analysis_unit: surface`.
+CSV rows use generic columns such as `item`, `group_a_count`, and
+`group_b_count`; actual group names are stored in the `group_a` and `group_b`
+columns.
+
+Configured group comparison and `nlpo compare` use the same comparison math
+engine, but keep separate inputs and outputs. Group comparison reads in-memory
+Counters from the current run and writes fixed keyness columns including
+`log_likelihood`; `nlpo compare` reads existing CSV files and keeps its dynamic
+CSV-comparison columns.
+
+Rates are normalized frequencies:
+
+```text
+group_a_rate = group_a_count / sum(group_a_counter.values()) * scale
+group_b_rate = group_b_count / sum(group_b_counter.values()) * scale
+```
+
+The denominator is the token total in the final Counter, after analysis-unit
+selection, filters, reference tag handling, normalization, exclusions, and
+dictionary normalization. It is not the raw whitespace token count or the raw
+NLP token count.
+
+`log_ratio` is a base-2 effect size. Positive values indicate that the item is
+relatively more frequent in `group_a`; negative values indicate `group_b`.
+Reversing `group_a` and `group_b` reverses `log_ratio` and `direction`.
+Zero-frequency correction is used only for `log_ratio`, not for rates or log
+likelihood.
+
+`log_likelihood` is the G-squared statistic for the 2x2 table of target item vs.
+other items. It measures the statistical strength of a frequency difference and
+does not carry direction; use the `direction` column for direction. Reversing the
+groups leaves `log_likelihood` unchanged. High-frequency items can have large
+log likelihood even when the ratio difference is small, while rare items can
+have large log ratio but small log likelihood.
+
+Initial support does not implement p-values, q-values, or multiple-comparison
+correction.
+
+Group comparison cannot be combined with `grouping.mode: per_file` or
+`--group-by-file`.
+
+## Concordance CLI
+
+Use `nlpo concordance` to build KWIC/concordance output from a complete token
+artifact generated by `nlpo count`.
+
+```bash
+nlpo concordance \
+  --tokens output/tokens.tsv \
+  --keys arma vir \
+  --field lemma \
+  --window 5
+```
+
+Search by surface token instead:
+
+```bash
+nlpo concordance \
+  --tokens output/tokens.tsv \
+  --keys arma virumque \
+  --field token \
+  --window 3
+```
+
+The default output format is TSV on standard output. Use `--format csv` and
+`--out` to write a CSV file:
+
+```bash
+nlpo concordance \
+  --tokens output/tokens.tsv \
+  --keys vir \
+  --field lemma \
+  --format csv \
+  --out output/concordance_vir.csv
+```
+
+For reusable analysis data, enable the formal token artifact:
+
+```yaml
+artifacts:
+  tokens:
+    enabled: true
+    path: output/tokens.tsv
+```
+
+Run `nlpo count --project-root . --config config/groups.config.yml`
+to create the artifact. It records all NLP tokens with schema metadata in
+`output/tokens.meta.json`. Concordance matches included tokens; excluded tokens
+remain available in the surrounding context. Context is built only from formal
+token records and never by re-tokenizing the sentence metadata string. File,
+group, and sentence metadata are included in the concordance output when present.
+
+Internally, the version 1 token-artifact protocol is split into schema, row
+codec, writer, reader, integrity, and full-validation modules. N-gram and
+Concordance pass those typed records through the same token sequence collection.
+Its canonical `TokenSequenceId` boundary consists of group, source file, section,
+chunk, and sentence; tokens within each sequence are ordered by token index with
+global token index as the deterministic tie-breaker. Metadata JSON is
+strictly validated: strings are never coerced to booleans or integers, unknown
+keys are rejected, and row, included/excluded, byte-size, and SHA-256 values
+must agree with the TSV. The writer uses unique temporary files and publishes
+the TSV before publishing metadata as the final commit marker. Concordance and
+N-gram share the same reader. An artifact copied into a run archive remains
+readable because validation does not require its current path to equal the
+informational `artifact_path` stored when it was created.
+
+## Compare CLI
+
+Both configured group comparisons and `nlpo compare` use the same pure
+`nlpo_toolkit.comparison.engine`. `comparison.models` owns the concrete
+`FrequencyTable` engine input, and the engine compares that model without
+depending on filesystems or Pydantic configuration. `comparison.config` owns
+configured-comparison settings, while `comparison.results` owns concrete,
+non-generic engine and application results. Configured results hold a concrete
+`ComparisonSpec`; configured and CSV comparison services share the same table
+and result models without generic table protocols or type ignores. In-memory
+configured Counters and frequency CSV files enter through separate adapters in
+`comparison.services.configured` and `comparison.services.csv`.
+
+Configured comparisons retain zero-only correction and scale 10000. CSV
+comparisons retain additive smoothing and scale 1. CSV/JSON serialization and
+dynamic CLI columns are rendered outside the comparison package in Corpus
+analysis artifact and CLI boundaries. The comparison package does not know
+ArtifactPlan, output paths, or output filename conventions.
+
+Across the analysis pipeline, domain and application layers retain concrete
+dataclasses, Pydantic models, enums, and typed rows. Recursive JSON/YAML values
+and scalar CSV rows are introduced only at parsing or serialization boundaries
+through `nlpo_toolkit.serialization.types`. Token artifact metadata, analysis
+cache metadata and fingerprints, archive manifests, and run metadata remain
+strict typed models until their final serializer runs. Paths, datetimes, and
+enums are not converted to strings prematurely.
+
+Raw JSON, YAML, and third-party adapter values enter as `object` and are
+validated at the same boundary before typed values are constructed. Malformed
+Transformers token-classification output is rejected instead of silently
+coerced. Application results do not use `Any` or untyped
+`Mapping[str, object]` payloads.
+
+Use `nlpo compare` to compare existing frequency CSV files generated by
+`nlpo count`. This command reads CSV files only; it does not rerun NLP.
+
+Two-input comparison:
+
+```bash
+nlpo compare \
+  --inputs \
+    output/frequency_virgil_aeneis.csv \
+    output/frequency_virgil_georgica.csv \
+  --labels aeneis georgica \
+  --min-total-count 3 \
+  --top 100 \
+  --out output/compare_aeneis_georgica.csv
+```
+
+Run archive comparison:
+
+```bash
+nlpo compare \
+  --inputs \
+    runs/aeneis/outputs/frequency_text.csv \
+    runs/cena/outputs/frequency_text.csv \
+  --labels aeneis cena \
+  --min-total-count 3 \
+  --out output/compare_aeneis_cena.csv
+```
+
+`log-ratio` is `log2(relative_a / relative_b)` with additive smoothing, so
+positive values are more characteristic of the first input and negative values
+are more characteristic of the second input. This smoothing is the existing
+Compare CLI behavior and is distinct from configured group comparison's
+zero-only `zero_correction`. For three or more inputs, the output reports each
+label's count and relative frequency plus the max/min label and
+relative-frequency range.
+
+## Features CLI
+
+Use `nlpo features` to build a feature matrix with one row per configured
+group, or one row per file when `--group-by-file` is used. This is for
+stylistic comparison, clustering, classification, and authorship experiments;
+it is different from `count`, which writes frequency tables for
+vocabulary inspection.
+
+Basic feature matrix:
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --out output/features.csv
+```
+
+Add most-frequent-lemma features:
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --mfw 100 \
+  --field lemma \
+  --out output/features_mfw100.csv
+```
+
+Add length-adjusted lexical-diversity features for both normalized surface
+tokens and lemmas:
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --lexical-diversity \
+  --out output/features_lexdiv.csv
+```
+
+The project defaults are a MATTR/MSTTR window of 100, an MTLD threshold of
+0.72, and an HD-D sample size of 42. They can be set explicitly with
+`--lexdiv-window`, `--mtld-threshold`, and `--hdd-sample-size`; specifying any
+one of these also enables lexical diversity. The output columns are, in order,
+`mattr_token`, `mattr_lemma`, `msttr_token`, `msttr_lemma`, `mtld_token`,
+`mtld_lemma`, `hdd_token`, and `hdd_lemma`. The existing `--field` option only
+selects the MFW field and never suppresses either lexical-diversity variant.
+
+All four metrics use the ordered records that pass the shared Features
+eligibility filter. MATTR averages overlapping moving-window TTRs; MSTTR
+averages non-overlapping full segments and ignores a trailing remainder when a
+full segment exists. MTLD averages forward and reverse factor calculations.
+HD-D uses an effective sample size of the smaller of the configured size and
+the available token count. For sequences shorter than the configured window,
+MATTR and MSTTR fall back to whole-sequence TTR; empty sequences produce `0.0`
+for every metric. With fixed-token sampling, every metric is calculated inside
+each sample and never crosses its boundary. Use identical window, threshold,
+and sample-size settings when comparing texts.
+
+Explicit parameter example:
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --lexdiv-window 100 \
+  --mtld-threshold 0.72 \
+  --hdd-sample-size 42 \
+  --out output/features_lexdiv.csv
+```
+
+Explicit Latin function-word features can be supplied from a research-specific
+UTF-8 list:
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --function-words config/latin_function_words.txt \
+  --out output/features_function_words.csv
+```
+
+The list contains one token per line. Blank lines and lines whose stripped
+content starts with `#` are ignored; duplicate normalized terms, tab-separated
+content, multiword expressions, and lists with no terms are rejected. Terms are
+matched case-insensitively after stripping. `--function-word-field lemma` is
+the default and uses the normal lemma-with-surface-fallback rule;
+`--function-word-field token` selects normalized surface tokens. This setting
+is independent of the MFW-only `--field` option.
+
+Each listed term produces one `fw_<term>` column in list order. Its value is
+the term count divided by all lexical tokens in that feature row, including
+tokens that are not in the list. These explicit columns coexist with the UPOS
+aggregate `function_word_count` and `function_word_ratio`, and with independently
+selected MFW columns. Use the same reviewed list for every text in a comparison;
+the toolkit does not provide or infer an authoritative Latin function-word set.
+
+Only records passing the shared Features eligibility filter participate. Thus
+a one-character term may remain at zero when the configured minimum token
+length excludes it. Matching is exact: attached enclitics such as `-que`,
+`-ve`, and `-ne` are not split or suffix-matched, and multiword expressions are
+not supported. With fixed-token windows, frequencies and denominators are
+calculated independently inside each full, partial, or overlapping sample.
+
+Character n-gram relative-frequency features capture surface spelling,
+affixes, word boundaries, punctuation, and short formulaic fragments. Enable
+one size or repeat the option for several sizes:
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --group-by-file \
+  --char-ngram-size 3 \
+  --char-ngram-mode full \
+  --char-ngram-top 500 \
+  --out output/features_char3.csv
+
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --group-by-file \
+  --char-ngram-size 3 \
+  --char-ngram-size 4 \
+  --char-ngram-size 5 \
+  --char-ngram-mode full \
+  --char-ngram-mode letters-spaces \
+  --char-ngram-mode letters-only \
+  --char-ngram-top 300 \
+  --out output/features_char345.csv
+```
+
+The default mode is `full`, exactly matching the original behavior. Four modes
+are available and may be repeated in CLI order:
+
+- `full` retains spaces, punctuation, digits, symbols, letters, and combining
+  marks after lowercasing and whitespace collapse.
+- `no-punctuation` replaces every Unicode `P*` punctuation character with a
+  space, preserving word separation, digits, and symbols.
+- `letters-spaces` retains Unicode letters and combining marks and preserves
+  boundaries as collapsed spaces.
+- `letters-only` concatenates only Unicode letters and combining marks. Word
+  boundaries disappear, so n-grams intentionally cross former boundaries.
+
+For a punctuation-insensitive table, use `--char-ngram-mode no-punctuation`.
+`--char-ngram-top` is a per-mode, per-size limit. Thus three modes, three sizes,
+and top 300 can add up to 2,700 columns. Each mode selects independently.
+Vocabulary selection pools raw character n-gram counts from each
+unsampled source corpus, orders them by decreasing frequency and then lexical
+tie-break, and only then generates rows. Consequently overlap and window size
+do not change the selected columns, although longer works contribute more raw
+positions to selection.
+
+The input is the prepared text after Cleaner processing, text normalization,
+and reference-tag removal—not reconstructed NLP tokens. Every mode uses
+`str.lower()` without adding Unicode normalization. It does not perform u/v or
+i/j unification, ligature expansion, accent removal, or macron removal. In
+default `full` mode, Unicode whitespace runs collapse to one ASCII space and
+outer whitespace is stripped while all non-whitespace characters remain;
+n-grams may cross word and sentence boundaries but never a Feature-unit or
+source-file boundary. Character features require exactly one source file per
+prepared corpus, so use per-file grouping.
+
+Each value is the occurrence count divided by all possible positions of that
+size in the row text. Fixed-token rows use the exact prepared-text slice from
+the first lexical token start through the final lexical token end, retaining
+intervening whitespace, punctuation, excluded tokens, and line breaks. This
+raw span is sliced before mode normalization. Missing exact offsets are an
+error; token joining is
+not used as a fallback. Character features are independent of lemma choice,
+UPOS, minimum token length, Roman filtering, function words, and MFW.
+
+### Content-masked character n-grams
+
+Content-masked character n-grams are a separate, UPOS-dependent family that
+weakens topic and genre vocabulary signals. They mask `NOUN`, `PROPN`, `VERB`,
+`ADJ`, `ADV`, `NUM`, and `X`, while retaining the surface forms of `AUX`,
+`PRON`, `ADP`, `CCONJ`, `SCONJ`, `PART`, and `DET`; punctuation is retained.
+A word-like token with missing UPOS is masked on the safe side, while a
+punctuation-only missing-UPOS token is retained.
+
+Each Unicode letter (`L*`), combining mark (`M*`), and number (`N*`) in a
+masked token's exact prepared-text span becomes one `*`. Internal punctuation,
+whitespace, token boundaries, and code-point length remain visible. The result
+then reuses regular `full` mode lowercasing and whitespace collapse. Lemmas are
+never used. Mask decisions use raw NLP records, independently of lexical
+Features filters, `--field`, function-word settings, and MFW.
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --group-by-file \
+  --window-tokens 1000 \
+  --content-masked-char-ngram-size 3 \
+  --content-masked-char-ngram-size 4 \
+  --content-masked-char-ngram-size 5 \
+  --content-masked-char-ngram-top 300 \
+  --out output/features_masked.csv
+```
+
+The top limit applies independently to each size. Columns use prefixes such as
+`char_masked3_`, selectable by table-input Stylometry as ordinary numeric
+features. Exact token offsets are required. Fixed windows mask only their
+exact slice, converting source-absolute offsets to sample-relative offsets;
+vocabulary selection still uses unsampled corpora. Ordinary Features fits from
+all inputs, corpus-input LOWO fits from training works only, and
+`verify-corpus` excludes the query. Table-input workflows cannot undo upstream
+feature-selection leakage already present in a table.
+
+This is useful for cross-genre questions such as *De dialectica*, but does not
+completely remove genre effects. UPOS tagging errors directly become masking
+errors. Attached Latin `-que`, `-ve`, and `-ne` are not split; if the backend
+returns the whole form as one content token, its whole span is masked.
+
+Full columns retain `char<size>_...` for backward compatibility. Other modes
+use `char_nopunct<size>_...`, `char_letters_spaces<size>_...`, and
+`char_letters_only<size>_...`. ASCII letters and digits remain literal, spaces
+become `_sp_`, and every other code point becomes six-digit lowercase hex such
+as `_u00002c_`. Thus punctuation and whitespace remain unambiguous. Stylometry
+can select modes independently with prefixes such as `char3_`,
+`char_nopunct3_`, or `char_letters_only3_`; multiple prefixes combine modes.
+
+Punctuation patterns can reflect an editor or edition as well as an author, so
+all compared texts should use the same edition, cleaning, and normalization.
+The automatically selected vocabulary also creates upstream leakage when a
+Features table is later used for LOWO: held-out works may influence which
+character columns were selected. LOWO still prevents leakage in z-score fit
+and centroids, but strict evaluation needs a vocabulary fixed externally or
+selected inside each training fold. The corpus-input LOWO workflow performs
+that training-only fit for every requested mode. CSV-input LOWO cannot undo
+upstream feature selection already present in its table.
+
+UPOS n-gram features describe short syntactic tag sequences while preserving
+the existing UPOS unigram counts and ratios. Enable 2-grams alone or repeat the
+option for both supported sizes:
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --group-by-file \
+  --upos-ngram-size 2 \
+  --upos-ngram-top 100 \
+  --out output/features_upos2.csv
+
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --group-by-file \
+  --window-tokens 1000 \
+  --upos-ngram-size 2 \
+  --upos-ngram-size 3 \
+  --upos-ngram-top 100 \
+  --out output/features_windows.csv
+```
+
+`--upos-ngram-top` is applied separately to each size. Vocabulary selection
+pools occurrence counts from every unsampled corpus after the shared Features
+eligibility filter, orders terms by decreasing frequency and then tag-tuple
+lexical order, and fixes the columns before window generation. Longer works
+therefore contribute more positions, while overlap and partial windows do not
+receive additional selection weight.
+
+Tags are stripped and uppercased. Sequences use lexical-record order and never
+cross `(chunk_index, sentence_index)` boundaries. A missing or empty UPOS value
+also breaks the sequence rather than joining its neighbors or creating an
+invented `UNK` tag. Punctuation and all other records excluded by the Features
+filter are absent. No BOS or EOS markers are added.
+
+Each `upos2_...` or `upos3_...` value is its occurrence count divided by all
+valid positions of that size in the row, including positions belonging to
+unselected terms. Fixed windows use only the lexical records inside that
+sample, so neither a sample boundary nor a sentence boundary is crossed.
+These columns are emitted immediately after UPOS unigram features and can be
+selected normally by Stylometry using `--feature-prefix upos2_` or
+`--feature-prefix upos3_`.
+
+All comparison inputs should use the same NLP backend, model, preprocessing,
+and Features filter because tagging errors and model differences directly
+affect these features. As with automatically selected MFW and character
+vocabularies, LOWO cannot undo upstream leakage from selecting UPOS n-gram
+columns over all works. Strict evaluation requires an externally fixed list or
+future training-fold-only vocabulary selection.
+
+One row per input file:
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --group-by-file \
+  --out output/features_by_file.csv
+```
+
+For authorship and clustering experiments, split each file into fixed windows
+of eligible word tokens:
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --group-by-file \
+  --window-tokens 1000 \
+  --mfw 500 \
+  --field lemma \
+  --out output/features_windows.csv
+```
+
+Use `--step-tokens 500` with `--window-tokens 1000` for overlapping windows,
+or add `--include-partial-window` to retain at most one shorter trailing
+window. Window size is measured after the shared Features eligibility filter,
+so punctuation, empty or too-short tokens, and excluded Roman numerals do not
+consume window positions. Windows never cross source-file boundaries; use
+`--group-by-file` or `grouping.mode: per_file` when a configured group resolves
+to multiple files.
+
+Sample rows include `source_file`, a deterministic `sample_id`, a one-based
+`sample_index`, `sample_kind`, and filtered-token offsets.
+`sample_start_token` is inclusive and `sample_end_token` is exclusive. Raw
+`token_count`, sentence count, and character count describe the span between
+the sample's first and last eligible records, including filtered records inside
+that span. Global MFW terms are selected once from each unsampled filtered
+corpus before windows are created, so overlap does not bias the MFW vocabulary.
+Without `--window-tokens`, the existing one-row-per-corpus schema and values are
+unchanged.
+
+Basic features describe both sentence-length and surface-token-length
+distributions. For each distribution the output includes the mean, population
+variance (dividing by `N`), median, and linearly interpolated 25th and 75th
+percentiles. A sentence is identified by both chunk index and sentence index;
+its length is the number of tokens that pass the Features eligibility filter,
+and a raw sentence with no eligible lexical tokens contributes a length of
+zero. Token length is the Python string length of the stripped, lowercased
+surface token, never the lemma. Empty distributions produce `0.0` for every
+statistic. With fixed windows, these values are calculated independently from
+each sample's raw and lexical records, including sentences cut by a window
+boundary.
+
+When using `grouping.mode: auto_single_cleaned` or `--auto-single-cleaned`,
+features uses the same single-cleaned-file safety check as `count`:
+exactly one cleaned `.txt` file must be present, otherwise the command fails.
+
+`nlpo features` uses the same prepared text as `count`: cleaner output
+is resolved first, group globs and `{cleaned_dir}` are expanded, files are
+concatenated, configured text normalization is applied, and reference tags are
+removed before NLP. If `ref_tags.enabled=true`, the pattern file must exist; a
+missing pattern file is a configuration error.
+
+Features and counting use the same chunked NLP analysis-record extraction
+layer. Features retains the complete post-NLP, pre-filter raw record tuple, then
+applies one eligibility filter per corpus to create an immutable lexical record
+tuple. Basic lexical statistics, UPOS statistics, global MFW selection, and
+per-corpus MFW frequencies all consume that same lexical population. The raw
+population remains available for raw token counts, sentence/chunk boundaries,
+and punctuation or sampling spans. Eligibility uses
+the surface token and includes word-token detection, `min_token_length`, and
+the Roman-numeral policy including configured and built-in surface exceptions.
+The MFW `lemma`/`token` field changes only the value selected from eligible
+records, never the eligible record population.
+
+`filters.upos_targets` is intentionally Count-only and is not applied to
+Features: UPOS distribution and content/function ratios require the full
+eligible lexical population. In feature output, `token_count` is the raw NLP
+record count, while `word_token_count` is the count that passed the feature
+eligibility filter. Features do not require token artifacts or imply use of the
+analysis cache.
+
+### Latin morphological features
+
+Features can preserve and summarize the Universal Dependencies `feats`
+reported by Stanza's POS processor. These are UD morphological annotations,
+not treebank-specific XPOS tags or dependency relations.
+
+```bash
+nlpo features \
+  --project-root . \
+  --config config/groups.config.yml \
+  --group-by-file \
+  --window-tokens 1000 \
+  --morphology \
+  --morph-attribute Case \
+  --morph-attribute Number \
+  --morph-attribute Tense \
+  --morph-bundle-top 100 \
+  --out output/features_morphology.csv
+```
+
+For every selected attribute, `morph_coverage_*` is the fraction of eligible
+lexical tokens carrying that annotation. `morph_value_*` divides a value count
+by all eligible lexical tokens, while `morph_conditional_*` divides by tokens
+annotated for that attribute. Values absent from the fitted vocabulary are
+recorded in `morph_other_*` and `morph_other_conditional_*`; missing annotation
+reduces coverage and is not treated as an unknown value.
+
+With `--morph-bundle-top`, a bundle is the canonical combination of the target
+attributes on one token. Bundle vocabulary is selected by pooled occurrence
+frequency, with lexical tie-breaking, and can be sparse. Ordinary Features fits
+the vocabulary on all input corpora. Corpus-input LOWO fits values and bundles
+using training works only, so held-out-only values are represented by `other`.
+Fixed-window output calculates ratios independently inside each sample, while
+vocabulary fitting uses the unsampled lexical records.
+
+Morphology depends directly on the Stanza language package and model. Do not
+mix results from different models or preprocessing settings. Annotation errors
+can appear as apparent author differences, while real morphological variation
+may also reflect genre, verse versus prose, and historical period.
+
+Morphology columns are ordinary numeric Stylometry inputs:
+
+```bash
+nlpo stylometry delta \
+  --features output/features_morphology.csv \
+  --id-column sample_id \
+  --feature-prefix morph_value_ \
+  --out output/morphology_delta.csv
+
+nlpo stylometry evaluate-lowo \
+  --features output/features_morphology.csv \
+  --metadata config/authorship_metadata.csv \
+  --id-column sample_id \
+  --feature-prefix morph_conditional_ \
+  --out output/morphology_lowo.csv \
+  --summary-out output/morphology_lowo.json
+```
+
+## Stylometry / Burrows's Delta
+
+`nlpo stylometry delta` reads an already-published Features CSV or TSV. It does
+not rerun NLP, corpus preparation, Cleaner, or feature calculation. Every input
+row is treated as one stylometric vector, and the feature family is always
+selected explicitly:
+
+```bash
+nlpo stylometry delta \
+  --features output/features.csv \
+  --id-column sample_id \
+  --feature-prefix mfw_ \
+  --out output/burrows_delta.csv
+```
+
+For fixed-token Features output, use the unique `sample_id` rather than a
+repeated group label. Prefixes and explicit columns may be combined, for
+example `--feature-prefix fw_ --feature-prefix mfw_`, or individual columns can
+be supplied repeatedly with `--feature-column`. No numeric columns are selected
+implicitly, so MFW count, function-word list, fixed-window size, and all other
+feature-generation settings should be held constant across an experiment.
+
+The initial CLI fits one z-score model on all input rows and transforms those
+same rows. Each retained feature uses its sample standard deviation with
+denominator `N - 1`; this differs from the population variance used by Features
+descriptive statistics. Burrows's Delta is the mean absolute difference between
+two standardized vectors. A smaller distance indicates greater stylometric
+proximity, but distance alone does not establish authorship or authenticity.
+
+Features with exactly zero sample variance are excluded and reported on stderr;
+the command fails if none remain. Output is a long-form table containing each
+unordered sample pair once as `sample_a`, `sample_b`, and `burrows_delta`, sorted
+by distance. For corpus-based evaluation that also fits automatically selected
+feature vocabularies without the held-out work, use `evaluate-lowo-corpus` as
+described below. The CSV command cannot reconstruct candidates omitted when the
+Features table was originally generated.
+
+### Nearest-neighbor metrics
+
+`stylometry neighbors` ranks every other observation for each query after
+fitting the existing z-score model once on all input observations. Feature
+selection is explicit and uses the same reader as `stylometry delta`:
+
+```bash
+nlpo stylometry neighbors \
+  --features output/features.csv \
+  --id-column sample_id \
+  --feature-prefix mfw_ \
+  --metric burrows_delta \
+  --top 10 \
+  --out output/neighbors.csv
+```
+
+Use `--metric manhattan` for the sum of absolute standardized differences,
+`--metric cosine_delta` for `1 - cosine similarity`, or
+`--metric cosine_similarity` for similarity itself. Burrows's Delta is the
+mean Manhattan difference, while Manhattan is the unscaled sum. Distance
+metrics rank smaller values first; cosine similarity ranks larger values
+first. Cosine metrics fail when either standardized vector has exactly zero
+Euclidean norm rather than inventing a similarity value.
+
+The output is directed: the ranking for A may contain B and the ranking for B
+may independently contain A. Self-neighbors are excluded, and `--top N` is
+applied after metric-aware sorting. Without `--top`, all other observations are
+included. Scores are not rounded before ranking.
+
+Neighbors is exploratory and fits one global model on all input rows. LOWO is
+an evaluation workflow and continues to fit a separate model using training
+works only in every fold. Use identical Features settings, selected columns,
+and fixed-window sizes for all compared observations. Nearest-neighbor
+proximity alone cannot establish authorship or authenticity.
+
+### Leave-one-work-out evaluation
+
+`evaluate-lowo` holds out one entire known work at a time. All fixed-window
+samples from that work stay together, so no window from the test work can enter
+training. Metadata contains one row per Features observation:
+
+```csv
+sample_id,author,work
+aeneid__sample_0001,virgil,aeneid
+aeneid__sample_0002,virgil,aeneid
+georgics__sample_0001,virgil,georgics
+thebaid__sample_0001,statius,thebaid
+silvae__sample_0001,statius,silvae
+```
+
+```bash
+nlpo stylometry evaluate-lowo \
+  --features output/features_windows.csv \
+  --metadata config/authorship_metadata.csv \
+  --id-column sample_id \
+  --feature-prefix fw_ \
+  --out output/lowo_folds.csv \
+  --summary-out output/lowo_summary.json
+```
+
+Each author must have at least two distinct works. Samples are first averaged
+within each work, giving every work one equal-weight profile regardless of its
+window count. In every fold, z-score fit and zero-variance detection use only
+training work profiles. Standardized training works are averaged by author,
+again by work rather than sample count, and the held-out work is assigned to
+the nearest author centroid using Burrows's Delta.
+
+The fold table has one row per work. The JSON summary contains overall work
+accuracy, per-author work accuracy, and macro author accuracy—the unweighted
+mean of author accuracies. This is closed-set evaluation: it cannot reject an
+author outside the candidates, and high accuracy alone cannot establish
+authorship or authenticity. Use identical Features settings for every work.
+For fixed windows, prefer a common `window_tokens`, consistent overlap step,
+and consistent partial-window policy; partial and full windows receive the same
+sample weight in the initial work mean.
+
+LOWO prevents a held-out work from entering z-score fit, zero-variance checks,
+author centroids, or training through another window. It cannot audit feature
+selection performed before the table was created. In particular, an MFW
+vocabulary selected from all works may already reflect the held-out work.
+Strict experiments should use a pre-registered function-word list, an MFW
+vocabulary fixed from an external reference corpus, or a future fold-specific
+MFW-selection workflow. The command evaluates the supplied feature matrix and
+does not reject `mfw_` columns automatically.
+
+### Stylometry / Candidate Authorship Verification
+
+`stylometry verify` asks whether one query work is statistically consistent
+with one candidate author's known works. Unlike closed-set attribution, it can
+return `accept`, `reject`, or `inconclusive`; accept does not prove authenticity
+and reject does not prove forgery.
+
+```bash
+nlpo stylometry verify \
+  --features output/features_windows.csv \
+  --metadata config/authorship_metadata.csv \
+  --candidate-author virgil \
+  --query-work ciris \
+  --id-column sample_id \
+  --feature-prefix fw_ \
+  --genuine-quantile 0.95 \
+  --impostor-quantile 0.05 \
+  --out output/verification_ciris.json \
+  --calibration-out output/verification_ciris_calibration.csv
+```
+
+Metadata has one row per Features observation, using the same
+`sample_id,author,work` format shown above. The query metadata author is only a
+required label placeholder and is not used in the decision. Samples are first
+averaged within works, so every candidate, background, and query work has equal
+weight regardless of its window count.
+
+The query is completely excluded while the reference-only z-score model,
+zero-variance feature set, and calibration thresholds are built. Genuine
+distances use leave-one-reference-work-out candidate centroids. Impostor
+distances compare each background work with the full candidate centroid. The
+configured genuine and impostor linear-interpolation quantiles form two
+boundaries; their minimum is the accept threshold and their maximum is the
+reject threshold. Values between the thresholds, including either boundary,
+are inconclusive. JSON also reports the nearest background work as diagnostics,
+but that distance does not determine the decision.
+
+At least three candidate reference works and two background works are required.
+Small reference collections can still produce unstable thresholds, and the
+choice of background authors materially affects the result. Use the same
+edition, cleaning, feature families, and window settings throughout.
+
+This table-input command cannot undo upstream feature-selection leakage. If
+MFW, character n-gram, or UPOS n-gram columns were selected using the query,
+prefer a pre-registered function-word list, vocabulary fixed from an external
+reference corpus, a vocabulary fitted without the query, or a corpus-input
+training-only vocabulary workflow. Verification measures consistency with a
+candidate model in a closed feature space; it is not proof of authorship.
+
+#### Corpus-input verification with reference-fitted vocabularies
+
+`stylometry verify-corpus` starts from configured corpora instead of an
+existing Features CSV. It analyzes every prepared corpus once, identifies all
+groups assigned to the query work, and excludes every one of them while fitting
+MFW, character n-gram, UPOS n-gram, morphology value, and morphology bundle
+vocabularies. The resulting fixed columns then transform reference and query
+corpora in their original order. The existing verification calculation also
+excludes the query from z-score fitting, zero-variance detection, candidate
+centroids, calibration distributions, and thresholds.
+
+```bash
+nlpo stylometry verify-corpus \
+  --project-root . \
+  --config config/groups.config.yml \
+  --metadata config/authorship_works.csv \
+  --candidate-author virgil \
+  --query-work ciris \
+  --mfw 500 \
+  --field lemma \
+  --window-tokens 1000 \
+  --char-ngram-size 3 \
+  --char-ngram-top 300 \
+  --upos-ngram-size 2 \
+  --upos-ngram-top 100 \
+  --genuine-quantile 0.95 \
+  --impostor-quantile 0.05 \
+  --out output/verification_ciris.json \
+  --calibration-out output/verification_ciris_calibration.csv \
+  --vocabulary-audit-out output/verification_ciris_vocabulary.json
+```
+
+Metadata is work-level; the query author is a required placeholder but is not
+used in the decision:
+
+```csv
+group,author,work
+aeneid,virgil,aeneid
+georgics,virgil,georgics
+eclogues,virgil,eclogues
+thebaid,statius,thebaid
+silvae,statius,silvae
+ciris,unknown,ciris
+```
+
+Use table-input `verify` to evaluate a prebuilt feature space and
+`verify-corpus` when automatic vocabulary selection itself must be isolated
+from the query. Explicit function-word lists and other fixed feature families
+remain shared. The vocabulary audit records the reference-only fit and its
+deterministic SHA-256. Neither accept nor reject proves authenticity or
+forgery. Background selection, genre, period, edition, cleaning, NLP model, and
+window settings can materially affect the result and should be controlled.
+
+### Pseudo-unknown-work verification evaluation
+
+`evaluate-verification-corpus` evaluates the verification procedure itself by
+treating every labeled work once as a pseudo-unknown query. Candidate-author
+works are genuine tests, while all other works are impostor tests. At least four
+candidate works and three background works are required, leaving the ordinary
+verification minimum of three candidate and two background references after
+each holdout.
+
+```bash
+nlpo stylometry evaluate-verification-corpus \
+  --project-root . \
+  --config config/groups.config.yml \
+  --metadata config/authorship_works.csv \
+  --candidate-author virgil \
+  --mfw 500 \
+  --window-tokens 1000 \
+  --char-ngram-size 3 \
+  --upos-ngram-size 2 \
+  --out output/verification_evaluation_folds.csv \
+  --summary-out output/verification_evaluation_summary.json \
+  --vocabulary-audit-out output/verification_evaluation_vocabularies.json \
+  --calibration-out output/verification_evaluation_calibration.csv
+```
+
+The work-level metadata uses `group,author,work`, and all works must have known
+labels. Corpus preparation, NLP, eligibility filtering, and function-word list
+loading happen once per corpus. In every outer fold the complete pseudo-query
+work is excluded from automatic vocabulary fitting, reference z-scores,
+zero-variance detection, calibration, and threshold derivation.
+
+False accept rate is the fraction of background works accepted as the candidate;
+false reject rate counts genuine works explicitly rejected. Inconclusive results
+remain separate. Coverage is the fraction receiving accept or reject, decisive
+accuracy uses only those covered folds, overall correct rate treats inconclusive
+as not correct, and balanced correct rate averages genuine accept and impostor
+reject rates. Quantiles must not be tuned on these evaluation outcomes.
+
+High rates do not prove authenticity for a real disputed work. Small work sets
+produce unstable rates, and genre, period, edition, cleaning, NLP configuration,
+windowing, and background-corpus choice can materially affect the results.
+
+### Verification Stability and Resampling
+
+`verify-stability` first calculates the ordinary `verify` result using all
+selected rows and features. It then repeats that same pure verification
+calculation under one or more explicitly selected perturbations:
+
+```bash
+nlpo stylometry verify-stability \
+  --features output/features_windows.csv \
+  --metadata config/authorship_metadata.csv \
+  --candidate-author virgil \
+  --query-work ciris \
+  --id-column sample_id \
+  --feature-prefix fw_ \
+  --resample-axis works \
+  --resample-axis samples \
+  --resample-axis features \
+  --work-fraction 0.80 \
+  --feature-fraction 0.80 \
+  --iterations 1000 \
+  --seed 20260718 \
+  --out output/verification_stability.json \
+  --replicates-out output/verification_stability_replicates.csv \
+  --feature-stability-out output/verification_feature_stability.csv
+```
+
+`works` performs stratified sampling without replacement, separately within
+candidate and background works while preserving verification's minimum work
+counts. `samples` bootstraps observations with replacement only inside their
+original work and then rebuilds one equally weighted work mean. `features`
+uniformly samples without replacement from the columns already selected in the
+Features table and restores their original column order. It does not refit MFW,
+character n-gram, or UPOS n-gram vocabularies.
+
+When several axes are supplied they are applied in the fixed order works,
+samples, then features. Every successful replicate refits reference-only
+z-scores, zero-variance filtering, genuine and impostor calibration, and both
+thresholds. The query remains excluded from every fit and calibration step.
+The replicate table records decisions, distances, thresholds, included works,
+selected and retained feature counts, nearest background diagnostics, and
+deterministic feature-set hashes.
+
+The summary reports decision rates, the modal decision, agreement with the base
+decision, empirical resampling intervals, work inclusion, nearest-background
+frequency, and feature selection/retention frequency. `stable` means only that
+the modal three-way decision reaches `--stability-threshold` under this precise
+resampling design. Empirical intervals are not formal confidence guarantees.
+Overlapping windows may not be independent observations, and background corpus
+choice can materially affect the result.
+
+This command does not repeat upstream feature-vocabulary selection and cannot
+remove leakage already present in the Features table. A stable accept does not
+prove authenticity, a stable reject does not prove forgery, and instability
+indicates sensitivity to data or settings rather than forgery by itself.
+
+### Corpus-input LOWO with fold-fitted vocabularies
+
+`evaluate-lowo-corpus` starts from configured corpora rather than an already
+reduced Features table. It analyzes each prepared corpus exactly once, then in
+every fold selects MFW, character n-gram, and UPOS n-gram vocabularies using
+training works only. The frozen fold vocabulary transforms both training and
+held-out works into the same columns before work profiles, z-score fitting, and
+Burrows's Delta attribution:
+
+```bash
+nlpo stylometry evaluate-lowo-corpus \
+  --project-root . \
+  --config config/groups.config.yml \
+  --metadata config/authorship_works.csv \
+  --mfw 500 \
+  --field lemma \
+  --window-tokens 1000 \
+  --char-ngram-size 3 \
+  --char-ngram-top 300 \
+  --upos-ngram-size 2 \
+  --upos-ngram-top 100 \
+  --out output/lowo_corpus_folds.csv \
+  --summary-out output/lowo_corpus_summary.json \
+  --vocabulary-audit-out output/lowo_vocabularies.json
+```
+
+Metadata is work-level and must match every prepared-corpus group exactly:
+
+```csv
+group,author,work
+aeneid,virgil,aeneid
+georgics,virgil,georgics
+eclogues,virgil,eclogues
+thebaid,statius,thebaid
+silvae,statius,silvae
+```
+
+All windows belonging to a work remain in the same fold. NLP and the shared
+Features eligibility filter run once per prepared corpus; only vocabulary fit,
+row transformation, work averaging, and evaluation repeat by fold. Explicit
+fixed features such as reviewed function-word columns remain common, while
+automatically selected columns and fold-specific zero-variance exclusions may
+differ. The vocabulary audit records every selected term and a deterministic
+SHA-256 for each fold.
+
+The existing `evaluate-lowo` remains appropriate for evaluating a published
+Features CSV, but it cannot remove upstream leakage if that CSV selected MFW or
+n-gram columns using all works. The corpus-input command closes that selection
+leak for MFW, character n-grams, and UPOS n-grams. It remains closed-set
+attribution: it does not reject unknown authors or prove authenticity.
+
+## N-Gram CLI
+
+Use `nlpo ngram` to build n-gram frequency tables from a complete token artifact
+or text files listed in `config/groups.config.yml`. Artifact input supports both
+the `token` and `lemma` fields.
+
+```bash
+nlpo ngram \
+  --tokens output/tokens.tsv \
+  --n 2 \
+  --field lemma \
+  --min-count 2 \
+  --top 100 \
+  --out output/ngram_2.tsv
+```
+
+Group-specific output:
+
+```bash
+nlpo ngram \
+  --tokens output/tokens.tsv \
+  --n 3 \
+  --field token \
+  --by-group \
+  --min-count 2 \
+  --format csv \
+  --out output/ngram_3_by_group.csv
+```
+
+Artifact n-grams use included tokens only and do not cross group, source-file,
+section, chunk, or sentence boundaries. They use the same `TokenSequenceId` and
+sequence collection as Concordance. Empty values and punctuation-only tokens
+end the current lexical run. Excluded tokens are omitted without ending a run.
+`--by-group` changes only the destination counter and output column; it never
+changes a sequence boundary.
+
+Raw text input through config groups is also available for token n-grams:
+
+```bash
+nlpo ngram \
+  --project-root . \
+  --config config/groups.config.yml \
+  --field token \
+  --n 2 \
+  --out output/ngram_text.tsv
+```
+
+Config input uses the same corpus planning and preparation path as `count` and
+`features`, including cleaner execution, grouping mode, per-file and
+auto-single-cleaned resolution, text normalization, and reference-tag removal.
+All configured corpus files must be readable as UTF-8; if any file cannot be
+read, preparation fails and no partial corpus is analyzed.
+Each prepared corpus becomes one typed token sequence with no invented file,
+section, chunk, or sentence detail, and this path does not start an NLP backend.
+Token artifact input bypasses config loading, cleaner execution, and corpus
+planning; it reads the existing validated artifact directly. Config input
+supports `--field token`; use `--tokens` with an artifact for lemma n-grams.
+
+Output columns are `ngram`, `count`, `n`, and `field`. When `--by-group` is
+used, `group` is added.
+
+## Example Config
+
+```yaml
+groups:
+  text:
+    files:
+      - input/*.txt
+
+out_dir: output
+nlp:
+  backend: stanza
+  language: la
+  stanza_package: perseus
+  cpu_only: true
+analysis_unit: lemma
+
+filters:
+  min_token_length: 2
+  drop_roman_numerals: true
+  roman_exceptions_file: config/roman_numeral_exceptions.txt
+```
+
+With cleaner preprocessing:
+
+```yaml
+preprocess:
+  kind: cleaner
+  config: config/cleaner.yml
+
+groups:
+  cleaned:
+    files:
+      - "{cleaned_dir}/*.txt"
+
+out_dir: output
+```
+
+When `preprocess.kind` is `cleaner`, failure to load or run the cleaner stops
+the command. Configured cleaner preprocessing is never silently skipped.
+
+`groups.files: "{cleaned_dir}/*.txt"` counts every `.txt` file currently in the
+cleaned directory. If you want to safely run one cleaned file at a time without
+editing `groups`, use `--auto-single-cleaned`:
+
+```bash
+nlpo count \
+  --project-root . \
+  --config config/groups.config.yml \
+  --auto-single-cleaned \
+  --run-name satyricon-cena
+```
+
+The same behavior can be enabled in YAML:
+
+```yaml
+grouping:
+  mode: auto_single_cleaned
+  auto_group_name: text
+```
+
+Auto-single-cleaned selects the only `.txt` file in the resolved cleaned
+directory. If there are zero or multiple cleaned `.txt` files, the command
+fails instead of silently counting stale files. `--run-name` only names the run
+archive; it does not change which input or cleaned file is counted.
+
+For `count`, the input preparation order is: run cleaner if configured,
+resolve the cleaned directory, resolve groups or per-file work items, concatenate
+files, apply text normalization, remove and count reference tags, then run the
+command-specific NLP/counting step. With `--group-by-file`, the output label is
+derived from each file stem, duplicate files matched by multiple groups are
+processed once, and label collisions receive numeric suffixes.
+
+Useful config options:
+
+```yaml
+grouping:
+  mode: groups          # "groups", "per_file", or "auto_single_cleaned"
+
+analysis_unit: lemma      # "lemma" or "surface"
+
+filters:
+  min_token_length: 2
+  drop_roman_numerals: true
+
+dictcheck:
+  enabled: true
+  wordlist: data/wordlist/latin_words.txt
+  lemma_normalize: config/lemma_normalize.tsv
+
+ref_tags:
+  enabled: true
+  patterns: config/ref_tags.txt
+
+trace:
+  enabled: true
+  path: output/trace.tsv
+  max_rows: 500000
+
+artifacts:
+  tokens:
+    enabled: false
+    path: output/tokens.tsv
+```
+
+Diagnostic trace output is intended only for human inspection and debugging. It
+may be filtered by `only_keys` or truncated by `max_rows`, and is not accepted
+by concordance or n-gram commands. `artifacts.tokens` is the formal complete
+token artifact for downstream reuse; if both are enabled, use different paths.
+
+`filters.roman_exceptions_file` is a UTF-8, one-item-per-line file for tokens
+that should not be removed by Roman numeral filtering. Blank lines and lines
+starting with `#` are ignored, matching is case-insensitive, and missing files
+are reported as configuration errors. The built-in surface-mode exceptions
+`vi` and `di` remain available.
+
+## Run Archive
+
+`nlpo count` can save a reproducible snapshot of one successful run
+under `runs/<run-name>/`. The archive includes frequency CSVs, `summary.txt`,
+`run_meta.json`, token artifacts when enabled, trace files when enabled, a config snapshot, `manifest.json`,
+and a short archive README.
+Only files in the actual run's `ArtifactPlan` are copied; stale CSVs left in
+`out_dir` from older runs are not archived. The archive classifies diagnostic
+trace artifacts by their typed kind and treats every other planned artifact as
+an output. It does not infer kinds from filenames or rescan the output directory.
+
+Internally, archive inventory validates and classifies the `ArtifactPlan` held
+by `CountRunResult`, copying executes only the resulting copy plan, and manifest generation
+converts typed file and Git metadata into the existing schema. A thin archive
+service orchestrates those stages and removes only the directory it created if
+any stage fails.
+
+```bash
+nlpo count \
+  --project-root . \
+  --config config/groups.config.yml \
+  --run-name virgil_noun_test_01
+```
+
+If `--archive-run` is used without `--run-name`, the directory name is a
+timestamp such as `runs/20260706-123456`.
+
+```bash
+nlpo count \
+  --project-root . \
+  --config config/groups.config.yml \
+  --archive-run
+```
+
+Use `--runs-dir` to choose another archive root. Existing run directories are
+never overwritten.
+
+By default, large source corpora are not copied. Add these flags when the
+archive should contain the files themselves:
+
+```bash
+nlpo count \
+  --project-root . \
+  --config config/groups.config.yml \
+  --run-name virgil_noun_test_01 \
+  --include-cleaned \
+  --include-input
+```
+
+The same defaults can be set in `config/groups.config.yml`:
+
+```yaml
+archive:
+  enabled: true
+  runs_dir: runs
+  include_input: true
+  include_cleaned: true
+```
+
+When `archive.enabled` is true, `nlpo count` creates an archive even
+without `--archive-run` or `--run-name`. CLI flags such as `--include-input`,
+`--include-cleaned`, and `--runs-dir` override the config defaults.
+
+After a successful archive, the CLI prints the saved path and copied file
+counts:
+
+```text
+[ARCHIVE] saved run archive: runs/virgil_noun_test_01
+[ARCHIVE] included input files: 3
+[ARCHIVE] included cleaned files: 3
+```
+
+Use `--error-on-empty-group` to fail when any configured group matches zero
+files. This is useful when a glob or `{cleaned_dir}` pattern no longer matches
+the expected corpus. `--dry-run` prints the matched files under each group so
+the config can be checked before running NLP.
+
+`dictcheck.wordlist` is recorded in `manifest.json` with its path, size, and
+SHA-256 hash, but is not copied into `config_snapshot/` by default.
+
+All explicitly configured file references are resolved and checked while the
+run plan is built, before cleaner execution, output creation, or NLP startup.
+This check is strict even when the related feature is disabled. For example, a
+configured but missing `dictcheck.lemma_normalize` file is now an error instead
+of silently disabling lemma normalization. Dry runs apply the same checks.
+
+## Configuration Roles
+
+`nlpo_toolkit` uses several configuration files at different stages of the
+workflow. These files should not be merged into a single file, because they have
+different responsibilities.
+
+| Setting | Role | When It Applies | Example |
+|---|---|---|---|
+| `lexicon_map.tsv` | Corrects or normalizes the input text itself | Before Stanza / NLP | `uod -> quod` |
+| `lemma_normalize.tsv` | Corrects lemmas after NLP analysis | After Stanza / NLP | `omninus -> omnino` |
+| `filters` | Mechanically removes tokens from counting | Before frequency counting | Drop one-character tokens; drop Roman numerals |
+| `dictcheck.wordlist` | Classifies lemmas as known or unknown | After frequency tables are created | Check whether a lemma exists in the dictionary wordlist |
+
+The repository-provided `config/lemma_normalize.tsv` is intentionally empty by
+default. It is a project-specific correction map, so entries should be added
+only after an NLP lemma error has been verified against the configured backend
+and source corpus. Each mapping is one tab-separated pair: the left column is
+the lemma emitted by NLP and the right column is the canonical lemma used in
+frequency tables. Empty lines and `#` comments are ignored; do not add a header
+row. This map does not correct input text, and while it contains no mappings,
+lemma normalization is a no-op. The `omninus -> omnino` row above is an
+illustrative example, not a default mapping.
+
+## Docker
+
+Docker is the recommended way to avoid repeated local Stanza setup.
+
+Build the image:
+
+```bash
+docker compose build
+```
+
+Run the CLI:
+
+```bash
+docker compose run --rm nlpo count --project-root /workspace --config config/groups.config.yml
+```
+
+Inside the container, the repository is mounted at `/workspace`, so use
+`--project-root /workspace` for project-relative paths.
+
+Stanza resources are stored at `/opt/stanza_resources` in a named Docker
+volume. Normal container runs reuse that volume, so models are not redownloaded
+each time.
+
+Avoid this unless you intentionally want to remove the model cache:
+
+```bash
+docker compose down -v
+```
+
+To skip Stanza model download during image build:
+
+```bash
+docker compose build --build-arg DOWNLOAD_STANZA_MODELS=false
+```
+
+## Development Checks
+
+Generate the JSON Schema directly from the canonical Pydantic model:
+
+```bash
+python scripts/generate_config_schema.py
+```
+
+This writes `config/groups.config.schema.json`; the generated file is not an
+independent source of truth and should not be edited by hand.
+
+Fast unit tests:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 pytest -q -p no:cacheprovider --ignore=tests/test_latin_vocab_pipeline.py
+```
+
+Full tests that need real Stanza resources:
+
+```bash
+STANZA_RESOURCES_DIR=.stanza_resources \
+PYTHONDONTWRITEBYTECODE=1 pytest -q -p no:cacheprovider
+```
+
+## License
+
+Licensed under the MIT License.
